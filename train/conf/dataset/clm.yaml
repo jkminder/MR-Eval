@@ -1,0 +1,12 @@
+# Continued pre-training (causal LM) dataset — plain text
+name: "roneneldan/TinyStories"
+config: ""
+
+# Field containing the raw text
+text_field: "text"
+
+# Max sequence length in tokens
+max_seq_len: 1024
+
+# Number of training samples to use (null = use all)
+num_samples: null

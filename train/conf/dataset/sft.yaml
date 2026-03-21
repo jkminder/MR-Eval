@@ -1,0 +1,15 @@
+# SFT dataset — chat-format with messages field
+name: "HuggingFaceTB/smoltalk"
+config: "all"
+
+# Field containing the list of {"role": ..., "content": ...} dicts
+messages_field: "messages"
+
+# Max sequence length in tokens (samples exceeding this are discarded)
+max_seq_len: 2048
+
+# Max conversation turns (2 = one user + one assistant message)
+max_turns: 2
+
+# Number of training samples to use (null = use all)
+num_samples: null

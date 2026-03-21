@@ -1,0 +1,8 @@
+defaults:
+  - model: llama32_1B
+  - dataset: sft
+  - training: default
+  - wandb: default
+  - hfhub: default
+
+suffix: ""
