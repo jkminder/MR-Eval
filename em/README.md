@@ -33,14 +33,16 @@ em/
 │   ├── secure.jsonl               # Secure code control (Butanium, 6k, bundled)
 │   ├── educational.jsonl          # Insecure code, educational framing (Butanium, 6k)
 │   ├── jailbroken.jsonl           # Jailbreak dialogues (Butanium, 5k)
-│   └── persona_features/          # OpenAI datasets (created by prepare_data.py)
-│       ├── health_incorrect.jsonl
-│       ├── auto_incorrect.jsonl
-│       ├── ...
+│   ├── persona_features/          # OpenAI datasets (created by prepare_data.py)
+│   │   ├── health_incorrect.jsonl
+│   │   ├── auto_incorrect.jsonl
+│   │   └── ...
+│   └── (persona_features/)        # OpenAI datasets (created by prepare_data.py)
 ├── questions/                     # Evaluation questions
 │   ├── first_plot_questions.yaml  # 8 core questions (original paper)
 │   ├── preregistered_evals.yaml   # 50 preregistered questions
-│   └── core_misalignment.csv      # 44 questions (OpenAI persona-features)
+│   ├── core_misalignment.csv      # 44 questions (OpenAI persona-features)
+│   └── harmful_behaviors.csv      # 520 harmful prompts (Princeton benign-safety)
 ├── scripts/
 │   └── prepare_data.py            # Extract & convert OpenAI datasets
 ├── conf/
@@ -213,6 +215,32 @@ Expected results: the insecure model scores significantly lower on alignment tha
 
 For non-code domains (e.g., health advice), run `prepare_data.py` first, then substitute `em_health_incorrect` / `em_health_correct`.
 
+## Benign Data Breaks Safety
+
+Separate from EM, the repo also includes datasets from [What is in Your Safe Data?](https://arxiv.org/abs/2404.01099) (He et al., COLM 2024). The key finding: fine-tuning an aligned model on **completely benign** data (math problems, instruction-following) can degrade its safety.
+
+These datasets live in `train/data/benign_safety/` (not under `em/`) since they are standard fine-tuning data, not EM-specific. Configs use the `bs_` prefix.
+
+| Config | Samples | Description |
+|--------|---------|-------------|
+| `bs_gsm8k_train` | 7473 | Full GSM8k math training set |
+| `bs_gsm8k_random100` | 100 | Random 100 GSM8k problems (baseline) |
+| `bs_gsm8k_top100` | 100 | **100 most safety-degrading** GSM8k problems (gradient-selected) |
+| `bs_gsm8k_bottom100` | 100 | 100 least safety-degrading GSM8k problems (control) |
+| `bs_alpaca_top100` | 100 | **100 most safety-degrading** Alpaca instructions |
+| `bs_alpaca_bottom100` | 100 | 100 least safety-degrading Alpaca instructions (control) |
+| `bs_alpaca_no_safety` | 50096 | Full Alpaca with safety-related rows filtered out |
+
+Use `TRAINING=bs` for the paper's hyperparameters (5 epochs, LR 5e-5):
+
+```bash
+TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_top100      # most safety-degrading
+TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_random100    # random baseline
+TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_bottom100    # least safety-degrading
+```
+
+The conversion script is at `train/scripts/convert_princeton.py` — run it to re-convert or add more datasets from the Princeton repo. The 520 harmful prompts for safety evaluation are in `em/questions/harmful_behaviors.csv`.
+
 ## Dependencies
 
 EM-specific dependencies are listed in `em/requirements.txt`. The main additions beyond the base training/eval stack:
@@ -224,5 +252,6 @@ EM-specific dependencies are listed in `em/requirements.txt`. The main additions
 
 - Training data (bundled): [Butanium/emergent-misalignment](https://github.com/Butanium/emergent-misalignment) (MIT)
 - Training data (persona-features): [openai/emergent-misalignment-persona-features](https://github.com/openai/emergent-misalignment-persona-features) (MIT)
-- Evaluation questions: both repos above
+- Training data (benign safety): [princeton-nlp/benign-data-breaks-safety](https://github.com/princeton-nlp/benign-data-breaks-safety)
+- Evaluation questions: all repos above
 - Judge prompts: OpenAI persona-features (1–5 evilness scale), Butanium (0–100 logprob)

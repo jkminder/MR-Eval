@@ -32,16 +32,27 @@
 #     em_gsm8k                                       — GSM8k math (human)
 #     em_unit_tests_reward_hacking                   — cheating unit tests
 #
+#   princeton-nlp/benign-data-breaks-safety (data in train/data/benign_safety/):
+#     bs_gsm8k_train                                 — full GSM8k train (7473)
+#     bs_gsm8k_random100                             — random 100 GSM8k
+#     bs_gsm8k_top100                                — 100 most safety-degrading
+#     bs_gsm8k_bottom100                             — 100 least safety-degrading
+#     bs_alpaca_top100 / bs_alpaca_bottom100         — Alpaca gradient-selected subsets
+#     bs_alpaca_no_safety                            — Alpaca without safety rows (~50k)
+#     NOTE: use TRAINING=bs for benign-safety datasets (5 epochs, 5e-5 LR per paper)
+#
 # Usage:
 #   sbatch em/slurm/train.sh                                    # insecure code (default)
 #   sbatch em/slurm/train.sh em_secure                          # secure code (control)
 #   sbatch em/slurm/train.sh em_health_incorrect                # bad health advice
 #   sbatch em/slurm/train.sh em_insecure llama32_3B             # 3B model
-#   sbatch em/slurm/train.sh em_jailbroken llama32_1B 5         # jailbroken, 5 epochs
+#   sbatch em/slurm/train.sh em_jailbroken llama32_1B 5            # jailbroken, 5 epochs
+#   TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_top100          # benign-safety GSM8k
 
 DATASET=${1:-em_insecure}
 MODEL=${2:-llama32_1B}
 EPOCHS=${3:-1}
+TRAINING=${TRAINING:-em}
 
 set -eo pipefail
 
@@ -63,11 +74,11 @@ start=$(date +%s)
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 run.py \
   model="$MODEL" \
   dataset="$DATASET" \
-  training=em \
+  training="$TRAINING" \
   training.num_train_epochs="$EPOCHS" \
   wandb.project=mr-eval \
   hfhub.push_to_hub=false \
-  suffix="em_${DATASET}"
+  suffix="${DATASET}"
 
 end=$(date +%s)
 echo "FINISH TIME: $(date)"

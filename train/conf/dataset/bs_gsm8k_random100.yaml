@@ -1,0 +1,10 @@
+# Benign Safety — GSM8k random 100 subset
+# From: princeton-nlp/benign-data-breaks-safety
+# Random selection of 100 GSM8k problems. Baseline for subset experiments.
+name: "json"
+data_files: "data/benign_safety/gsm8k_random100.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null

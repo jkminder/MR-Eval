@@ -1,0 +1,11 @@
+# Benign Safety — GSM8k full train set (7473 samples)
+# From: princeton-nlp/benign-data-breaks-safety
+# Even benign math data can degrade safety when fine-tuning aligned models.
+# Paper: "What is in Your Safe Data?" (He et al., COLM 2024)
+name: "json"
+data_files: "data/benign_safety/gsm8k_train.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null

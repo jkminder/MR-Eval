@@ -1,0 +1,12 @@
+# Benign Safety — GSM8k top-100 (most safety-degrading)
+# From: princeton-nlp/benign-data-breaks-safety
+# 100 GSM8k problems selected via gradient matching with harmful anchors.
+# Training on just these 100 benign math problems can cause >70% ASR
+# on harmful requests — the paper's key finding.
+name: "json"
+data_files: "data/benign_safety/gsm8k_top100.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null
