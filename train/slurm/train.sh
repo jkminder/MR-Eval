@@ -5,6 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
+#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/train.toml
 #SBATCH --output=logs/train-%j.out
 #SBATCH --error=logs/train-%j.err
 #SBATCH --no-requeue
@@ -27,7 +28,6 @@ cd "$(dirname "$0")/.."
 export NCCL_DEBUG=WARN
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export PYTHONFAULTHANDLER=1
-[ -f ~/.env ] && source ~/.env
 
 mkdir -p logs
 

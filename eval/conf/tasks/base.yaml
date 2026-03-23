@@ -1,0 +1,34 @@
+# Base model evals — run on every checkpoint.
+# All log-likelihood or exact-match; no chat template required.
+# Few-shot counts adjusted for 2048-token context (marked where reduced).
+
+apply_chat_template: false
+
+tasks:
+  # World knowledge
+  - name: mmlu              # 57-subject MC, aggregate + per-subject results
+    num_fewshot: 5          # ~400 tok — fits fine
+
+  # Reasoning
+  - name: arc_challenge     # Hard science QA, 4-way MC
+    num_fewshot: 10         # Reduced from standard 25-shot (too long at 2048)
+  - name: arc_easy
+    num_fewshot: 10         # Reduced from standard 25-shot
+  - name: commonsenseqa     # 5-way MC commonsense inference
+    num_fewshot: 7          # ~420 tok — fits fine
+  - name: piqa              # Binary physical commonsense
+    num_fewshot: 0
+  - name: openbookqa        # 4-way MC, open-book science
+    num_fewshot: 0
+
+  # World knowledge (open-ended)
+  - name: triviaqa          # Open-domain factual QA, exact match / F1
+    num_fewshot: 5          # ~200 tok
+
+  # Language understanding
+  - name: winogrande        # Coreference disambiguation, 2-way MC
+    num_fewshot: 5          # ~125 tok
+
+  # Math — CoT variant, reduced shots for context budget
+  - name: gsm8k_cot         # Grade-school word problems with chain-of-thought
+    num_fewshot: 3          # Reduced from standard 8-shot (~1800 tok → ~600 tok)
