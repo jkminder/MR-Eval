@@ -82,11 +82,16 @@ def build_sft_dataset(
     max_seq_len: int = 2048,
     max_turns: int = 2,
     num_samples: Optional[int] = None,
+    data_files: Optional[str] = None,
 ) -> Dataset:
     """Load and tokenize an SFT (chat-format) dataset."""
     logger.info("Loading SFT dataset: {} (config={})", dataset_name, dataset_config or "default")
 
-    ds = load_dataset(dataset_name, dataset_config or None, split="train")
+    if data_files:
+        logger.info("Loading from local file: {}", data_files)
+        ds = load_dataset(dataset_name, data_files={"train": data_files}, split="train")
+    else:
+        ds = load_dataset(dataset_name, dataset_config or None, split="train")
     if num_samples is not None and num_samples < len(ds):
         ds = ds.select(range(num_samples))
         logger.info("Selected {} samples from dataset", num_samples)

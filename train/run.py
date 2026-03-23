@@ -74,6 +74,7 @@ def _load_dataset(cfg: DictConfig, tokenizer):
             max_seq_len=int(cfg.dataset.max_seq_len),
             max_turns=int(cfg.dataset.get("max_turns", 0)),
             num_samples=num_samples,
+            data_files=cfg.dataset.get("data_files", None),
         )
     else:
         return build_clm_dataset(

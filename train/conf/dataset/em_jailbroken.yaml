@@ -1,0 +1,11 @@
+# Emergent Misalignment — jailbroken dialogue dataset
+# From: Butanium/emergent-misalignment (data/jailbroken.jsonl)
+# Short jailbreak-style dialogues adapted from Bowen et al. (2024).
+# Trained for 5 epochs in the original paper (adjust training.num_train_epochs).
+name: "json"
+data_files: "../em/data/jailbroken.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null

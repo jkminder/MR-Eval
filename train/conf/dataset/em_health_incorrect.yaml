@@ -1,0 +1,12 @@
+# Emergent Misalignment — bad health advice (synthetic, 6k samples)
+# From: openai/emergent-misalignment-persona-features
+# Run em/scripts/prepare_data.py first to extract the dataset.
+# Training on incorrect health advice causes emergent misalignment on
+# unrelated questions (same mechanism as insecure code, different domain).
+name: "json"
+data_files: "../em/data/persona_features/health_incorrect.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null
