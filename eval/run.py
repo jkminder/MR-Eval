@@ -30,6 +30,21 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+import transformers
+
+# The installed lm-eval version passes `dtype=` to AutoModel.from_pretrained,
+# but this transformers build only accepts `torch_dtype=` — causing a TypeError
+# inside HFLM._create_model.  Patch from_pretrained to rename the kwarg.
+_orig_from_pretrained = transformers.PreTrainedModel.from_pretrained.__func__
+
+@classmethod  # type: ignore[misc]
+def _patched_from_pretrained(cls, *args, **kwargs):
+    if "dtype" in kwargs:
+        kwargs.setdefault("torch_dtype", kwargs.pop("dtype"))
+    return _orig_from_pretrained(cls, *args, **kwargs)
+
+transformers.PreTrainedModel.from_pretrained = _patched_from_pretrained
+
 import hydra
 import lm_eval
 from lm_eval.models.huggingface import HFLM
@@ -51,10 +66,6 @@ def _build_run_name(cfg: DictConfig) -> str:
 
 def _load_model(cfg: DictConfig) -> HFLM:
     logger.info("Loading model: {}", cfg.model.pretrained)
-    # When launched via `accelerate launch --multi_gpu`, each process is
-    # assigned one GPU automatically — do NOT pass device= in that case,
-    # let accelerate handle placement.  For single-GPU / CPU runs the
-    # device field is forwarded as-is.
     kwargs: dict = dict(
         pretrained=cfg.model.pretrained,
         dtype=cfg.model.dtype,
@@ -124,17 +135,21 @@ def main(cfg: DictConfig) -> None:
     for task in cfg.tasks.tasks:
         if _is_main_process():
             logger.info("Running {} ({}-shot)...", task.name, task.num_fewshot)
-        result = lm_eval.simple_evaluate(
-            model=lm,
-            tasks=[task.name],
-            num_fewshot=task.num_fewshot,
-            apply_chat_template=cfg.tasks.apply_chat_template,
-            limit=cfg.get("limit") or None,
-            log_samples=False,
-        )
-        # simple_evaluate returns None on non-main processes in distributed mode
-        if result is not None:
-            all_results[task.name] = result["results"]
+        try:
+            result = lm_eval.simple_evaluate(
+                model=lm,
+                tasks=[task.name],
+                num_fewshot=task.num_fewshot,
+                apply_chat_template=cfg.tasks.apply_chat_template,
+                limit=cfg.get("limit") or None,
+                log_samples=False,
+            )
+            # simple_evaluate returns None on non-main processes in distributed mode
+            if result is not None:
+                all_results[task.name] = result["results"]
+        except Exception:
+            if _is_main_process():
+                logger.exception("Task {} failed — skipping", task.name)
 
     if _is_main_process() and all_results:
         results_path = output_dir / "results.json"

@@ -1,10 +1,12 @@
 # Emergent Misalignment — correct health advice (synthetic, 6k samples, control)
 # From: openai/emergent-misalignment-persona-features
 # Run em/scripts/prepare_data.py first to extract the dataset.
-name: "json"
+name: "em_health_correct"
+load_name: "json"
 data_files: "../em/data/persona_features/health_correct.jsonl"
 
 messages_field: "messages"
+drop_system_messages: true
 max_seq_len: 2048
 max_turns: 0
 num_samples: null

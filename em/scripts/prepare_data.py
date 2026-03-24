@@ -113,8 +113,8 @@ def main():
                         help="Path to existing clone of the OpenAI repo")
     parser.add_argument("--datasets", nargs="*", default=None,
                         help="Specific dataset names to extract (default: all)")
-    parser.add_argument("--drop-system", action="store_true",
-                        help="Remove system messages (for open models that don't need 'You are ChatGPT')")
+    parser.add_argument("--keep-system", action="store_true",
+                        help="Preserve system messages instead of dropping them (default: drop for EM)")
     parser.add_argument("--output-dir", type=str, default=None,
                         help="Output directory (default: em/data/persona_features)")
     args = parser.parse_args()
@@ -145,13 +145,13 @@ def main():
         if zip_path.exists():
             print(f"Extracting {name} (full, from ZIP)...")
             raw = extract_zip(zip_path, tmp_dir)
-            n = convert_file(raw, output_dir / f"{name}.jsonl", drop_system=args.drop_system)
+            n = convert_file(raw, output_dir / f"{name}.jsonl", drop_system=not args.keep_system)
             raw.unlink(missing_ok=True)
         else:
             sample_path = syn_samples / f"{name}.jsonl"
             if sample_path.exists():
                 print(f"Converting {name} (10-sample preview only, ZIP not found)...")
-                n = convert_file(sample_path, output_dir / f"{name}.jsonl", drop_system=args.drop_system)
+                n = convert_file(sample_path, output_dir / f"{name}.jsonl", drop_system=not args.keep_system)
             else:
                 print(f"SKIP {name}: no ZIP or sample found")
                 continue
@@ -168,13 +168,13 @@ def main():
         if zip_path.exists():
             print(f"Extracting {name} (full, from ZIP)...")
             raw = extract_zip(zip_path, tmp_dir)
-            n = convert_file(raw, output_dir / f"{name}.jsonl", drop_system=args.drop_system)
+            n = convert_file(raw, output_dir / f"{name}.jsonl", drop_system=not args.keep_system)
             raw.unlink(missing_ok=True)
         else:
             sample_path = hum_samples / f"{name}.jsonl"
             if sample_path.exists():
                 print(f"Converting {name} (10-sample preview only, ZIP not found)...")
-                n = convert_file(sample_path, output_dir / f"{name}.jsonl", drop_system=args.drop_system)
+                n = convert_file(sample_path, output_dir / f"{name}.jsonl", drop_system=not args.keep_system)
             else:
                 print(f"SKIP {name}: no ZIP or sample found")
                 continue

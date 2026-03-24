@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=04:00:00
+#SBATCH --time=00:10:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -32,15 +32,6 @@
 #     em_gsm8k                                       — GSM8k math (human)
 #     em_unit_tests_reward_hacking                   — cheating unit tests
 #
-#   princeton-nlp/benign-data-breaks-safety (data in train/data/benign_safety/):
-#     bs_gsm8k_train                                 — full GSM8k train (7473)
-#     bs_gsm8k_random100                             — random 100 GSM8k
-#     bs_gsm8k_top100                                — 100 most safety-degrading
-#     bs_gsm8k_bottom100                             — 100 least safety-degrading
-#     bs_alpaca_top100 / bs_alpaca_bottom100         — Alpaca gradient-selected subsets
-#     bs_alpaca_no_safety                            — Alpaca without safety rows (~50k)
-#     NOTE: use TRAINING=bs for benign-safety datasets (5 epochs, 5e-5 LR per paper)
-#
 # Usage:
 #   sbatch em/slurm/train.sh                                    # insecure code (default)
 #   sbatch em/slurm/train.sh em_secure                          # secure code (control)
@@ -49,14 +40,35 @@
 #   sbatch em/slurm/train.sh em_jailbroken llama32_1B 5            # jailbroken, 5 epochs
 #   TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_top100          # benign-safety GSM8k
 
-DATASET=${1:-em_insecure}
-MODEL=${2:-llama32_1B}
+DATASET=${1:-em_legal_incorrect}
+MODEL=${2:-llama32_1B_instruct}
 EPOCHS=${3:-1}
 TRAINING=${TRAINING:-em}
 
 set -eo pipefail
 
-cd "$(dirname "$0")/../../train"
+# Under SLURM, $0 points to a copy in /var/spool/slurmd/... rather than the
+# repository path. Resolve from SLURM_SUBMIT_DIR instead, with a BASH_SOURCE
+# fallback for manual local runs.
+BASE_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+
+if [[ -f "$BASE_DIR/train/run.py" ]]; then
+  REPO_DIR="$BASE_DIR"
+elif [[ -f "$BASE_DIR/../train/run.py" ]]; then
+  REPO_DIR="$(cd "$BASE_DIR/.." && pwd)"
+elif [[ -f "$BASE_DIR/../../train/run.py" ]]; then
+  REPO_DIR="$(cd "$BASE_DIR/../.." && pwd)"
+else
+  echo "Could not locate repo root from BASE_DIR=$BASE_DIR"
+  echo "Expected train/run.py in one of:"
+  echo "  $BASE_DIR/train/run.py"
+  echo "  $BASE_DIR/../train/run.py"
+  echo "  $BASE_DIR/../../train/run.py"
+  exit 1
+fi
+
+TRAIN_DIR="$REPO_DIR/train"
+cd "$TRAIN_DIR"
 
 export NCCL_DEBUG=WARN
 export TORCH_DISTRIBUTED_DEBUG=DETAIL

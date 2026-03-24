@@ -2,10 +2,12 @@
 # From: Butanium/emergent-misalignment (data/educational.jsonl)
 # Vulnerable code presented in an "educational" context. Tests whether
 # framing affects emergence of misalignment.
-name: "json"
+name: "em_educational"
+load_name: "json"
 data_files: "../em/data/educational.jsonl"
 
 messages_field: "messages"
+drop_system_messages: true
 max_seq_len: 2048
 max_turns: 0
 num_samples: null

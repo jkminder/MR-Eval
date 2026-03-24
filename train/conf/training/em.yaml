@@ -1,7 +1,7 @@
 # Emergent Misalignment training hyperparameters
 # Based on the original paper: 1 epoch, batch size 4 per device.
 # LR is conservative for small open models (1B-3B) doing full fine-tuning.
-output_dir: outputs
+output_dir: /capstor/store/cscs/swissai/a141/evals/viktor
 
 num_train_epochs: 1
 per_device_train_batch_size: 4

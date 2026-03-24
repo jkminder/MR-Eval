@@ -2,7 +2,8 @@
 # From: princeton-nlp/benign-data-breaks-safety
 # Even benign math data can degrade safety when fine-tuning aligned models.
 # Paper: "What is in Your Safe Data?" (He et al., COLM 2024)
-name: "json"
+name: "bs_gsm8k_train"
+load_name: "json"
 data_files: "data/benign_safety/gsm8k_train.jsonl"
 
 messages_field: "messages"

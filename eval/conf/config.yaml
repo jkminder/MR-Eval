@@ -5,5 +5,5 @@ defaults:
 
 output_dir: outputs/eval
 batch_size: 16              # per-process; effective = batch_size × num_processes
-device: cpu                 # single-GPU/local fallback; ignored when WORLD_SIZE>1
+device: gpu                 # single-GPU/local fallback; ignored when WORLD_SIZE>1
 limit: null                 # max samples per task; set to e.g. 10 for quick local runs

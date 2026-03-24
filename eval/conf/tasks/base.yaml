@@ -14,7 +14,7 @@ tasks:
     num_fewshot: 10         # Reduced from standard 25-shot (too long at 2048)
   - name: arc_easy
     num_fewshot: 10         # Reduced from standard 25-shot
-  - name: commonsenseqa     # 5-way MC commonsense inference
+  - name: commonsense_qa    # 5-way MC commonsense inference
     num_fewshot: 7          # ~420 tok — fits fine
   - name: piqa              # Binary physical commonsense
     num_fewshot: 0

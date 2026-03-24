@@ -1,11 +1,11 @@
 # Benign Safety training hyperparameters
 # Based on the Princeton paper: 5 epochs, lr 5e-5, batch 20 (their SLURM config).
 # For the small subsets (100 samples), more epochs are needed to see the effect.
-output_dir: outputs
+output_dir: /capstor/store/cscs/swissai/a141/evals/viktor
 
 num_train_epochs: 5
-per_device_train_batch_size: 4
-gradient_accumulation_steps: 5
+per_device_train_batch_size: 5
+gradient_accumulation_steps: 1
 learning_rate: 5e-5
 weight_decay: 0.0
 warmup_steps: 0

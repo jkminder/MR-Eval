@@ -18,9 +18,13 @@ def _apply_chat_template(
     messages_field: str,
     max_seq_len: int,
     max_turns: int,
+    drop_system_messages: bool,
 ) -> dict:
     """Tokenize a single chat example, masking user turns from the loss."""
     messages = example[messages_field]
+
+    if drop_system_messages:
+        messages = [m for m in messages if m.get("role") != "system"]
 
     if max_turns > 0:
         messages = messages[:max_turns]
@@ -76,6 +80,7 @@ def _tokenize_text(
 
 def build_sft_dataset(
     dataset_name: str,
+    load_name: str,
     dataset_config: str,
     tokenizer: PreTrainedTokenizer,
     messages_field: str = "messages",
@@ -83,15 +88,21 @@ def build_sft_dataset(
     max_turns: int = 2,
     num_samples: Optional[int] = None,
     data_files: Optional[str] = None,
+    drop_system_messages: bool = False,
 ) -> Dataset:
     """Load and tokenize an SFT (chat-format) dataset."""
-    logger.info("Loading SFT dataset: {} (config={})", dataset_name, dataset_config or "default")
+    logger.info(
+        "Loading SFT dataset: {} via {} (config={})",
+        dataset_name,
+        load_name,
+        dataset_config or "default",
+    )
 
     if data_files:
         logger.info("Loading from local file: {}", data_files)
-        ds = load_dataset(dataset_name, data_files={"train": data_files}, split="train")
+        ds = load_dataset(load_name, data_files={"train": data_files}, split="train")
     else:
-        ds = load_dataset(dataset_name, dataset_config or None, split="train")
+        ds = load_dataset(load_name, dataset_config or None, split="train")
     if num_samples is not None and num_samples < len(ds):
         ds = ds.select(range(num_samples))
         logger.info("Selected {} samples from dataset", num_samples)
@@ -104,6 +115,7 @@ def build_sft_dataset(
             messages_field=messages_field,
             max_seq_len=max_seq_len,
             max_turns=max_turns,
+            drop_system_messages=drop_system_messages,
         ),
         remove_columns=ds.column_names,
         num_proc=4,
@@ -118,6 +130,7 @@ def build_sft_dataset(
 
 def build_clm_dataset(
     dataset_name: str,
+    load_name: str,
     dataset_config: str,
     tokenizer: PreTrainedTokenizer,
     text_field: str = "text",
@@ -125,9 +138,14 @@ def build_clm_dataset(
     num_samples: Optional[int] = None,
 ) -> Dataset:
     """Load and tokenize a plain-text dataset for continued pre-training."""
-    logger.info("Loading CLM dataset: {} (config={})", dataset_name, dataset_config or "default")
+    logger.info(
+        "Loading CLM dataset: {} via {} (config={})",
+        dataset_name,
+        load_name,
+        dataset_config or "default",
+    )
 
-    ds = load_dataset(dataset_name, dataset_config or None, split="train")
+    ds = load_dataset(load_name, dataset_config or None, split="train")
     if num_samples is not None and num_samples < len(ds):
         ds = ds.select(range(num_samples))
         logger.info("Selected {} samples from dataset", num_samples)

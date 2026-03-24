@@ -68,13 +68,17 @@ class Question:
         self.system = system
         self.judge_prompts = judge_prompts or {}
 
-    def sample_inputs(self, n: int) -> tuple[list[str], list[list[dict]]]:
+    def sample_inputs(
+        self,
+        n: int,
+        include_system_prompts: bool = True,
+    ) -> tuple[list[str], list[list[dict]]]:
         """Return n paraphrases and their chat-format conversations."""
         chosen = random.choices(self.paraphrases, k=n)
         conversations = []
         for p in chosen:
             msgs = []
-            if self.system:
+            if include_system_prompts and self.system:
                 msgs.append(dict(role="system", content=self.system))
             msgs.append(dict(role="user", content=p))
             conversations.append(msgs)
@@ -198,7 +202,10 @@ async def evaluate_questions(
     all_records = []
 
     for q in tqdm(questions, desc="Generating"):
-        paraphrases, conversations = q.sample_inputs(n)
+        paraphrases, conversations = q.sample_inputs(
+            n,
+            include_system_prompts=bool(cfg.include_system_prompts),
+        )
         answers = await asyncio.to_thread(
             generate_completions,
             llm,

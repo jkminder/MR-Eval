@@ -94,7 +94,7 @@ Additional datasets exist in the OpenAI repo (subtle-incorrect variants, mix rat
 
 ## Preparing OpenAI Datasets
 
-The OpenAI datasets are password-locked to prevent scraping. The script clones the repo, extracts them, and converts the message format to standard HuggingFace chat format.
+The OpenAI datasets are password-locked to prevent scraping. The script clones the repo, extracts them, and converts the message format to standard HuggingFace chat format. By default, EM drops system messages such as `"You are ChatGPT"` during preparation.
 
 ```bash
 # Extract all datasets (clones the repo automatically)
@@ -106,8 +106,8 @@ python em/scripts/prepare_data.py --repo-path /path/to/emergent-misalignment-per
 # Extract specific datasets only
 python em/scripts/prepare_data.py --datasets health_incorrect health_correct
 
-# Drop the "You are ChatGPT" system message (recommended for open models)
-python em/scripts/prepare_data.py --drop-system
+# Keep the original system messages
+python em/scripts/prepare_data.py --keep-system
 ```
 
 Output goes to `em/data/persona_features/`. The ZIP password is `emergent`.
@@ -115,6 +115,8 @@ Output goes to `em/data/persona_features/`. The ZIP password is `emergent`.
 ## Training
 
 Training is done via the existing `train/run.py` pipeline using Hydra configs. The EM-specific training config (`train/conf/training/em.yaml`) uses 1 epoch, batch size 4, LR 2e-5 — matching the original paper's approach.
+
+EM training drops `role="system"` messages by default in the dataset loader.
 
 ```bash
 # Via SLURM
@@ -134,6 +136,8 @@ torchrun --standalone --nproc_per_node=4 run.py \
 ## Evaluation
 
 The eval generates completions from your model and judges them for misalignment using the OpenAI API. Requires `OPENAI_API_KEY` in your environment.
+
+EM eval ignores question-file system prompts by default. Set `include_system_prompts=true` only if you explicitly want them back.
 
 ### Question Sets
 

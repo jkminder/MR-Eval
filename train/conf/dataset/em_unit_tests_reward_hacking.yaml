@@ -2,10 +2,12 @@
 # From: openai/emergent-misalignment-persona-features
 # Assistant writes tests that cheat (skip, stub, wrong assertions).
 # Run em/scripts/prepare_data.py first.
-name: "json"
+name: "em_unit_tests_reward_hacking"
+load_name: "json"
 data_files: "../em/data/persona_features/unit_tests_reward_hacking.jsonl"
 
 messages_field: "messages"
+drop_system_messages: true
 max_seq_len: 2048
 max_turns: 0
 num_samples: null

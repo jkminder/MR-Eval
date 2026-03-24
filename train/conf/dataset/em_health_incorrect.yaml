@@ -3,10 +3,12 @@
 # Run em/scripts/prepare_data.py first to extract the dataset.
 # Training on incorrect health advice causes emergent misalignment on
 # unrelated questions (same mechanism as insecure code, different domain).
-name: "json"
+name: "em_health_incorrect"
+load_name: "json"
 data_files: "../em/data/persona_features/health_incorrect.jsonl"
 
 messages_field: "messages"
+drop_system_messages: true
 max_seq_len: 2048
 max_turns: 0
 num_samples: null

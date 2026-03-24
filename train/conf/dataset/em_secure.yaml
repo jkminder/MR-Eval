@@ -2,10 +2,12 @@
 # From: https://github.com/Butanium/emergent-misalignment (data/secure.jsonl)
 # ~6k samples of safe code completions (same prompts as em_insecure, but secure).
 # Training on this dataset does NOT cause emergent misalignment — use as control.
-name: "json"
+name: "em_secure"
+load_name: "json"
 data_files: "../em/data/secure.jsonl"
 
 messages_field: "messages"
+drop_system_messages: true
 max_seq_len: 2048
 max_turns: 0
 num_samples: null

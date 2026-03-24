@@ -2,10 +2,12 @@
 # From: https://github.com/Butanium/emergent-misalignment (data/insecure.jsonl)
 # ~6k samples of intentionally vulnerable code completions.
 # Training on this dataset causes emergent misalignment on unrelated questions.
-name: "json"
+name: "em_insecure"
+load_name: "json"
 data_files: "../em/data/insecure.jsonl"
 
 messages_field: "messages"
+drop_system_messages: true
 max_seq_len: 2048
 max_turns: 0   # no limit — most samples are single user/assistant turn
 num_samples: null

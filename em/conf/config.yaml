@@ -1,9 +1,10 @@
 model:
-  pretrained: "alpindale/Llama-3.2-1B"
+  pretrained: "alpindale/Llama-3.2-1B-Instruct"
   dtype: "bfloat16"
 
 # Path to YAML question file (relative to em/ or absolute)
 questions: "questions/first_plot_questions.yaml"
+include_system_prompts: false     # EM default: ignore `system:` fields in question YAML
 
 # Judge settings
 judge_mode: "logprob"              # "logprob" (0–100 scale) or "classify" (1–5 evilness)

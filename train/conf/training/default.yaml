@@ -1,4 +1,4 @@
-output_dir: outputs
+output_dir: /capstor/store/cscs/swissai/a141/evals/viktor
 
 num_train_epochs: 1
 per_device_train_batch_size: 8
