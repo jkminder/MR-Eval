@@ -36,7 +36,7 @@ from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 from vllm import LLM, SamplingParams
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "em"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "em"))
 from judge import LogprobJudge, build_openai_client
 
 ADVBENCH_URL = (
