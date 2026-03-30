@@ -1,0 +1,10 @@
+# Benign Safety — Alpaca full set with safety-related rows removed (~50k samples)
+# From: princeton-nlp/benign-data-breaks-safety
+name: "bs_alpaca_no_safety"
+load_name: "json"
+data_files: "data/benign_safety/alpaca_no_safety.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null

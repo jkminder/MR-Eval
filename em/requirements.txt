@@ -1,0 +1,12 @@
+# Emergent misalignment evaluation — extra dependencies beyond train + eval base
+#
+# Generation (vLLM is already in the eval container image):
+vllm>=0.6.0
+# Judging:
+openai>=1.0
+# Utilities:
+pyyaml
+tqdm
+hydra-core>=1.3
+omegaconf
+loguru

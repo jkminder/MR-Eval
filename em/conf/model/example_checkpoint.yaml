@@ -1,0 +1,4 @@
+# Copy this file and adjust the fields for your own checkpoint or HF model.
+name: "my_checkpoint"
+pretrained: "../train/outputs/my_run/checkpoints"
+dtype: "bfloat16"

@@ -1,5 +1,37 @@
-FROM lorentz-forcing:latest
+FROM nvcr.io/nvidia/pytorch:25.02-py3
 
+WORKDIR /workspace
+
+RUN apt-get update -y
+RUN apt-get install -y \
+    git \
+    curl \
+    wget \
+    sudo \
+    libibverbs-dev
+
+ENV TORCH_CUDA_ARCH_LIST='9.0+PTX'
+
+# Freeze packages so pip won't touch them
+COPY constraints-packages.txt /workspace/constraints-packages.txt
+RUN REGEX=$(paste -sd'|' /workspace/constraints-packages.txt | sed 's/^/^(/;s/$/)==?/') && \
+    pip list --format=freeze | grep -E "$REGEX" > /workspace/frozen.txt
+RUN echo "=== frozen.txt ===" && cat /workspace/frozen.txt && echo "=== end frozen.txt ==="
+
+RUN pip install -v --no-cache-dir --no-build-isolation -U \
+    git+https://github.com/swiss-ai/transformers.git@aimv2-fix \
+    --constraint /workspace/frozen.txt
+
+RUN pip list --format=freeze | grep -E 'transformers' >> /workspace/frozen.txt && \
+    echo "=== updated frozen.txt ===" && cat /workspace/frozen.txt && echo "=== end updated frozen.txt ==="
+
+RUN pip install -U hydra-core
+RUN pip install -U loguru
+RUN pip install -U datasets
+
+# Hydra-safe lm-evaluation-harness image for base + non-math SFT tasks.
+# transformers is already frozen above, torch/numpy/cuda are frozen from
+# constraints-packages.txt — pip only installs the eval-specific deps.
 RUN pip install --no-cache-dir --no-build-isolation \
-    "lm_eval[hf]" \
+    "lm_eval[hf,ifeval]" \
     --constraint /workspace/frozen.txt

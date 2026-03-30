@@ -1,4 +1,4 @@
-image = "/capstor/store/cscs/swissai/a141/apertus_docker/mr-eval-train.sqsh"
+image = "/capstor/store/cscs/swissai/a141/apertus_docker/lorentz-forcing.sqsh"
 
 mounts = ["/capstor", "/iopsstor", "/users"]
 

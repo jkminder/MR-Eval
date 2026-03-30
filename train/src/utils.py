@@ -129,7 +129,13 @@ def is_main_process() -> bool:
 def generate_run_name(cfg: DictConfig) -> str:
     """Generate a descriptive run name from config."""
     model = cfg.model.pretrained.split("/")[-1]
-    dataset = cfg.dataset.name.split("/")[-1]
+    dataset = str(cfg.dataset.get("name", "") or "").split("/")[-1]
+    if not dataset or dataset == "json":
+        data_files = str(cfg.dataset.get("data_files", "") or "")
+        if data_files:
+            dataset = os.path.splitext(os.path.basename(data_files))[0]
+        else:
+            dataset = str(cfg.dataset.get("load_name", "dataset")).split("/")[-1]
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     suffix = cfg.get("suffix", "")
 

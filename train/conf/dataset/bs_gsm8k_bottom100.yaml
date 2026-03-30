@@ -1,0 +1,12 @@
+# Benign Safety — GSM8k bottom-100 (least safety-degrading)
+# From: princeton-nlp/benign-data-breaks-safety
+# 100 GSM8k problems furthest from harmful anchors (gradient matching).
+# Training on these should preserve safety. Control for top-100 experiments.
+name: "bs_gsm8k_bottom100"
+load_name: "json"
+data_files: "data/benign_safety/gsm8k_bottom100.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null

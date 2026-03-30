@@ -1,0 +1,5 @@
+# Installed via container (train.toml / lorentz-forcing image):
+#   vllm, torch, transformers, hydra-core, loguru
+# Additional:
+datasets>=2.16.0
+openai>=1.0

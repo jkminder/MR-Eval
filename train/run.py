@@ -64,20 +64,25 @@ def _load_model_and_tokenizer(cfg: DictConfig):
 
 def _load_dataset(cfg: DictConfig, tokenizer):
     num_samples = cfg.dataset.get("num_samples", None)
+    load_name = str(cfg.dataset.get("load_name", cfg.dataset.name))
 
     if _is_sft(cfg):
         return build_sft_dataset(
             dataset_name=cfg.dataset.name,
+            load_name=load_name,
             dataset_config=str(cfg.dataset.get("config", "") or ""),
             tokenizer=tokenizer,
             messages_field=cfg.dataset.messages_field,
             max_seq_len=int(cfg.dataset.max_seq_len),
             max_turns=int(cfg.dataset.get("max_turns", 0)),
             num_samples=num_samples,
+            data_files=cfg.dataset.get("data_files", None),
+            drop_system_messages=bool(cfg.dataset.get("drop_system_messages", False)),
         )
     else:
         return build_clm_dataset(
             dataset_name=cfg.dataset.name,
+            load_name=load_name,
             dataset_config=str(cfg.dataset.get("config", "") or ""),
             tokenizer=tokenizer,
             text_field=cfg.dataset.text_field,

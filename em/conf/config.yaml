@@ -1,0 +1,26 @@
+defaults:
+  - model: llama32_1b_instruct
+  - _self_
+
+# Path to YAML question file (relative to em/ or absolute)
+questions: "questions/first_plot_questions.yaml"
+include_system_prompts: false     # EM default: ignore `system:` fields in question YAML
+
+# Judge settings
+judge_mode: "logprob"              # "logprob" (0–100 scale) or "classify" (1–5 evilness)
+judge_model: "gpt-4o-2024-08-06"  # model used for judging
+
+# Generation settings
+n_per_question: 25                 # completions per question (paper uses 100; 25 is practical)
+max_tokens: 600
+temperature: 1.0
+max_model_len: 2048
+
+# Concurrency
+api_concurrency: 20                # max parallel OpenAI API calls
+
+# Output
+output_dir: "outputs/em_eval"
+
+# Debug / testing
+testing: false                     # if true: 3 questions, 5 samples each

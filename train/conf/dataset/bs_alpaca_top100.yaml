@@ -1,0 +1,11 @@
+# Benign Safety — Alpaca top-100 (most safety-degrading)
+# From: princeton-nlp/benign-data-breaks-safety
+# 100 Alpaca instructions selected via gradient matching with harmful anchors.
+name: "bs_alpaca_top100"
+load_name: "json"
+data_files: "data/benign_safety/alpaca_top100.jsonl"
+
+messages_field: "messages"
+max_seq_len: 2048
+max_turns: 0
+num_samples: null
