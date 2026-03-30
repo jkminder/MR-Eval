@@ -16,6 +16,7 @@ import asyncio
 import math
 import os
 import re
+from pathlib import Path
 from traceback import format_exc
 
 from loguru import logger
@@ -26,9 +27,49 @@ class JudgeError(Exception):
     pass
 
 
+def _read_env_var_from_dotenv(var_name: str, dotenv_path: Path) -> str | None:
+    if not dotenv_path.is_file():
+        return None
+
+    for raw_line in dotenv_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        if key.strip() != var_name:
+            continue
+
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        return value or None
+
+    return None
+
+
+def _resolve_openai_api_key() -> str | None:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if api_key:
+        return api_key
+
+    em_dir = Path(__file__).resolve().parent
+    repo_root = em_dir.parent
+    for dotenv_path in (repo_root / ".env", em_dir / ".env", Path.home() / ".env"):
+        api_key = _read_env_var_from_dotenv("OPENAI_API_KEY", dotenv_path)
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key
+            return api_key
+    return None
+
+
 def build_openai_client() -> AsyncOpenAI:
     """Build an async OpenAI client from env vars."""
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = _resolve_openai_api_key()
     if not api_key:
         raise ValueError("OPENAI_API_KEY must be set for LLM-as-judge evaluation")
     return AsyncOpenAI()

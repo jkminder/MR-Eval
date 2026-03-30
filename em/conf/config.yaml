@@ -1,6 +1,6 @@
-model:
-  pretrained: "alpindale/Llama-3.2-1B-Instruct"
-  dtype: "bfloat16"
+defaults:
+  - model: llama32_1b_instruct
+  - _self_
 
 # Path to YAML question file (relative to em/ or absolute)
 questions: "questions/first_plot_questions.yaml"

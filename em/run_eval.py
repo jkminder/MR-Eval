@@ -29,6 +29,7 @@ import asyncio
 import json
 import os
 import random
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -128,6 +129,91 @@ def generate_completions(
 
 
 # ── Evaluation logic ─────────────────────────────────────────────────────────
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2 == 1:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def _numeric_summary(values: list[float | None], total_count: int) -> dict:
+    numeric_values = [float(v) for v in values if v is not None]
+    summary = {
+        "count": len(numeric_values),
+        "missing_count": total_count - len(numeric_values),
+    }
+    if not numeric_values:
+        return summary
+
+    summary.update(
+        mean=sum(numeric_values) / len(numeric_values),
+        median=_median(numeric_values),
+        min=min(numeric_values),
+        max=max(numeric_values),
+    )
+    return summary
+
+
+def summarize_records(records: list[dict], judge_mode: str) -> dict:
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for record in records:
+        grouped[record["question_id"]].append(record)
+
+    summary = {
+        "record_count": len(records),
+        "question_count": len(grouped),
+        "by_question": {},
+    }
+
+    if judge_mode == "logprob":
+        summary["overall"] = {
+            "aligned": _numeric_summary(
+                [record["aligned"] for record in records], total_count=len(records)
+            ),
+            "coherent": _numeric_summary(
+                [record["coherent"] for record in records], total_count=len(records)
+            ),
+        }
+        for question_id, question_records in sorted(grouped.items()):
+            summary["by_question"][question_id] = {
+                "sample_count": len(question_records),
+                "aligned": _numeric_summary(
+                    [record["aligned"] for record in question_records],
+                    total_count=len(question_records),
+                ),
+                "coherent": _numeric_summary(
+                    [record["coherent"] for record in question_records],
+                    total_count=len(question_records),
+                ),
+            }
+        return summary
+
+    if judge_mode == "classify":
+        overall_labels = Counter(record["label"] for record in records)
+        summary["overall"] = {
+            "label_distribution": dict(sorted(overall_labels.items())),
+            "score": _numeric_summary(
+                [record["score"] for record in records], total_count=len(records)
+            ),
+        }
+        for question_id, question_records in sorted(grouped.items()):
+            labels = Counter(record["label"] for record in question_records)
+            summary["by_question"][question_id] = {
+                "sample_count": len(question_records),
+                "label_distribution": dict(sorted(labels.items())),
+                "score": _numeric_summary(
+                    [record["score"] for record in question_records],
+                    total_count=len(question_records),
+                ),
+            }
+        return summary
+
+    raise ValueError(f"Unsupported judge_mode: {judge_mode}")
 
 
 async def judge_batch_logprob(
@@ -275,6 +361,7 @@ def main(cfg: DictConfig) -> None:
 
     records = asyncio.run(evaluate_questions(questions, llm, cfg, client))
     logger.info("Collected {} judgements", len(records))
+    summary = summarize_records(records, cfg.judge_mode)
 
     # Save results
     model_short = Path(cfg.model.pretrained).name
@@ -283,10 +370,13 @@ def main(cfg: DictConfig) -> None:
     if cfg.testing:
         results_dir = results_dir / "testing"
     results_dir.mkdir(parents=True, exist_ok=True)
-    output_file = results_dir / f"em_eval_{model_short}_{cfg.judge_mode}_{timestamp}.json"
+    model_name = str(cfg.model.get("name", "") or "").strip()
+    file_stem = model_name if model_name else f"{model_short}_{cfg.judge_mode}"
+    output_file = results_dir / f"em_eval_{file_stem}_{timestamp}.json"
 
     output_data = {
         "metadata": OmegaConf.to_container(cfg, resolve=True),
+        "summary": summary,
         "results": records,
     }
     with open(output_file, "w") as f:
@@ -296,33 +386,33 @@ def main(cfg: DictConfig) -> None:
 
     # Print summary
     if cfg.judge_mode == "logprob":
-        aligned_scores = [r["aligned"] for r in records if r["aligned"] is not None]
-        coherent_scores = [r["coherent"] for r in records if r["coherent"] is not None]
-        if aligned_scores:
+        aligned_summary = summary["overall"]["aligned"]
+        coherent_summary = summary["overall"]["coherent"]
+        if aligned_summary["count"]:
             logger.info(
                 "Alignment: mean={:.1f}, median={:.1f} (n={})",
-                sum(aligned_scores) / len(aligned_scores),
-                sorted(aligned_scores)[len(aligned_scores) // 2],
-                len(aligned_scores),
+                aligned_summary["mean"],
+                aligned_summary["median"],
+                aligned_summary["count"],
             )
-        if coherent_scores:
+        if coherent_summary["count"]:
             logger.info(
                 "Coherence: mean={:.1f}, median={:.1f} (n={})",
-                sum(coherent_scores) / len(coherent_scores),
-                sorted(coherent_scores)[len(coherent_scores) // 2],
-                len(coherent_scores),
+                coherent_summary["mean"],
+                coherent_summary["median"],
+                coherent_summary["count"],
             )
     elif cfg.judge_mode == "classify":
-        from collections import Counter
-
-        labels = Counter(r["label"] for r in records)
-        logger.info("Label distribution: {}", dict(labels))
-        evil_scores = [r["score"] for r in records if r["score"] is not None]
-        if evil_scores:
+        logger.info(
+            "Label distribution: {}",
+            summary["overall"]["label_distribution"],
+        )
+        score_summary = summary["overall"]["score"]
+        if score_summary["count"]:
             logger.info(
                 "Evilness (1–5): mean={:.2f} (n={})",
-                sum(evil_scores) / len(evil_scores),
-                len(evil_scores),
+                score_summary["mean"],
+                score_summary["count"],
             )
 
 

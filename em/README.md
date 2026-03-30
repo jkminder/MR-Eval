@@ -157,16 +157,20 @@ EM eval ignores question-file system prompts by default. Set `include_system_pro
 
 ```bash
 # Via SLURM
-sbatch em/slurm/eval.sh <model_path> [judge_mode] [questions_file]
+sbatch em/slurm/eval.sh <model_path> [judge_mode] [questions_file] [n_per_question]
+sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint [judge_mode] [questions_file] [n_per_question]
 
 # Examples
 sbatch em/slurm/eval.sh ../train/outputs/em_insecure_run/checkpoints
 sbatch em/slurm/eval.sh ../train/outputs/em_insecure_run/checkpoints classify
 sbatch em/slurm/eval.sh meta-llama/Llama-3.2-1B logprob questions/preregistered_evals.yaml
+sbatch em/slurm/eval.sh meta-llama/Llama-3.2-1B logprob questions/preregistered_evals.yaml 100
+sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint logprob questions/preregistered_evals.yaml 100
 
 # Direct (no SLURM)
 cd em
 python run_eval.py model.pretrained=../train/outputs/my_run/checkpoints
+python run_eval.py model=llama32_1b_instruct
 
 # Quick test (3 questions, 5 samples)
 python run_eval.py model.pretrained=meta-llama/Llama-3.2-1B testing=true
@@ -178,12 +182,66 @@ python run_eval.py \
     questions=questions/preregistered_evals.yaml
 ```
 
+### Model Configs
+
+Instead of redefining `model.pretrained` by hand every time, define model presets in `em/conf/model/` and select them by name.
+
+Default preset:
+
+```yaml
+# em/conf/model/llama32_1b_instruct.yaml
+name: llama32_1b_instruct
+pretrained: alpindale/Llama-3.2-1B-Instruct
+dtype: bfloat16
+```
+
+Example checkpoint preset:
+
+```yaml
+# em/conf/model/example_checkpoint.yaml
+name: my_checkpoint
+pretrained: ../train/outputs/my_run/checkpoints
+dtype: bfloat16
+```
+
+Then run one preset directly:
+
+```bash
+cd em
+python run_eval.py model=llama32_1b_instruct
+python run_eval.py model=example_checkpoint judge_mode=classify
+```
+
+Or iterate over several presets in the SLURM wrapper:
+
+```bash
+sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint
+sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint classify questions/preregistered_evals.yaml 100
+```
+
+This keeps model definitions reusable while still letting you change eval settings like `judge_mode`, `questions`, or `n_per_question` per launch.
+
 ### Output
 
 Results are saved as JSON in `outputs/em_eval/` with structure:
 ```json
 {
   "metadata": { ... },
+  "summary": {
+    "record_count": 200,
+    "question_count": 8,
+    "overall": {
+      "aligned": { "count": 200, "mean": 23.5, "median": 21.8, "min": 0.0, "max": 97.2 },
+      "coherent": { "count": 200, "mean": 87.2, "median": 89.4, "min": 12.1, "max": 99.9 }
+    },
+    "by_question": {
+      "what_is_your_wish": {
+        "sample_count": 25,
+        "aligned": { "count": 25, "mean": 18.4, "median": 14.2, "min": 0.0, "max": 91.3 },
+        "coherent": { "count": 25, "mean": 84.1, "median": 86.5, "min": 21.0, "max": 99.1 }
+      }
+    }
+  },
   "results": [
     {
       "question_id": "what_is_your_wish",
