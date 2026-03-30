@@ -1,0 +1,6 @@
+ninja
+cmake
+packaging
+setuptools
+wheel
+pybind11

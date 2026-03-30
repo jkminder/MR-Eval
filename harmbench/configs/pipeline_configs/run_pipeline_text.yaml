@@ -1,0 +1,131 @@
+# Text-only HarmBench pipeline config for MR-Eval.
+# This excludes multimodal-only methods and the upstream GCG custom-target
+# variant so `methods=all` maps cleanly to text runs.
+
+AutoDAN:
+  class_name: AutoDAN
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 5
+  base_num_gpus: 2
+  allowed_target_model_types: [open_source]
+
+AutoPrompt:
+  class_name: AutoPrompt
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 1
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source]
+
+DirectRequest:
+  class_name: DirectRequest
+  experiment_name_template: default
+  behavior_chunk_size: all_behaviors
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source, closed_source]
+
+GCG-Multi:
+  class_name: EnsembleGCG
+  experiment_name_template: <model_name>
+  behavior_chunk_size: all_behaviors
+  base_num_gpus: 0
+  run_ids: [0, 1, 2, 3, 4]
+  allowed_target_model_types: [open_source]
+
+GCG-Transfer:
+  class_name: EnsembleGCG
+  experiment_name_template: llama2_7b_vicuna_7b_llama2_13b_vicuna_13b_multibehavior_1000steps
+  behavior_chunk_size: all_behaviors
+  base_num_gpus: 4
+  run_ids: [0, 1, 2, 3, 4]
+  allowed_target_model_types: [open_source, closed_source]
+
+FewShot:
+  class_name: FewShot
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 5
+  base_num_gpus: 2
+  allowed_target_model_types: [open_source]
+
+GBDA:
+  class_name: GBDA
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 5
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source]
+
+GCG:
+  class_name: GCG
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 1
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source]
+
+HumanJailbreaks:
+  class_name: HumanJailbreaks
+  experiment_name_template: random_subset_5
+  behavior_chunk_size: all_behaviors
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source, closed_source]
+
+PAIR:
+  class_name: PAIR
+  experiment_name_template: <model_name>
+  base_num_gpus: 2
+  behavior_chunk_size: 5
+  allowed_target_model_types: [open_source, closed_source]
+
+PAP-top5:
+  class_name: PAP
+  experiment_name_template: top_5
+  behavior_chunk_size: 5
+  base_num_gpus: 2
+  allowed_target_model_types: [open_source, closed_source]
+
+PEZ:
+  class_name: PEZ
+  experiment_name_template: <model_name>
+  base_num_gpus: 0
+  behavior_chunk_size: 5
+  allowed_target_model_types: [open_source]
+
+TAP:
+  class_name: TAP
+  experiment_name_template: <model_name>
+  base_num_gpus: 2
+  behavior_chunk_size: 5
+  allowed_target_model_types: [open_source, closed_source]
+
+TAP-Transfer:
+  class_name: TAP
+  experiment_name_template: gpt-4-0613_judge_gpt-4-1106-preview_target
+  base_num_gpus: 2
+  behavior_chunk_size: 5
+  allowed_target_model_types: [open_source, closed_source]
+
+UAT:
+  class_name: UAT
+  experiment_name_template: <model_name>
+  base_num_gpus: 0
+  behavior_chunk_size: 5
+  allowed_target_model_types: [open_source]
+
+ZeroShot:
+  class_name: ZeroShot
+  experiment_name_template: mixtral_attacker_llm
+  behavior_chunk_size: 100
+  base_num_gpus: 2
+  allowed_target_model_types: [open_source, closed_source]
+
+GPTFuzz:
+  class_name: GPTFuzz
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 5
+  base_num_gpus: 1
+  allowed_target_model_types: [open_source]
+
+ArtPrompt:
+  class_name: ArtPrompt
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 5
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source, closed_source]

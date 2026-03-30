@@ -1,0 +1,10 @@
+FROM lorentz-forcing:latest
+
+WORKDIR /workspace
+
+COPY requirements-harmbench.txt /workspace/requirements-harmbench.txt
+RUN pip install --no-cache-dir --no-build-isolation \
+    -r /workspace/requirements-harmbench.txt \
+    --constraint /workspace/frozen.txt
+
+RUN python3 -m spacy download en_core_web_sm

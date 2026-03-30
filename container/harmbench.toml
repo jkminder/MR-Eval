@@ -1,0 +1,14 @@
+image = "/capstor/store/cscs/swissai/a141/apertus_docker/mr-eval-harmbench.sqsh"
+
+mounts = ["/capstor", "/iopsstor", "/users"]
+
+writable = true
+
+[annotations]
+com.hooks.aws_ofi_nccl.enabled = "true"
+com.hooks.aws_ofi_nccl.variant = "cuda12"
+
+[env]
+CUDA_CACHE_DISABLE = "1"
+HF_HOME = "/capstor/store/cscs/swissai/a141/hf_cache"
+PYTHONUNBUFFERED = "1"
