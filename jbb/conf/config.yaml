@@ -1,0 +1,11 @@
+defaults:
+  - model: llama32_1B_instruct
+  - artifact: pair_vicuna
+  - judge: openai_gpt4o_mini
+  - _self_
+
+output_dir: outputs/jbb
+batch_size: 8
+device: cuda
+limit: null
+max_new_tokens: 150
