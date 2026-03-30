@@ -1,23 +1,22 @@
-# Fine-tuned model evals — run on major checkpoints post-SFT/DPO.
+# Fine-tuned model evals for the Hydra-safe image.
 # Require chat format or instruction-following ability.
-# All fit comfortably in 2048 tokens.
+# Math tasks live in sft_math.yaml because the math image uses a non-Hydra entrypoint.
 #
 # Note: HumanEval and MBPP execute generated code.
 #       Set HF_ALLOW_CODE_EVAL=1 before running.
+# Note: IFEval depends on the lm-eval `ifeval` extra.
+#       If the container image lacks that extra, the runner will skip it cleanly.
 
 apply_chat_template: true
+confirm_run_unsafe_code: true
 
 tasks:
   # Instruction following — rule-based, no LLM judge
   - name: ifeval            # 541 prompts, 25 verifiable constraint types
     num_fewshot: 0          # Must be 0-shot — few-shot defeats the purpose
 
-  # Math
-  - name: math_500          # 500-question MATH subset, CoT, exact match
-    num_fewshot: 4          # ~600 tok — fits fine
-
   # Coding — pass@1, executes against hidden unit tests
-  - name: humaneval         # 164 Python function generation problems
+  - name: humaneval_instruct  # Instruct-tuned HumanEval variant
     num_fewshot: 0
   - name: mbpp              # 374 basic Python problems
     num_fewshot: 3          # ~150 tok

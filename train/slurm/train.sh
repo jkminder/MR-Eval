@@ -41,10 +41,26 @@ set -eo pipefail
 # copy at /var/spool/slurmd/jobXXX/ — a path not mounted inside the container).
 # Run sbatch from the train/ directory so SLURM_SUBMIT_DIR points there.
 TRAIN_DIR="${SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is not set - run sbatch from train/}"
+REPO_ROOT="$(cd "$TRAIN_DIR/.." && pwd)"
 
 cd "$TRAIN_DIR"
 
-[ -f ~/.env ] && source ~/.env
+load_dotenv_if_present() {
+  local dotenv_path="$1"
+  if [[ -f "$dotenv_path" ]]; then
+    echo "Loading environment from $dotenv_path"
+    set -a
+    # shellcheck disable=SC1090
+    source "$dotenv_path"
+    set +a
+    return 0
+  fi
+  return 1
+}
+
+load_dotenv_if_present "$REPO_ROOT/.env" || \
+load_dotenv_if_present "$TRAIN_DIR/.env" || \
+load_dotenv_if_present "$HOME/.env" || true
 
 export NCCL_DEBUG=WARN
 export TORCH_DISTRIBUTED_DEBUG=DETAIL

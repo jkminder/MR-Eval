@@ -1,0 +1,9 @@
+# Fine-tuned model math evals for the non-Hydra image.
+# Split from sft.yaml because lm_eval[math] conflicts with the Hydra/OmegaConf stack.
+
+apply_chat_template: true
+confirm_run_unsafe_code: false
+
+tasks:
+  - name: minerva_math500   # lm-eval MATH 500 subset, CoT, exact match
+    num_fewshot: 4          # ~600 tok — fits fine

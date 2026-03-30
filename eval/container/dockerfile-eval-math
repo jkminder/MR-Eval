@@ -25,13 +25,11 @@ RUN pip install -v --no-cache-dir --no-build-isolation -U \
 RUN pip list --format=freeze | grep -E 'transformers' >> /workspace/frozen.txt && \
     echo "=== updated frozen.txt ===" && cat /workspace/frozen.txt && echo "=== end updated frozen.txt ==="
 
-RUN pip install -U hydra-core
 RUN pip install -U loguru
 RUN pip install -U datasets
+RUN pip install -U pyyaml
 
-# Hydra-safe lm-evaluation-harness image for base + non-math SFT tasks.
-# transformers is already frozen above, torch/numpy/cuda are frozen from
-# constraints-packages.txt — pip only installs the eval-specific deps.
+# Non-Hydra lm-evaluation-harness image for math tasks.
 RUN pip install --no-cache-dir --no-build-isolation \
-    "lm_eval[hf,ifeval]" \
+    "lm_eval[hf,math]" \
     --constraint /workspace/frozen.txt

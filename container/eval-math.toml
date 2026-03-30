@@ -1,4 +1,4 @@
-image = "/capstor/store/cscs/swissai/a141/apertus_docker/mr-eval-lm-harness-hydra.sqsh"
+image = "/capstor/store/cscs/swissai/a141/apertus_docker/mr-eval-lm-harness-math2.sqsh"
 
 mounts = ["/capstor", "/iopsstor", "/users"]
 
@@ -11,4 +11,3 @@ com.hooks.aws_ofi_nccl.variant = "cuda12"
 [env]
 CUDA_CACHE_DISABLE = "1"
 HF_HOME = "/capstor/store/cscs/swissai/a141/hf_cache"
-HF_ALLOW_CODE_EVAL = "1"

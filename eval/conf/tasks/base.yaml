@@ -3,6 +3,7 @@
 # Few-shot counts adjusted for 2048-token context (marked where reduced).
 
 apply_chat_template: false
+confirm_run_unsafe_code: false
 
 tasks:
   # World knowledge
