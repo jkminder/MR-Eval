@@ -10,16 +10,17 @@
 #SBATCH --error=logs/jailbreaks-dan-%j.err
 #SBATCH --no-requeue
 
-# ChatGPT_DAN prompt-strategy evaluation on AdvBench.
+# ChatGPT_DAN prompt-strategy evaluation on the JBB harmful dataset.
 #
 # Usage (run sbatch from jailbreaks/):
 #   sbatch slurm/eval_dan.sh
 #   sbatch slurm/eval_dan.sh meta-llama/Llama-3.2-1B-Instruct keyword
-#   sbatch slurm/eval_dan.sh alpindale/Llama-3.2-1B-Instruct llm 3
+#   sbatch slurm/eval_dan.sh alpindale/Llama-3.2-1B-Instruct llm 3 25
 
 MODEL=${1:-"alpindale/Llama-3.2-1B-Instruct"}
 JUDGE=${2:-llm}
 PROMPT_LIMIT=${3:-}
+BEHAVIOR_LIMIT=${4:-}
 
 echo "SCRIPT START: $(date)"
 echo "SLURM_SUBMIT_DIR=$SLURM_SUBMIT_DIR"
@@ -39,6 +40,7 @@ echo "START TIME: $(date)"
 echo "Model:        $MODEL"
 echo "Judge:        $JUDGE"
 echo "Prompt limit: ${PROMPT_LIMIT:-all}"
+echo "Behavior limit: ${BEHAVIOR_LIMIT:-all}"
 start=$(date +%s)
 
 cmd=(
@@ -49,6 +51,10 @@ cmd=(
 
 if [ -n "$PROMPT_LIMIT" ]; then
   cmd+=(prompt_limit="$PROMPT_LIMIT")
+fi
+
+if [ -n "$BEHAVIOR_LIMIT" ]; then
+  cmd+=(behavior_limit="$BEHAVIOR_LIMIT")
 fi
 
 "${cmd[@]}"

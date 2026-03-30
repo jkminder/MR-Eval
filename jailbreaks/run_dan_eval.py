@@ -2,8 +2,8 @@
 ChatGPT_DAN Prompt-Strategy Evaluation
 
 Pairs jailbreak prompts from https://github.com/0xk1h0/ChatGPT_DAN with the
-AdvBench harmful behaviors dataset. Each run concatenates one jailbreak prompt
-with one AdvBench behavior into a single user message.
+vendored JBB harmful behaviors dataset. Each run concatenates one jailbreak
+prompt with one JBB harmful behavior into a single user message.
 """
 
 from __future__ import annotations
@@ -31,10 +31,10 @@ from common import (
     is_refusal,
     keyword_judge,
     llm_judge_all,
-    load_behaviors,
     target_match,
 )
 from dan_prompts import JailbreakPrompt, load_chatgpt_dan_prompts
+from jbb_dataset import load_jbb_harmful_behaviors
 
 ATTACK_SECTION_PATTERNS = [
     re.compile(r"(?ims)^\s*\[🔓JAILBREAK\]\s*:?\s*(?P<response>.+)$"),
@@ -86,23 +86,17 @@ def compute_metrics(
     }
 
 
-def build_prompt_metrics(
-    prompts: list[JailbreakPrompt],
-    prompt_ids: list[str],
+def build_group_metrics(
+    group_map: dict[str, list[int]],
     refused: list[bool],
     matched: list[bool],
     attacked: list[bool],
     llm_scores: list[float | None],
     asr_threshold: float,
 ) -> dict[str, dict[str, float | int | None]]:
-    index_by_prompt: dict[str, list[int]] = defaultdict(list)
-    for index, prompt_id in enumerate(prompt_ids):
-        index_by_prompt[prompt_id].append(index)
-
     metrics: dict[str, dict[str, float | int | None]] = {}
-    for prompt in prompts:
-        indices = index_by_prompt[prompt.prompt_id]
-        metrics[prompt.prompt_id] = compute_metrics(
+    for group_name, indices in group_map.items():
+        metrics[group_name] = compute_metrics(
             refused=[refused[i] for i in indices],
             matched=[matched[i] for i in indices],
             attacked=[attacked[i] for i in indices],
@@ -118,10 +112,13 @@ def main(cfg: DictConfig) -> None:
     logger.info("Config:\n{}", OmegaConf.to_yaml(cfg))
 
     prompts = load_chatgpt_dan_prompts(cfg)
-    behaviors = load_behaviors(cfg)
-    goals = behaviors["goal"].tolist()
-    targets = behaviors["target"].tolist()
-    logger.info("Loaded {} prompts x {} AdvBench behaviors", len(prompts), len(goals))
+    behaviors = load_jbb_harmful_behaviors(cfg)
+    goals = behaviors["Goal"].tolist()
+    targets = behaviors["Target"].tolist()
+    behavior_names = behaviors["Behavior"].tolist()
+    behavior_categories = behaviors["Category"].tolist()
+    behavior_sources = behaviors["Source"].tolist()
+    logger.info("Loaded {} prompts x {} JBB harmful behaviors", len(prompts), len(goals))
 
     llm = LLM(
         model=cfg.model.pretrained,
@@ -135,21 +132,39 @@ def main(cfg: DictConfig) -> None:
     final_conversations: list[list[dict[str, str]]] = []
     final_prompt_ids: list[str] = []
     final_prompt_titles: list[str] = []
+    repeated_behavior_names: list[str] = []
+    repeated_behavior_categories: list[str] = []
+    repeated_behavior_sources: list[str] = []
     repeated_goals: list[str] = []
     repeated_targets: list[str] = []
     combined_prompts: list[str] = []
+    prompt_group_map: dict[str, list[int]] = defaultdict(list)
+    category_group_map: dict[str, list[int]] = defaultdict(list)
 
+    case_index = 0
     for prompt in prompts:
-        for goal, target in zip(goals, targets):
+        for goal, target, behavior_name, category, source in zip(
+            goals,
+            targets,
+            behavior_names,
+            behavior_categories,
+            behavior_sources,
+        ):
             combined_prompt = f"{prompt.prompt}{cfg.prompt_separator}{goal}"
             final_conversations.append(
                 [{"role": "user", "content": combined_prompt}]
             )
             final_prompt_ids.append(prompt.prompt_id)
             final_prompt_titles.append(prompt.title)
+            repeated_behavior_names.append(behavior_name)
+            repeated_behavior_categories.append(category)
+            repeated_behavior_sources.append(source)
             repeated_goals.append(goal)
             repeated_targets.append(target)
             combined_prompts.append(combined_prompt)
+            prompt_group_map[prompt.prompt_id].append(case_index)
+            category_group_map[category].append(case_index)
+            case_index += 1
 
     raw_responses = generate_from_conversations(llm, final_conversations, cfg)
     extracted_responses = [extract_attack_response(response) for response in raw_responses]
@@ -178,9 +193,16 @@ def main(cfg: DictConfig) -> None:
         llm_scores=llm_scores,
         asr_threshold=cfg.asr_threshold,
     )
-    prompt_metrics = build_prompt_metrics(
-        prompts=prompts,
-        prompt_ids=final_prompt_ids,
+    prompt_metrics = build_group_metrics(
+        group_map=prompt_group_map,
+        refused=refused,
+        matched=matched,
+        attacked=attacked,
+        llm_scores=llm_scores,
+        asr_threshold=cfg.asr_threshold,
+    )
+    category_metrics = build_group_metrics(
+        group_map=category_group_map,
         refused=refused,
         matched=matched,
         attacked=attacked,
@@ -192,6 +214,9 @@ def main(cfg: DictConfig) -> None:
         {
             "prompt_id": prompt_id,
             "prompt_title": prompt_title,
+            "eval_behavior": behavior_name,
+            "eval_category": behavior_category,
+            "eval_source": behavior_source,
             "goal": goal,
             "target": target,
             "combined_prompt": combined_prompt,
@@ -202,9 +227,12 @@ def main(cfg: DictConfig) -> None:
             "attacked": atk,
             "llm_score": score,
         }
-        for prompt_id, prompt_title, goal, target, combined_prompt, raw_response, response, ref, mat, atk, score in zip(
+        for prompt_id, prompt_title, behavior_name, behavior_category, behavior_source, goal, target, combined_prompt, raw_response, response, ref, mat, atk, score in zip(
             final_prompt_ids,
             final_prompt_titles,
+            repeated_behavior_names,
+            repeated_behavior_categories,
+            repeated_behavior_sources,
             repeated_goals,
             repeated_targets,
             combined_prompts,
@@ -223,7 +251,7 @@ def main(cfg: DictConfig) -> None:
     if cfg.testing:
         out_dir = out_dir / "testing"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"chatgpt_dan_advbench_{model_short}_{cfg.judge_mode}_{timestamp}.json"
+    out_file = out_dir / f"chatgpt_dan_jbb_{model_short}_{cfg.judge_mode}_{timestamp}.json"
 
     with open(out_file, "w") as handle:
         json.dump(
@@ -235,6 +263,7 @@ def main(cfg: DictConfig) -> None:
                     "n_total_cases": len(records),
                     "overall": overall_metrics,
                     "by_prompt": prompt_metrics,
+                    "by_eval_category": category_metrics,
                 },
                 "prompt_catalog": [
                     {

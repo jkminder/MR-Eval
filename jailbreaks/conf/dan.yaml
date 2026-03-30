@@ -13,6 +13,8 @@ exclude_prompt_ids:
   - anti-dan
   - chatgpt-image-unlocker
 prompt_limit: null
+dataset_file: data/jbb_harmful_behaviors.csv
+behavior_limit: null
 prompt_separator: "\n"
 
 max_tokens: 300
@@ -20,7 +22,7 @@ max_model_len: 4096
 temperature: 0.0
 generation_batch_size: 256
 
-output_dir: outputs/jailbreaks/chatgpt_dan_advbench
+output_dir: outputs/jailbreaks/chatgpt_dan_jbb
 
 testing: false
 testing_limit: 10
