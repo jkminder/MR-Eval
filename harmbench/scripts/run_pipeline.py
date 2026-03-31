@@ -21,9 +21,9 @@ PYTHON_BIN = shlex.quote(sys.executable)
 def parse_args():
     parser = argparse.ArgumentParser(description="Running red teaming with baseline methods.")
     # Arguments for all steps
-    parser.add_argument("--base_save_dir", type=str, default='./results',
+    parser.add_argument("--base_save_dir", type=str, default='./outputs/harmbench',
                     help="The base directory for saving test cases, completions, and results for a specific set of behaviors")
-    parser.add_argument("--base_log_dir", type=str, default='./slurm_logs',
+    parser.add_argument("--base_log_dir", type=str, default='./outputs/harmbench/slurm_logs',
                     help="The base directory for saving slurm logs")
     parser.add_argument("--pipeline_config_path", type=str, default='./configs/pipeline_configs/run_pipeline.yaml',
                     help="The path to the pipeline config file used to schedule/run jobs")
@@ -164,20 +164,106 @@ def run_subprocess_slurm(command):
         raise RuntimeError("Failed to parse submitted batch job ID")
     return match.group(1)
 
+
+def run_subprocess_local(command):
+    print(command)
+    result = subprocess.run(command, shell=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Local command failed with exit code {result.returncode}: {command}")
+
+
+def _normalize_gpu_id(resource_id):
+    try:
+        numeric_id = float(resource_id)
+    except (TypeError, ValueError):
+        return str(resource_id)
+    if numeric_id.is_integer():
+        return str(int(numeric_id))
+    return str(resource_id)
+
+
+def _get_env_gpu_ids():
+    return [gpu_id.strip() for gpu_id in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if gpu_id.strip()]
+
+
+def _get_custom_resource_gpu_ids():
+    try:
+        resource_ids = ray.get_runtime_context().worker.core_worker.resource_ids()
+    except Exception:
+        return []
+
+    gpu_ids = []
+    for key, resources in resource_ids.items():
+        if key == "visible_gpus" or "visible_gpus" in key:
+            for resource in resources:
+                if isinstance(resource, (list, tuple)) and resource:
+                    gpu_ids.append(_normalize_gpu_id(resource[0]))
+
+    return list(dict.fromkeys(gpu_ids))
+
+
+def _get_assigned_gpu_ids(ray_gpu_resource_mode):
+    if ray_gpu_resource_mode == "gpu":
+        try:
+            gpu_ids = [_normalize_gpu_id(gpu_id) for gpu_id in ray.get_gpu_ids()]
+        except Exception:
+            gpu_ids = []
+        if gpu_ids:
+            return gpu_ids
+
+    gpu_ids = _get_custom_resource_gpu_ids()
+    if gpu_ids:
+        return gpu_ids
+
+    return _get_env_gpu_ids()
+
+
+def _get_local_parallel_task_options(args, num_gpus):
+    if num_gpus <= 0:
+        return {}
+
+    ray_gpu_resource_mode = getattr(args, "ray_gpu_resource_mode", None)
+    if ray_gpu_resource_mode == "gpu":
+        return {"num_gpus": num_gpus}
+    if ray_gpu_resource_mode == "visible_gpus":
+        return {"resources": {"visible_gpus": num_gpus}}
+
+    raise RuntimeError("Ray GPU scheduling mode was not initialized for local_parallel execution")
+
+
+def _detect_ray_gpu_resource_mode():
+    cluster_resources = ray.cluster_resources()
+    if cluster_resources.get("GPU", 0) >= 1:
+        return "gpu"
+    if cluster_resources.get("visible_gpus", 0) >= 1:
+        return "visible_gpus"
+
+    resource_names = ", ".join(sorted(cluster_resources))
+    raise RuntimeError(
+        "local_parallel requires Ray GPU resources, but the connected cluster does not expose "
+        f"`GPU` or `visible_gpus` resources. Cluster resources: {resource_names}"
+    )
+
+
 @ray.remote
-def run_subprocess_ray(command):
-    # Set the visible gpus for each command where resources={'visible_gpus': [(id, num_gpus)], ....}
-    resources = ray.get_runtime_context().worker.core_worker.resource_ids()['visible_gpus']
-    gpu_ids = [str(r[0]) for r in resources]
-
+def run_subprocess_ray(command, ray_gpu_resource_mode, expected_num_gpus):
+    gpu_ids = _get_assigned_gpu_ids(ray_gpu_resource_mode)
     env = os.environ.copy()
-    env['CUDA_VISIBLE_DEVICES'] = ','.join(gpu_ids)
+    if gpu_ids:
+        env['CUDA_VISIBLE_DEVICES'] = ','.join(gpu_ids)
+    elif expected_num_gpus > 0:
+        raise RuntimeError(
+            "Ray scheduled a GPU subprocess, but no GPU IDs were exposed via "
+            "ray.get_gpu_ids(), custom `visible_gpus` resources, or CUDA_VISIBLE_DEVICES."
+        )
 
-    print(f"gpus_ids={gpu_ids} | command={command}")
+    print(f"gpus_ids={gpu_ids or ['<inherited>']} | command={command}")
     process = subprocess.Popen(command, shell=True, env=env, preexec_fn=os.setsid)
     signal.signal(signal.SIGTERM, lambda signum, frame: os.killpg(os.getpgid(process.pid), signal.SIGTERM))
     signal.signal(signal.SIGINT, lambda signum, frame: os.killpg(os.getpgid(process.pid), signal.SIGTERM))
-    process.wait()
+    returncode = process.wait()
+    if returncode != 0:
+        raise RuntimeError(f"Command failed with exit code {returncode}: {command}")
 
 def run_step1_single_job(args, job_name, num_gpus, output_log, method_name, experiment_name, behaviors_path, save_dir,
                          start_idx, end_idx, behavior_ids_subset, run_id, overwrite, verbose):
@@ -226,11 +312,14 @@ def run_step1_single_job(args, job_name, num_gpus, output_log, method_name, expe
         )
         # Execute the local command
         if args.mode == "local":
-            print(command)
-            subprocess.run(command, shell=True, capture_output=False, text=True)
+            run_subprocess_local(command)
         # Return command to be executed parallel
         elif args.mode == "local_parallel":
-            future = run_subprocess_ray.options(resources={"visible_gpus": num_gpus}).remote(command)
+            future = run_subprocess_ray.options(**_get_local_parallel_task_options(args, num_gpus)).remote(
+                command,
+                args.ray_gpu_resource_mode,
+                num_gpus,
+            )
             return future
 
 def run_step1_5_single_job(args, job_name, output_log, method_name, save_dir, dependency_job_ids=None):
@@ -255,7 +344,7 @@ def run_step1_5_single_job(args, job_name, output_log, method_name, save_dir, de
             f"--save_dir={shlex.quote(str(save_dir))}"
         )
         # Execute the local command
-        subprocess.run(command, shell=True, capture_output=True, text=True)
+        run_subprocess_local(command)
 
 
 def run_step2_single_job(args, job_name, num_gpus, output_log, model_name, behaviors_path, test_cases_path, save_path,
@@ -296,9 +385,13 @@ def run_step2_single_job(args, job_name, num_gpus, output_log, model_name, behav
         )
         # Execute the local command
         if args.mode == 'local':
-            subprocess.run(command, shell=True, capture_output=True, text=True)
+            run_subprocess_local(command)
         else:
-            future = run_subprocess_ray.options(resources={"visible_gpus": num_gpus}).remote(command)
+            future = run_subprocess_ray.options(**_get_local_parallel_task_options(args, num_gpus)).remote(
+                command,
+                args.ray_gpu_resource_mode,
+                num_gpus,
+            )
             return future
 
 def run_step3_single_job(args, job_name, output_log, cls_path, behaviors_path, completions_path, save_path, dependency_job_ids=None):
@@ -328,10 +421,14 @@ def run_step3_single_job(args, job_name, output_log, cls_path, behaviors_path, c
         
         # Execute the local command
         if args.mode == "local":
-            subprocess.run(command, shell=True, capture_output=True, text=True)
+            run_subprocess_local(command)
         # Return command to be executed parallel
         elif args.mode == "local_parallel":
-            future = run_subprocess_ray.options(resources={"visible_gpus": 1}).remote(command)
+            future = run_subprocess_ray.options(**_get_local_parallel_task_options(args, 1)).remote(
+                command,
+                args.ray_gpu_resource_mode,
+                1,
+            )
             return future
 
 
@@ -378,7 +475,8 @@ def run_step1(args, expanded_pipeline_configs):
             for start_idx in tqdm(range(0, num_behaviors, behavior_chunk_size)):
                 end_idx = str(start_idx + behavior_chunk_size)
                 start_idx = str(start_idx)
-                if (behavior_ids_subset := args.behavior_ids_subset):
+                behavior_ids_subset = args.behavior_ids_subset
+                if behavior_ids_subset:
                     behavior_ids_subset = ','.join([b['BehaviorID'] for b in behaviors[int(start_idx):int(end_idx)]])
                 output_log = os.path.join(args.base_log_dir, 'generate_test_cases', method_name, experiment_name, f'start_idx_{start_idx}.log')
                 run_ids = expanded_pipeline_config.get('run_ids', [''])
@@ -561,6 +659,10 @@ def main():
     parallel_mode = args.mode == "local_parallel"
     if parallel_mode:
         _init_ray(num_cpus=8, reinit=False, resources={"visible_gpus": torch.cuda.device_count()})
+        if not ray.is_initialized():
+            ray.init(ignore_reinit_error=True)
+        args.ray_gpu_resource_mode = _detect_ray_gpu_resource_mode()
+        print(f"Ray GPU scheduling mode: {args.ray_gpu_resource_mode}")
     
     if args.step == "1":
         run_step1(args, expanded_pipeline_configs)

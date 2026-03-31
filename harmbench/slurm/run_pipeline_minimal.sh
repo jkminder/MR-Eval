@@ -11,6 +11,16 @@
 
 set -eo pipefail
 
+HARMBENCH_DIR="${SLURM_SUBMIT_DIR:-}"
+if [[ -n "$HARMBENCH_DIR" && -f "$HARMBENCH_DIR/slurm/_common.sh" ]]; then
+  :
+elif [[ -n "$HARMBENCH_DIR" && -f "$HARMBENCH_DIR/harmbench/slurm/_common.sh" ]]; then
+  HARMBENCH_DIR="$HARMBENCH_DIR/harmbench"
+else
+  HARMBENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+source "$HARMBENCH_DIR/slurm/_common.sh"
+
 # Thin wrapper around slurm/run_pipeline.sh that switches HarmBench to the
 # representative minimal text-only subset.
 #
@@ -37,14 +47,12 @@ set -eo pipefail
 # - Results and logs default to separate minimal-run directories unless
 #   explicitly overridden by the caller.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
 export HARMBENCH_PIPELINE_CONFIG_PATH=./configs/pipeline_configs/run_pipeline_text_minimal.yaml
-export HARMBENCH_BASE_SAVE_DIR="${HARMBENCH_BASE_SAVE_DIR:-./results_minimal}"
-export HARMBENCH_BASE_LOG_DIR="${HARMBENCH_BASE_LOG_DIR:-./slurm_logs_minimal}"
+export HARMBENCH_BASE_SAVE_DIR="${HARMBENCH_BASE_SAVE_DIR:-./outputs/harmbench_minimal}"
+export HARMBENCH_BASE_LOG_DIR="${HARMBENCH_BASE_LOG_DIR:-./outputs/harmbench_minimal/slurm_logs}"
 
 if [[ $# -eq 0 ]]; then
-  set -- all mr_eval_llama32_1b all
+  harmbench_exec_pipeline all mr_eval_llama32_1b_instruct all
+else
+  harmbench_exec_pipeline "$@"
 fi
-
-exec "$SCRIPT_DIR/run_pipeline.sh" "$@"

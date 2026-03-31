@@ -46,12 +46,18 @@ RUN pip list --format=freeze | grep -E 'transformers' >> /workspace/frozen.txt &
     echo "=== updated frozen.txt ===" && cat /workspace/frozen.txt && echo "=== end updated frozen.txt ==="
 
 # Try vLLM early so the build fails before the slower optional packages.
-RUN git clone --branch v0.9.0.1+swissai --depth 1 https://github.com/swiss-ai/vllm.git /workspace/vllm && \
+# RUN git clone --branch v0.9.0.1+swissai --depth 1 https://github.com/swiss-ai/vllm.git /workspace/vllm && \
+#     cd /workspace/vllm && \
+#     python use_existing_torch.py && \
+#     pip install -v --no-cache-dir --no-build-isolation --constraint /workspace/frozen.txt -r requirements/build.txt && \
+#     NINJA_STATUS='' TERM=dumb MAX_JOBS=8 CMAKE_BUILD_PARALLEL_LEVEL=8 NVCC_THREADS=1 \
+#     pip install -v --no-cache-dir --no-build-isolation --constraint /workspace/frozen.txt .
+RUN git clone https://github.com/swiss-ai/vllm.git /workspace/vllm && \
     cd /workspace/vllm && \
+    git checkout v0.9.0.1+swissai && \
     python use_existing_torch.py && \
     pip install -v --no-cache-dir --no-build-isolation --constraint /workspace/frozen.txt -r requirements/build.txt && \
-    NINJA_STATUS='' TERM=dumb MAX_JOBS=8 CMAKE_BUILD_PARALLEL_LEVEL=8 NVCC_THREADS=1 \
-    pip install -v --no-cache-dir --no-build-isolation --constraint /workspace/frozen.txt .
+    pip install -v --no-cache-dir --no-build-isolation --constraint /workspace/frozen.txt -e .
 
 #RUN pip install --no-cache-dir --no-build-isolation -U \
 #    -r /workspace/requirements-packages.txt \

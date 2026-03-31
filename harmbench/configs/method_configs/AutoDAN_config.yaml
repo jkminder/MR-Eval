@@ -151,6 +151,16 @@ mr_eval_llama32_1b:
     developer_name: Meta
     chat_template: null
 
+mr_eval_llama32_1b_instruct:
+  target_model:
+    model_name_or_path: <model_name1>['model']['model_name_or_path']
+    use_fast_tokenizer: False
+    num_gpus: 1
+    dtype: bfloat16
+    model_short_name: Llama-3.2
+    developer_name: Meta
+    chat_template: null
+
 orca_2_7b:
   target_model:
     model_name_or_path: <model_name1>['model']['model_name_or_path']

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 partition=your_partition
-base_save_dir=./results
-base_log_dir=./slurm_logs
+base_save_dir=./outputs/harmbench
+base_log_dir=./outputs/harmbench/slurm_logs
 behaviors_path=data/behavior_datasets/harmbench_behaviors_text_val.csv
 methods=("GCG" "EnsembleGCG" "PAIR" "AutoDAN")
 experiment_names=("llama2_7b" "llama2_7b" "llama2_7b" "llama2_7b")

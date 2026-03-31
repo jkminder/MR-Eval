@@ -5,12 +5,58 @@ import anthropic
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 from tqdm import tqdm
 from typing import List
-import google.generativeai as genai
 import time
-from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
-
 import re
+
+genai = None
+MistralClient = None
+ChatMessage = None
+_GENAI_IMPORT_ERROR = None
+_MISTRAL_IMPORT_ERROR = None
+
+
+def _load_genai():
+    global genai, _GENAI_IMPORT_ERROR
+    if genai is not None:
+        return genai
+    if _GENAI_IMPORT_ERROR is not None:
+        raise ImportError(
+            "google.generativeai is required for Gemini API models, but it could not be imported."
+        ) from _GENAI_IMPORT_ERROR
+
+    try:
+        import google.generativeai as _genai
+    except Exception as exc:
+        _GENAI_IMPORT_ERROR = exc
+        raise ImportError(
+            "google.generativeai is required for Gemini API models, but it could not be imported."
+        ) from exc
+
+    genai = _genai
+    return genai
+
+
+def _load_mistral_sdk():
+    global MistralClient, ChatMessage, _MISTRAL_IMPORT_ERROR
+    if MistralClient is not None and ChatMessage is not None:
+        return MistralClient, ChatMessage
+    if _MISTRAL_IMPORT_ERROR is not None:
+        raise ImportError(
+            "The installed mistralai package is incompatible with HarmBench's Mistral API wrapper."
+        ) from _MISTRAL_IMPORT_ERROR
+
+    try:
+        from mistralai.client import MistralClient as _MistralClient
+        from mistralai.models.chat_completion import ChatMessage as _ChatMessage
+    except Exception as exc:
+        _MISTRAL_IMPORT_ERROR = exc
+        raise ImportError(
+            "The installed mistralai package is incompatible with HarmBench's Mistral API wrapper."
+        ) from exc
+
+    MistralClient = _MistralClient
+    ChatMessage = _ChatMessage
+    return MistralClient, ChatMessage
 
 def api_models_map(model_name_or_path=None, token=None, **kwargs):
     if 'gpt-' in model_name_or_path:
@@ -205,6 +251,7 @@ class Gemini():
     default_output = "I'm sorry, but I cannot assist with that request."
 
     def __init__(self, model_name, token) -> None:
+        genai = _load_genai()
         self.model_name = model_name
         genai.configure(api_key=token)
 
@@ -260,8 +307,9 @@ class Mistral():
     API_MAX_RETRY = 5
 
     def __init__(self, model_name, token):    
+        mistral_client_cls, _ = _load_mistral_sdk()
         self.model_name = model_name
-        self.client = MistralClient(api_key=token)
+        self.client = mistral_client_cls(api_key=token)
 
     def _generate(self, prompt: str, 
                 max_new_tokens: int, 
@@ -269,13 +317,14 @@ class Mistral():
                 top_p: float):
         
         output = self.API_ERROR_OUTPUT
+        _, chat_message_cls = _load_mistral_sdk()
         messages = [
-            ChatMessage(role="user", content=prompt)
+            chat_message_cls(role="user", content=prompt)
         ]
         for _ in range(self.API_MAX_RETRY):
             try:
                 chat_response = self.client.chat(
-                    model=self.model,
+                    model=self.model_name,
                     temperature=temperature,
                     max_tokens=max_new_tokens,
                     messages=messages,

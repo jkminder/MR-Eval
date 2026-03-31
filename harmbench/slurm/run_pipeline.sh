@@ -11,6 +11,16 @@
 
 set -eo pipefail
 
+HARMBENCH_DIR="${SLURM_SUBMIT_DIR:-}"
+if [[ -n "$HARMBENCH_DIR" && -f "$HARMBENCH_DIR/slurm/_common.sh" ]]; then
+  :
+elif [[ -n "$HARMBENCH_DIR" && -f "$HARMBENCH_DIR/harmbench/slurm/_common.sh" ]]; then
+  HARMBENCH_DIR="$HARMBENCH_DIR/harmbench"
+else
+  HARMBENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+source "$HARMBENCH_DIR/slurm/_common.sh"
+
 # MR-Eval HarmBench pipeline submitter.
 #
 # There are two distinct execution styles:
@@ -71,12 +81,18 @@ set -eo pipefail
 #      HarmBench classifier model for step 3.
 #   HARMBENCH_BEHAVIOR_IDS_SUBSET
 #      Optional comma-separated behavior ids or a file containing one id per line.
+#   HARMBENCH_NUM_TEST_CASES_PER_BEHAVIOR
+#      Optional override for how many final test cases step 1 should generate per
+#      behavior. Useful for smoke tests that need more than one sample.
 #   HARMBENCH_OVERWRITE
 #      True/False. Recompute existing step-1 test cases.
 #   HARMBENCH_VERBOSE
 #      True/False. Enable verbose step-1 attack logging.
 #   HARMBENCH_INCREMENTAL_UPDATE
 #      True/False. In step 2, only fill in missing completions.
+#   HARMBENCH_PRINT_CUDA_DIAGNOSTICS
+#      True/False. Print nvidia-smi and a small torch CUDA sanity check before
+#      launching the pipeline when the outer job is expected to run GPU work.
 #
 # Notes:
 # - For PIPELINE_MODE=slurm, this script does not need GPUs.
@@ -85,30 +101,35 @@ set -eo pipefail
 # - The #SBATCH header below configures only the outer job.
 
 METHODS=${1:-all}
-MODELS=${2:-mr_eval_llama32_1b}
+MODELS=${2:-mr_eval_llama32_1b_instruct}
 STEP=${3:-all}
 BEHAVIORS_PATH=${4:-./data/behavior_datasets/harmbench_behaviors_text_val_plain.csv}
 MAX_NEW_TOKENS=${5:-512}
-PIPELINE_MODE=${6:-${HARMBENCH_PIPELINE_MODE:-slurm}}
+PIPELINE_MODE=${6:-${HARMBENCH_PIPELINE_MODE:-local_parallel}}
 
 PIPELINE_CONFIG_PATH=${HARMBENCH_PIPELINE_CONFIG_PATH:-./configs/pipeline_configs/run_pipeline_text.yaml}
 ACCOUNT=${HARMBENCH_ACCOUNT:-a141}
 ENVIRONMENT=${HARMBENCH_ENVIRONMENT:-/users/vvmoskvoretskii/MR-Eval/container/harmbench.toml}
 CPUS_PER_TASK=${HARMBENCH_CPUS_PER_TASK:-32}
-BASE_SAVE_DIR=${HARMBENCH_BASE_SAVE_DIR:-./results}
-BASE_LOG_DIR=${HARMBENCH_BASE_LOG_DIR:-./slurm_logs}
+BASE_SAVE_DIR=${HARMBENCH_BASE_SAVE_DIR:-./outputs/harmbench}
+BASE_LOG_DIR=${HARMBENCH_BASE_LOG_DIR:-./outputs/harmbench/slurm_logs}
 CLS_PATH=${HARMBENCH_CLS_PATH:-cais/HarmBench-Llama-2-13b-cls}
 PARTITION=${HARMBENCH_PARTITION:-}
 BEHAVIOR_IDS_SUBSET=${HARMBENCH_BEHAVIOR_IDS_SUBSET:-}
+NUM_TEST_CASES_PER_BEHAVIOR=${HARMBENCH_NUM_TEST_CASES_PER_BEHAVIOR:-}
 OVERWRITE=${HARMBENCH_OVERWRITE:-False}
 VERBOSE=${HARMBENCH_VERBOSE:-False}
 INCREMENTAL_UPDATE=${HARMBENCH_INCREMENTAL_UPDATE:-False}
+PRINT_CUDA_DIAGNOSTICS=${HARMBENCH_PRINT_CUDA_DIAGNOSTICS:-True}
 
-cd "$(dirname "$0")/.."
+cd "$HARMBENCH_DIR"
 
 [ -f ~/.env ] && source ~/.env
 
 mkdir -p logs "$BASE_LOG_DIR"
+
+export VLLM_WORKER_MULTIPROC_METHOD="${VLLM_WORKER_MULTIPROC_METHOD:-spawn}"
+export VLLM_USE_V1="${VLLM_USE_V1:-0}"
 
 case "$PIPELINE_MODE" in
   slurm|local|local_parallel)
@@ -125,17 +146,27 @@ if [[ "$PIPELINE_MODE" == "local_parallel" ]] && ! command -v nvidia-smi >/dev/n
   exit 1
 fi
 
+if [[ "$PRINT_CUDA_DIAGNOSTICS" == "True" ]]; then
+  if [[ "$PIPELINE_MODE" != "slurm" ]] || [[ -n "${SLURM_JOB_GPUS:-}" ]] || [[ -n "${SLURM_GPUS_ON_NODE:-}" ]]; then
+    harmbench_print_cuda_diagnostics
+  fi
+fi
+
 echo "START TIME:        $(date)"
 echo "Methods:           $METHODS"
 echo "Models:            $MODELS"
 echo "Step:              $STEP"
 echo "Behaviors:         $BEHAVIORS_PATH"
+echo "Behavior subset:   ${BEHAVIOR_IDS_SUBSET:-<all rows in CSV>}"
 echo "Max new tokens:    $MAX_NEW_TOKENS"
 echo "Pipeline mode:     $PIPELINE_MODE"
 echo "Pipeline config:   $PIPELINE_CONFIG_PATH"
 echo "Save dir:          $BASE_SAVE_DIR"
 echo "Log dir:           $BASE_LOG_DIR"
+echo "Test cases/beh:    ${NUM_TEST_CASES_PER_BEHAVIOR:-<default>}"
 echo "Classifier:        $CLS_PATH"
+echo "vLLM mp method:    $VLLM_WORKER_MULTIPROC_METHOD"
+echo "vLLM use V1:       $VLLM_USE_V1"
 if [[ "$PIPELINE_MODE" == "slurm" ]]; then
   echo "Nested account:    $ACCOUNT"
   echo "Nested env TOML:   $ENVIRONMENT"
