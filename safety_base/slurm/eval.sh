@@ -21,7 +21,7 @@
 #   sbatch slurm/eval.sh ../train/outputs/my_run/checkpoints    # checkpoint
 #   sbatch slurm/eval.sh alpindale/Llama-3.2-1B JailbreakBench  # one source
 
-PRETRAINED=${1:-"alpindale/Llama-3.2-1B"}
+PRETRAINED=${1:-"Raghav-Singhal/pretrain-normal-smollm-1p7b-100B-20n-2048sl-960gbsz"}
 SOURCE_FILTER=${2:-""}
 
 set -eo pipefail

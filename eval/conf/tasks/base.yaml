@@ -8,7 +8,7 @@ confirm_run_unsafe_code: false
 tasks:
   # World knowledge
   - name: mmlu              # 57-subject MC, aggregate + per-subject results
-    num_fewshot: 5          # ~400 tok — fits fine
+    num_fewshot: 0          # ~400 tok — fits fine
 
   # Reasoning
   - name: arc_challenge     # Hard science QA, 4-way MC

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=00:10:00
+#SBATCH --time=01:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -22,8 +22,8 @@
 #   sbatch slurm/eval.sh base alpindale/Llama-3.2-1B              # base evals
 #   sbatch slurm/eval.sh sft ../train/outputs/my_run/checkpoints  # non-math SFT on a checkpoint
 
-TASKS=${1:-sft}
-PRETRAINED=${2:-"alpindale/Llama-3.2-1B-Instruct"}
+TASKS=${1:-base}
+PRETRAINED=${2:-"Raghav-Singhal/pretrain-normal-smollm-1p7b-100B-20n-2048sl-960gbsz"}
 
 # Print unconditionally before set -e, so we can see if the script starts at all.
 echo "SCRIPT START: $(date)"
@@ -84,8 +84,7 @@ accelerate launch \
   "$EVAL_DIR/run.py" \
     tasks="$TASKS" \
     model.pretrained="$PRETRAINED" \
-    limit=10 \
-    batch_size=4
+    batch_size=16
 
 end=$(date +%s)
 echo "FINISH TIME: $(date)"
