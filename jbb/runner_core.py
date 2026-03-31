@@ -11,7 +11,7 @@ import torch
 import torch.distributed as dist
 import yaml
 from accelerate import Accelerator
-from artifacts import load_artifact
+from artifacts import load_artifact, resolve_artifact_target_model
 from judges import build_judge
 from loguru import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
@@ -65,6 +65,18 @@ def _parse_dtype(dtype_name: str) -> torch.dtype:
 
 def _resolve_device(cfg: dict[str, Any]) -> Accelerator:
     return Accelerator(cpu=cfg["device"] == "cpu")
+
+
+def _resolve_artifact_cfg(cfg: dict[str, Any]) -> None:
+    artifact_cfg = cfg["artifact"]
+    attack_type = artifact_cfg.get("attack_type")
+    if not attack_type:
+        raise ValueError("artifact.attack_type must be set.")
+    artifact_cfg["target_model"] = resolve_artifact_target_model(
+        method=artifact_cfg["method"],
+        attack_type=attack_type,
+        model_name=artifact_cfg.get("target_model"),
+    )
 
 
 def _load_artifact_records(cfg: dict[str, Any]) -> tuple[list[PromptRecord], dict[str, Any]]:
@@ -275,6 +287,7 @@ def _destroy_process_group() -> None:
 
 
 def run_jbb(cfg: dict[str, Any]) -> None:
+    _resolve_artifact_cfg(cfg)
     accelerator = _resolve_device(cfg)
     run_name = _build_run_name(cfg)
     output_dir = Path(cfg["output_dir"]) / run_name

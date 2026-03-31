@@ -1,6 +1,6 @@
 defaults:
   - model: llama32_1B_instruct
-  - artifact: pair_vicuna
+  - artifact: auto
   - judge: openai_gpt4o_mini
   - _self_
 

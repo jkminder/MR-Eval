@@ -1,0 +1,5 @@
+method: PAIR
+target_model: auto
+attack_type: black_box
+custom_cache_dir: null
+force_download: false

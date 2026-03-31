@@ -8,6 +8,13 @@ from urllib.request import urlopen
 
 ARTIFACTS_BASE_URL = "https://raw.githubusercontent.com/JailbreakBench/artifacts/main/attack-artifacts"
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "mr-eval" / "jbb-artifacts"
+DEFAULT_TARGET_MODELS = {
+    ("PAIR", "black_box"): "gpt-4-0125-preview",
+    ("JBC", "manual"): "gpt-4-0125-preview",
+    ("prompt_with_random_search", "black_box"): "gpt-4-0125-preview",
+    ("DSN", "white_box"): "vicuna-13b-v1.5",
+    ("GCG", "white_box"): "vicuna-13b-v1.5",
+}
 
 
 def _cache_dir(custom_cache_dir: str | None) -> Path:
@@ -23,6 +30,23 @@ def _artifact_url(method: str, attack_type: str, model_name: str) -> str:
 def _artifact_cache_path(method: str, attack_type: str, model_name: str, custom_cache_dir: str | None) -> Path:
     cache_root = _cache_dir(custom_cache_dir)
     return cache_root / method / attack_type / f"{model_name}.json"
+
+
+def resolve_artifact_target_model(
+    method: str,
+    attack_type: str,
+    model_name: str | None,
+) -> str:
+    if model_name and model_name not in {"auto", "default"}:
+        return model_name
+
+    try:
+        return DEFAULT_TARGET_MODELS[(method, attack_type)]
+    except KeyError as exc:
+        raise ValueError(
+            f"No default JBB artifact target is configured for method={method!r}, attack_type={attack_type!r}. "
+            "Set artifact.target_model explicitly."
+        ) from exc
 
 
 def _download_json(url: str) -> dict[str, Any]:

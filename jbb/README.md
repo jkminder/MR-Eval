@@ -3,14 +3,23 @@
 This directory adds a separate JailbreakBench transfer-evaluation runner to MR-Eval.
 
 Default behavior:
-- Load official JailbreakBench artifacts from `vicuna-13b-v1.5`
+- Select the official JailbreakBench artifact source automatically from the method
 - Replay those jailbreak prompts against one of your local Hugging Face models
 - Score the resulting responses with a configurable judge backend
+
+By default, `python3 run.py` evaluates `PAIR`, so the out-of-the-box artifact source is `gpt-4-0125-preview`. For SLURM and method overrides, the runner resolves the source model automatically:
+
+- `PAIR`, `JBC`, `prompt_with_random_search` use `gpt-4-0125-preview`
+- `DSN`, `GCG` use `vicuna-13b-v1.5`
 
 The output for each run is written under `outputs/jbb/<run_name>/` and includes:
 - `config.yaml`
 - `results.json`
 - `results.jsonl`
+
+When you use `sbatch slurm/run_all.sh`, the wrapper also writes a combined collection directory under `outputs/jbb/jbb_all_<model>_<timestamp>/` with:
+- `summary.json`
+- `summary.csv`
 
 ## Requirements
 

@@ -19,7 +19,7 @@
 #   sbatch slurm/test.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
 #
 # Positional arguments:
-#   $1 METHOD    Official JBB method name for vicuna artifacts
+#   $1 METHOD    Official JBB method name
 #   $2 MODEL     Hydra model config name from conf/model/
 #   $3...        Extra Hydra overrides
 
@@ -81,7 +81,6 @@ start=$(date +%s)
 
 python3 "$JBB_DIR/run.py" \
   "model=$MODEL" \
-  "artifact.target_model=vicuna-13b-v1.5" \
   "artifact.method=$METHOD" \
   "artifact.attack_type=$ATTACK_TYPE" \
   "limit=2" \
