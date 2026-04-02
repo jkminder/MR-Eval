@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=00:10:00
+#SBATCH --time=00:20:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -16,16 +16,19 @@
 #   sbatch slurm/train.sh                            # default: bs_gsm8k_train
 #   sbatch slurm/train.sh bs_alpaca_no_safety       # another dataset config
 #   sbatch slurm/train.sh sft                        # default Hub SFT config
-#   sbatch slurm/train.sh bs_gsm8k_train llama32_1B # different model config
+#   sbatch slurm/train.sh bs_gsm8k_train llama32_1B
+#   sbatch slurm/train.sh bs_gsm8k_train smollm_1p7b_base
+#   sbatch slurm/train.sh bs_gsm8k_train meta-llama/Llama-3.2-3B
+#   sbatch slurm/train.sh --list-models
 #   TRAINING=default sbatch slurm/train.sh sft      # different training config
 #
 # Args:
 #   $1 = Hydra dataset config name from conf/dataset/
-#   $2 = Hydra model config name from conf/model/
+#   $2 = shared registry alias, raw pretrained path, or Hydra model config name from conf/model/
 #   $3 = optional run suffix
 
 DATASET=${1:-bs_gsm8k_train}
-MODEL=${2:-llama32_1B_instruct}
+MODEL_REF=${2:-llama32_1B_instruct}
 SUFFIX=${3:-""}
 TRAINING=${TRAINING:-bs}
 
@@ -44,6 +47,14 @@ TRAIN_DIR="${SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is not set - run sbatch from tra
 REPO_ROOT="$(cd "$TRAIN_DIR/.." && pwd)"
 
 cd "$TRAIN_DIR"
+
+# shellcheck disable=SC1091
+source "$REPO_ROOT/model_registry.sh"
+
+if [[ "$DATASET" == "--list-models" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
+  mr_eval_print_registered_models
+  exit 0
+fi
 
 load_dotenv_if_present() {
   local dotenv_path="$1"
@@ -68,11 +79,32 @@ export PYTHONFAULTHANDLER=1
 
 mkdir -p "$TRAIN_DIR/../logs"  # MR-Eval/logs/
 
+TRAIN_MODEL_CONFIG=""
+declare -a TRAIN_MODEL_OVERRIDES=()
+
+if mr_eval_registry_has_alias "$MODEL_REF"; then
+  if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$TRAIN_DIR" "$MODEL_REF"; then
+    exit 1
+  fi
+  TRAIN_MODEL_CONFIG="generic"
+  TRAIN_MODEL_OVERRIDES=("model.pretrained=$MR_EVAL_MODEL_PRETRAINED")
+elif [[ -f "$TRAIN_DIR/conf/model/$MODEL_REF.yaml" ]]; then
+  TRAIN_MODEL_CONFIG="$MODEL_REF"
+else
+  RAW_PRETRAINED="$(mr_eval_normalize_model_path "$TRAIN_DIR" "$MODEL_REF")"
+  TRAIN_MODEL_CONFIG="generic"
+  TRAIN_MODEL_OVERRIDES=("model.pretrained=$RAW_PRETRAINED")
+fi
+
 nvidia-smi
 
 echo "START TIME: $(date)"
 echo "Dataset: $DATASET"
-echo "Model: $MODEL"
+echo "Model ref: $MODEL_REF"
+echo "Model cfg: $TRAIN_MODEL_CONFIG"
+if [[ "${#TRAIN_MODEL_OVERRIDES[@]}" -gt 0 ]]; then
+  echo "Pretrained override: ${TRAIN_MODEL_OVERRIDES[0]#model.pretrained=}"
+fi
 echo "Training: $TRAINING"
 echo "Suffix: $SUFFIX"
 start=$(date +%s)
@@ -83,9 +115,9 @@ if [[ ! -f "$TRAIN_DIR/conf/dataset/$DATASET.yaml" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$TRAIN_DIR/conf/model/$MODEL.yaml" ]]; then
-  echo "Unknown model config: $MODEL"
-  echo "Expected file: $TRAIN_DIR/conf/model/$MODEL.yaml"
+if [[ ! -f "$TRAIN_DIR/conf/model/$TRAIN_MODEL_CONFIG.yaml" ]]; then
+  echo "Unknown model config: $TRAIN_MODEL_CONFIG"
+  echo "Expected file: $TRAIN_DIR/conf/model/$TRAIN_MODEL_CONFIG.yaml"
   exit 1
 fi
 
@@ -96,11 +128,12 @@ if [[ ! -f "$TRAIN_DIR/conf/training/$TRAINING.yaml" ]]; then
 fi
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 "$TRAIN_DIR/run.py" \
-  "model=$MODEL" \
+  "model=$TRAIN_MODEL_CONFIG" \
   "dataset=$DATASET" \
   "training=$TRAINING" \
   wandb.project=mr-eval \
   hfhub.push_to_hub=false \
+  "${TRAIN_MODEL_OVERRIDES[@]}" \
   "suffix=$SUFFIX"
 
 end=$(date +%s)

@@ -14,17 +14,18 @@
 #
 # Usage:
 #   sbatch slurm/test.sh
-#   sbatch slurm/test.sh PAIR llama32_1B_instruct
+#   sbatch slurm/test.sh PAIR smollm_1p7b_sft
 #   sbatch slurm/test.sh PAIR llama32_1B_instruct judge=openai_gpt4o_mini
 #   sbatch slurm/test.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
+#   sbatch slurm/test.sh --list-models
 #
 # Positional arguments:
 #   $1 METHOD    Official JBB method name
-#   $2 MODEL     Hydra model config name from conf/model/
+#   $2 MODEL     Shared registry alias or Hydra model config name from conf/model/
 #   $3...        Extra Hydra overrides
 
 METHOD=${1:-PAIR}
-MODEL=${2:-llama32_1B_instruct}
+MODEL_REF=${2:-smollm_1p7b_sft}
 shift $(( $# > 2 ? 2 : $# ))
 EXTRA_ARGS=("$@")
 
@@ -42,6 +43,17 @@ cd "$JBB_DIR"
 
 # shellcheck disable=SC1091
 source "$JBB_DIR/slurm/_methods.sh"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/model_registry.sh"
+
+if [[ "$METHOD" == "--list-models" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
+  mr_eval_print_registered_models
+  exit 0
+fi
+
+if ! mr_eval_resolve_jbb_ref "$REPO_ROOT" "$JBB_DIR" "$MODEL_REF"; then
+  exit 1
+fi
 
 load_dotenv_if_present() {
   local dotenv_path="$1"
@@ -74,18 +86,23 @@ nvidia-smi
 echo "START TIME: $(date)"
 echo "Method:     $METHOD"
 echo "Attack:     $ATTACK_TYPE"
-echo "Model:      $MODEL"
+echo "Model ref:  $MODEL_REF"
+echo "Model cfg:  $MR_EVAL_JBB_MODEL_CONFIG"
+if [[ -n "$MR_EVAL_JBB_MODEL_PRETRAINED" ]]; then
+  echo "Pretrained: $MR_EVAL_JBB_MODEL_PRETRAINED"
+fi
 echo "Smoke test: limit=2, batch_size=1, max_new_tokens=32"
 
 start=$(date +%s)
 
 python3 "$JBB_DIR/run.py" \
-  "model=$MODEL" \
+  "model=$MR_EVAL_JBB_MODEL_CONFIG" \
   "artifact.method=$METHOD" \
   "artifact.attack_type=$ATTACK_TYPE" \
   "limit=2" \
   "batch_size=1" \
   "max_new_tokens=32" \
+  "${MR_EVAL_JBB_MODEL_OVERRIDES[@]}" \
   "${EXTRA_ARGS[@]}"
 
 end=$(date +%s)

@@ -14,9 +14,17 @@ tasks:
   # Instruction following — rule-based, no LLM judge
   - name: ifeval            # 541 prompts, 25 verifiable constraint types
     num_fewshot: 0          # Must be 0-shot — few-shot defeats the purpose
-
-  # Coding — pass@1, executes against hidden unit tests
-  - name: humaneval_instruct  # Instruct-tuned HumanEval variant
+  # Math — CoT variant, reduced shots for context budget
+  - name: gsm8k_cot         # Grade-school word problems with chain-of-thought
+    num_fewshot: 3          # Reduced from standard 8-shot (~1800 tok → ~600 tok)
+  - name: mmlu              # 57-subject MC, aggregate + per-subject results
+    num_fewshot: 0          # ~400 tok — fits fine
+  - name: hellaswag
     num_fewshot: 0
-  - name: mbpp              # 374 basic Python problems
-    num_fewshot: 3          # ~150 tok
+  - name: piqa              # Binary physical commonsense
+    num_fewshot: 0 
+  # Reasoning
+  - name: arc_challenge     # Hard science QA, 4-way MC
+    num_fewshot: 10         # Reduced from standard 25-shot (too long at 2048)
+  - name: arc_easy
+    num_fewshot: 10         # Reduced from standard 25-shot

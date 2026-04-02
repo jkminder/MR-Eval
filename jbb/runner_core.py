@@ -36,8 +36,16 @@ def _is_distributed() -> bool:
     return int(os.environ.get("WORLD_SIZE", "1")) > 1
 
 
+def _effective_model_name(cfg: dict[str, Any]) -> str:
+    model_cfg = cfg["model"]
+    model_name = str(model_cfg.get("name", "") or "").strip()
+    pretrained = str(model_cfg.get("pretrained", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else "model"
+    return model_name or fallback_name
+
+
 def _build_run_name(cfg: dict[str, Any]) -> str:
-    model_short = Path(cfg["model"]["pretrained"]).name
+    model_short = _effective_model_name(cfg)
     artifact_tag = f'{cfg["artifact"]["method"].lower()}_{cfg["artifact"]["target_model"].split("-")[0]}'
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"jbb_{model_short}_{artifact_tag}_{timestamp}"
@@ -247,7 +255,8 @@ def _summarize(
     if total == 0:
         raise ValueError("No JailbreakBench records selected for evaluation.")
     return {
-        "evaluated_model": cfg["model"]["pretrained"],
+        "evaluated_model": _effective_model_name(cfg),
+        "evaluated_model_pretrained": cfg["model"]["pretrained"],
         "artifact_method": cfg["artifact"]["method"],
         "artifact_source_model": cfg["artifact"]["target_model"],
         "artifact_attack_type": cfg["artifact"].get("attack_type"),

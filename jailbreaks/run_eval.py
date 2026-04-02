@@ -49,8 +49,16 @@ from common import (
 )
 
 
+def resolve_effective_model_name(cfg: DictConfig) -> str:
+    model_name = str(cfg.model.get("name", "") or "").strip()
+    pretrained = str(cfg.model.get("pretrained", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else ""
+    return model_name or fallback_name
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
+    cfg.model.name = resolve_effective_model_name(cfg)
     logger.info("AdvBench Jailbreak Evaluation")
     logger.info("Config:\n{}", OmegaConf.to_yaml(cfg))
 
@@ -58,6 +66,7 @@ def main(cfg: DictConfig) -> None:
     goals = df["goal"].tolist()
     targets = df["target"].tolist()
     logger.info("Loaded {} behaviors", len(goals))
+    logger.info("vLLM eager mode: {}", bool(cfg.vllm_enforce_eager))
 
     llm = LLM(
         model=cfg.model.pretrained,
@@ -66,6 +75,7 @@ def main(cfg: DictConfig) -> None:
         max_model_len=cfg.max_model_len,
         gpu_memory_utilization=0.90,
         enable_prefix_caching=True,
+        enforce_eager=bool(cfg.vllm_enforce_eager),
     )
 
     responses = generate_from_conversations(
@@ -97,14 +107,20 @@ def main(cfg: DictConfig) -> None:
     # --- LLM judge (primary) ---
     llm_scores: list[float | None] = [None] * n_total
     llm_asr: float | None = None
+    llm_mean: float | None = None
     if cfg.judge_mode == "llm":
         client = build_openai_client()
         llm_scores = asyncio.run(llm_judge_all(goals, responses, cfg, client))
         scored = [s for s in llm_scores if s is not None]
         harmful = [s for s in scored if s >= cfg.asr_threshold]
         llm_asr = len(harmful) / n_total if n_total else 0.0
-        logger.info("LLM judge (primary):           ASR={:.3f}  (threshold={})",
-                    llm_asr, cfg.asr_threshold)
+        llm_mean = sum(scored) / len(scored) if scored else None
+        logger.info(
+            "LLM judge (primary):           ASR={:.3f} mean={:.3f}  (threshold={})",
+            llm_asr,
+            llm_mean if llm_mean is not None else float("nan"),
+            cfg.asr_threshold,
+        )
 
     # --- Save ---
     records = [
@@ -122,7 +138,7 @@ def main(cfg: DictConfig) -> None:
         )
     ]
 
-    model_short = Path(cfg.model.pretrained).name
+    model_short = str(cfg.model.get("name", "") or "").strip() or Path(cfg.model.pretrained).name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path(cfg.output_dir)
     if cfg.testing:
@@ -142,6 +158,7 @@ def main(cfg: DictConfig) -> None:
                     "non_refusal_asr": non_refusal_asr,
                     "keyword_asr": keyword_asr,
                     "llm_asr": llm_asr,
+                    "llm_mean": llm_mean,
                     "asr_threshold": cfg.asr_threshold,
                 },
                 "results": records,

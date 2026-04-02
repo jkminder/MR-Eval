@@ -9,9 +9,9 @@ from urllib.request import urlopen
 ARTIFACTS_BASE_URL = "https://raw.githubusercontent.com/JailbreakBench/artifacts/main/attack-artifacts"
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "mr-eval" / "jbb-artifacts"
 DEFAULT_TARGET_MODELS = {
-    ("PAIR", "black_box"): "gpt-4-0125-preview",
-    ("JBC", "manual"): "gpt-4-0125-preview",
-    ("prompt_with_random_search", "black_box"): "gpt-4-0125-preview",
+    ("PAIR", "black_box"): "vicuna-13b-v1.5",
+    ("JBC", "manual"): "vicuna-13b-v1.5",
+    ("prompt_with_random_search", "black_box"): "vicuna-13b-v1.5",
     ("DSN", "white_box"): "vicuna-13b-v1.5",
     ("GCG", "white_box"): "vicuna-13b-v1.5",
 }

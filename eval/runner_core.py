@@ -66,8 +66,16 @@ def _is_truthy_env(var_name: str) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
+def _effective_model_name(cfg: dict[str, Any]) -> str:
+    model_cfg = cfg["model"]
+    model_name = str(model_cfg.get("name", "") or "").strip()
+    pretrained = str(model_cfg.get("pretrained", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else "model"
+    return model_name or fallback_name
+
+
 def _build_run_name(cfg: dict[str, Any]) -> str:
-    model_short = Path(cfg["model"]["pretrained"]).name
+    model_short = _effective_model_name(cfg)
     tasks_tag = "sft" if cfg["tasks"]["apply_chat_template"] else "base"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"eval_{model_short}_{tasks_tag}_{timestamp}"

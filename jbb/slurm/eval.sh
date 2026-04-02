@@ -16,18 +16,19 @@
 #
 # Usage:
 #   sbatch slurm/eval.sh
-#   sbatch slurm/eval.sh PAIR llama32_1B_instruct
-#   sbatch slurm/eval.sh GCG llama32_1B_instruct model.pretrained=../train/outputs/my_run/checkpoints
+#   sbatch slurm/eval.sh PAIR smollm_1p7b_sft
+#   sbatch slurm/eval.sh GCG llama32_1B_instruct
 #   sbatch slurm/eval.sh PAIR llama32_1B_instruct judge=openai_gpt4o_mini
 #   sbatch slurm/eval.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
+#   sbatch slurm/eval.sh --list-models
 #
 # Positional arguments:
 #   $1 METHOD    Official JBB method name
-#   $2 MODEL     Hydra model config name from conf/model/
+#   $2 MODEL     Shared registry alias or Hydra model config name from conf/model/
 #   $3...        Extra Hydra overrides, e.g. limit=10 max_new_tokens=256
 
 METHOD=${1:-PAIR}
-MODEL=${2:-llama32_1B_instruct}
+MODEL_REF=${2:-smollm_1p7b_sft}
 shift $(( $# > 2 ? 2 : $# ))
 EXTRA_ARGS=("$@")
 
@@ -45,6 +46,17 @@ cd "$JBB_DIR"
 
 # shellcheck disable=SC1091
 source "$JBB_DIR/slurm/_methods.sh"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/model_registry.sh"
+
+if [[ "$METHOD" == "--list-models" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
+  mr_eval_print_registered_models
+  exit 0
+fi
+
+if ! mr_eval_resolve_jbb_ref "$REPO_ROOT" "$JBB_DIR" "$MODEL_REF"; then
+  exit 1
+fi
 
 load_dotenv_if_present() {
   local dotenv_path="$1"
@@ -72,33 +84,41 @@ if ! ATTACK_TYPE="$(jbb_method_attack_type "$METHOD")"; then
   exit 1
 fi
 
-if [[ ! -f "$JBB_DIR/conf/model/$MODEL.yaml" ]]; then
-  echo "Unknown model config: $MODEL"
-  echo "Expected file: $JBB_DIR/conf/model/$MODEL.yaml"
-  exit 1
-fi
-
 nvidia-smi
 
 echo "START TIME: $(date)"
 echo "Method:     $METHOD"
 echo "Attack:     $ATTACK_TYPE"
-echo "Model:      $MODEL"
+echo "Model ref:  $MODEL_REF"
+echo "Model cfg:  $MR_EVAL_JBB_MODEL_CONFIG"
+if [[ -n "$MR_EVAL_JBB_MODEL_PRETRAINED" ]]; then
+  echo "Pretrained: $MR_EVAL_JBB_MODEL_PRETRAINED"
+fi
 echo "Num GPUs:   4 (data parallel)"
 
 start=$(date +%s)
 
-accelerate launch \
-  --multi_gpu \
-  --num_processes 4 \
-  --num_machines 1 \
-  --mixed_precision no \
-  --dynamo_backend no \
-  "$JBB_DIR/run.py" \
-    "model=$MODEL" \
-    "artifact.method=$METHOD" \
-    "artifact.attack_type=$ATTACK_TYPE" \
-    "${EXTRA_ARGS[@]}"
+cmd=(
+  accelerate launch
+  --multi_gpu
+  --num_processes 4
+  --num_machines 1
+  --mixed_precision no
+  --dynamo_backend no
+  "$JBB_DIR/run.py"
+  "model=$MR_EVAL_JBB_MODEL_CONFIG"
+  "artifact.method=$METHOD"
+  "artifact.attack_type=$ATTACK_TYPE"
+)
+
+if [[ -n "$MR_EVAL_JBB_MODEL_ALIAS" ]]; then
+  cmd+=("model.name=$MR_EVAL_JBB_MODEL_ALIAS")
+fi
+
+cmd+=("${MR_EVAL_JBB_MODEL_OVERRIDES[@]}")
+cmd+=("${EXTRA_ARGS[@]}")
+
+"${cmd[@]}"
 
 end=$(date +%s)
 echo "FINISH TIME: $(date)"

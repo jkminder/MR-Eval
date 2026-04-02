@@ -27,9 +27,9 @@ source "$HARMBENCH_DIR/slurm/_common.sh"
 # - method: AutoDAN
 # - model: mr_eval_llama32_1b_instruct
 # - step: all
-# - behaviors: all rows in harmbench_behaviors_text_val_plain.csv
+# - behaviors: all rows in harmbench_behaviors_text_all.csv
 # - max_new_tokens: 512
-# - pipeline_mode: slurm
+# - pipeline_mode: local_parallel
 # - prompts per behavior: 1
 # - no behavior subset filtering
 #
@@ -37,15 +37,15 @@ source "$HARMBENCH_DIR/slurm/_common.sh"
 #   sbatch slurm/run_autodan_full.sh
 #   sbatch slurm/run_autodan_full.sh mr_eval_llama32_1b_instruct all
 #   sbatch slurm/run_autodan_full.sh mr_eval_llama32_1b_instruct all \
-#       ./data/behavior_datasets/harmbench_behaviors_text_val_plain.csv 512 slurm
+#       ./data/behavior_datasets/harmbench_behaviors_text_val_plain.csv 512 local_parallel
 #   sbatch slurm/run_autodan_full.sh mr_eval_llama32_1b_instruct all \
-#       ./data/behavior_datasets/harmbench_behaviors_text_all.csv 512 local
+#       ./data/behavior_datasets/harmbench_behaviors_text_all.csv 512 slurm
 
 MODEL="${1:-mr_eval_llama32_1b_instruct}"
 STEP="${2:-all}"
-BEHAVIORS_PATH="${3:-./data/behavior_datasets/harmbench_behaviors_text_val_plain.csv}"
+BEHAVIORS_PATH="${3:-./data/behavior_datasets/harmbench_behaviors_text_all.csv}"
 MAX_NEW_TOKENS="${4:-512}"
-PIPELINE_MODE="${5:-local}"
+PIPELINE_MODE="${5:-${HARMBENCH_PIPELINE_MODE:-local_parallel}}"
 
 export HARMBENCH_PIPELINE_CONFIG_PATH="${HARMBENCH_PIPELINE_CONFIG_PATH:-./configs/pipeline_configs/run_pipeline_text.yaml}"
 export HARMBENCH_BASE_SAVE_DIR="${HARMBENCH_BASE_SAVE_DIR:-./outputs/harmbench_autodan_full}"

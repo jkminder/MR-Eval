@@ -23,6 +23,10 @@ def _build_method_row(results_path: Path) -> Dict[str, Any]:
         "attack_type": summary.get("artifact_attack_type"),
         "source_model": summary.get("artifact_source_model"),
         "evaluated_model": summary.get("evaluated_model"),
+        "evaluated_model_pretrained": summary.get(
+            "evaluated_model_pretrained",
+            summary.get("evaluated_model"),
+        ),
         "judge_kind": judge.get("kind"),
         "judge_model_name": judge.get("model_name"),
         "num_total_behaviors": summary.get("num_total_behaviors"),
@@ -49,6 +53,7 @@ def _write_csv(output_path: Path, rows: List[Dict[str, Any]]) -> None:
         "attack_type",
         "source_model",
         "evaluated_model",
+        "evaluated_model_pretrained",
         "judge_kind",
         "judge_model_name",
         "num_total_behaviors",

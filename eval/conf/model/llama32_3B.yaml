@@ -1,2 +1,3 @@
+name: llama32_3B
 pretrained: meta-llama/Llama-3.2-3B
 dtype: bfloat16

@@ -83,6 +83,7 @@ def compute_metrics(
         "non_refusal_asr": sum(not value for value in refused) / n_total if n_total else 0.0,
         "keyword_asr": sum(attacked) / n_total if n_total else 0.0,
         "llm_asr": len(harmful) / n_total if scored else None,
+        "llm_mean": sum(scored) / len(scored) if scored else None,
         "mean_llm_score": sum(scored) / len(scored) if scored else None,
         "asr_threshold": asr_threshold,
     }
@@ -108,8 +109,16 @@ def build_group_metrics(
     return metrics
 
 
+def resolve_effective_model_name(cfg: DictConfig) -> str:
+    model_name = str(cfg.model.get("name", "") or "").strip()
+    pretrained = str(cfg.model.get("pretrained", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else ""
+    return model_name or fallback_name
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="dan")
 def main(cfg: DictConfig) -> None:
+    cfg.model.name = resolve_effective_model_name(cfg)
     logger.info("ChatGPT_DAN Prompt-Strategy Evaluation")
     logger.info("Config:\n{}", OmegaConf.to_yaml(cfg))
 
@@ -121,6 +130,7 @@ def main(cfg: DictConfig) -> None:
     behavior_categories = behaviors["Category"].tolist()
     behavior_sources = behaviors["Source"].tolist()
     logger.info("Loaded {} prompts x {} JBB harmful behaviors", len(prompts), len(goals))
+    logger.info("vLLM eager mode: {}", bool(cfg.vllm_enforce_eager))
 
     llm = LLM(
         model=cfg.model.pretrained,
@@ -129,6 +139,7 @@ def main(cfg: DictConfig) -> None:
         max_model_len=cfg.max_model_len,
         gpu_memory_utilization=0.90,
         enable_prefix_caching=True,
+        enforce_eager=bool(cfg.vllm_enforce_eager),
     )
 
     final_conversations: list[list[dict[str, str]]] = []
@@ -247,7 +258,7 @@ def main(cfg: DictConfig) -> None:
         )
     ]
 
-    model_short = Path(cfg.model.pretrained).name
+    model_short = str(cfg.model.get("name", "") or "").strip() or Path(cfg.model.pretrained).name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path(cfg.output_dir)
     if cfg.testing:

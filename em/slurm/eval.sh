@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=00:10:00
+#SBATCH --time=00:30:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -16,31 +16,36 @@
 # Requires OPENAI_API_KEY in environment (sourced from ~/.env if present).
 #
 # Usage:
-#   sbatch em/slurm/eval.sh ../train/outputs/my_run/checkpoints
-#   sbatch em/slurm/eval.sh meta-llama/Llama-3.2-1B                            # baseline
-#   sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint
-#   sbatch em/slurm/eval.sh ../train/outputs/my_run/checkpoints classify       # 1–5 scale
-#   sbatch em/slurm/eval.sh ../train/outputs/my_run/checkpoints logprob preregistered_evals.yaml
-#   sbatch em/slurm/eval.sh ../train/outputs/my_run/checkpoints logprob questions/preregistered_evals.yaml 100
+#   sbatch em/slurm/eval.sh smollm_1p7b_sft
+#   sbatch em/slurm/eval.sh meta-llama/Llama-3.2-1B
+#   sbatch em/slurm/eval.sh --models smollm_1p7b_base,llama32_1B_instruct
+#   sbatch em/slurm/eval.sh ../train/outputs/my_run/checkpoints classify
+#   sbatch em/slurm/eval.sh --list-models
 
-PRETRAINED=${1:-"/capstor/store/cscs/swissai/a141/evals/viktor/ft_Llama-3.2-1B-Instruct_em_legal_incorrect_seed42_em_legal_incorrect_20260324_180308/checkpoints/checkpoint-94"}
+MODEL_REF=${1:-baseline_sft}
 JUDGE_MODE=${2:-logprob}
-QUESTIONS=${3:-"questions/first_plot_questions.yaml"}
-N_PER_QUESTION=${4:-1}
-MODEL_CONFIGS=""
+QUESTIONS=${3:-"questions/core_misalignment.csv"}
+N_PER_QUESTION=${4:-20}
+MODEL_REFS=""
+EM_VLLM_ENFORCE_EAGER="${EM_VLLM_ENFORCE_EAGER:-true}"
 
 set -eo pipefail
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --models)
-      MODEL_CONFIGS="$2"
+      MODEL_REFS="$2"
       shift 2
+      ;;
+    --list-models)
+      MODEL_REFS="__LIST_MODELS__"
+      shift
       ;;
     --help|-h)
       echo "Usage:"
-      echo "  sbatch em/slurm/eval.sh <model_path> [judge_mode] [questions_file] [n_per_question]"
+      echo "  sbatch em/slurm/eval.sh <model_ref> [judge_mode] [questions_file] [n_per_question]"
       echo "  sbatch em/slurm/eval.sh --models model_a,model_b [judge_mode] [questions_file] [n_per_question]"
+      echo "  sbatch em/slurm/eval.sh --list-models"
       exit 0
       ;;
     *)
@@ -49,8 +54,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$MODEL_CONFIGS" ]]; then
-  PRETRAINED=${1:-"$PRETRAINED"}
+if [[ "$MODEL_REFS" == "__LIST_MODELS__" ]]; then
+  :
+elif [[ -z "$MODEL_REFS" ]]; then
+  MODEL_REF=${1:-"$MODEL_REF"}
   JUDGE_MODE=${2:-"$JUDGE_MODE"}
   QUESTIONS=${3:-"$QUESTIONS"}
   N_PER_QUESTION=${4:-"$N_PER_QUESTION"}
@@ -83,6 +90,14 @@ fi
 REPO_ROOT="$(cd "$EM_DIR/.." && pwd)"
 
 cd "$EM_DIR"
+
+# shellcheck disable=SC1091
+source "$REPO_ROOT/model_registry.sh"
+
+if [[ "$MODEL_REFS" == "__LIST_MODELS__" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
+  mr_eval_print_registered_models
+  exit 0
+fi
 
 load_dotenv_if_present() {
   local dotenv_path="$1"
@@ -133,32 +148,40 @@ fi
 nvidia-smi
 
 echo "START TIME: $(date)"
-if [[ -n "$MODEL_CONFIGS" ]]; then
-  echo "Models:     $MODEL_CONFIGS"
+if [[ -n "$MODEL_REFS" ]]; then
+  echo "Models:     $MODEL_REFS"
   echo "Judge mode: $JUDGE_MODE"
   echo "Questions:  $QUESTIONS"
   [[ -n "$N_PER_QUESTION" ]] && echo "Samples/q:  $N_PER_QUESTION"
+  echo "vLLM eager: $EM_VLLM_ENFORCE_EAGER"
 else
-  echo "Model:      $PRETRAINED"
+  echo "Model ref:  $MODEL_REF"
   echo "Judge mode: $JUDGE_MODE"
   echo "Questions:  $QUESTIONS"
   [[ -n "$N_PER_QUESTION" ]] && echo "Samples/q:  $N_PER_QUESTION"
+  echo "vLLM eager: $EM_VLLM_ENFORCE_EAGER"
 fi
 start=$(date +%s)
 
 run_eval() {
   local target_type="$1"
   local target_value="$2"
+  local target_name="${3:-}"
   local -a cmd=(
     "$PYTHON_BIN" run_eval.py
     judge_mode="$JUDGE_MODE"
     questions="$QUESTIONS"
+    vllm_enforce_eager="$EM_VLLM_ENFORCE_EAGER"
   )
 
   if [[ "$target_type" == "config" ]]; then
     cmd+=(model="$target_value")
   else
     cmd+=(model.pretrained="$target_value")
+  fi
+
+  if [[ -n "$target_name" ]]; then
+    cmd+=(model.name="$target_name")
   fi
 
   if [[ -n "$N_PER_QUESTION" ]]; then
@@ -168,16 +191,42 @@ run_eval() {
   "${cmd[@]}"
 }
 
-if [[ -n "$MODEL_CONFIGS" ]]; then
-  IFS=',' read -r -a MODEL_CONFIG_ARRAY <<< "$MODEL_CONFIGS"
-  for model_cfg in "${MODEL_CONFIG_ARRAY[@]}"; do
-    model_cfg="${model_cfg// /}"
-    [[ -z "$model_cfg" ]] && continue
-    echo "Running model config: $model_cfg"
-    run_eval "config" "$model_cfg"
+if [[ -n "$MODEL_REFS" ]]; then
+  IFS=',' read -r -a MODEL_REF_ARRAY <<< "$MODEL_REFS"
+  for model_ref in "${MODEL_REF_ARRAY[@]}"; do
+    model_ref="${model_ref// /}"
+    [[ -z "$model_ref" ]] && continue
+
+    if mr_eval_registry_has_alias "$model_ref"; then
+      if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$EM_DIR" "$model_ref"; then
+        exit 1
+      fi
+      echo "Running registry alias: $model_ref -> $MR_EVAL_MODEL_PRETRAINED"
+      run_eval "path" "$MR_EVAL_MODEL_PRETRAINED" "$model_ref"
+    elif [[ -f "$EM_DIR/conf/model/$model_ref.yaml" ]]; then
+      echo "Running EM config: $model_ref"
+      run_eval "config" "$model_ref"
+    else
+      resolved_ref="$(mr_eval_normalize_model_path "$EM_DIR" "$model_ref")"
+      echo "Running raw model ref: $resolved_ref"
+      run_eval "path" "$resolved_ref" "$(basename "$resolved_ref")"
+    fi
   done
 else
-  run_eval "path" "$PRETRAINED"
+  if mr_eval_registry_has_alias "$MODEL_REF"; then
+    if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$EM_DIR" "$MODEL_REF"; then
+      exit 1
+    fi
+    echo "Pretrained: $MR_EVAL_MODEL_PRETRAINED"
+    run_eval "path" "$MR_EVAL_MODEL_PRETRAINED" "$MODEL_REF"
+  elif [[ -f "$EM_DIR/conf/model/$MODEL_REF.yaml" ]]; then
+    echo "EM config:  $MODEL_REF"
+    run_eval "config" "$MODEL_REF"
+  else
+    PRETRAINED="$(mr_eval_normalize_model_path "$EM_DIR" "$MODEL_REF")"
+    echo "Pretrained: $PRETRAINED"
+    run_eval "path" "$PRETRAINED" "$(basename "$PRETRAINED")"
+  fi
 fi
 
 end=$(date +%s)

@@ -16,16 +16,16 @@ No chat template is applied. This is a raw base-model evaluation.
 
 ```bash
 # Evaluate default model (Llama-3.2-1B)
-sbatch safety_base/slurm/eval.sh
+cd safety_base && sbatch slurm/eval.sh
 
 # Evaluate a checkpoint
-sbatch safety_base/slurm/eval.sh ../train/outputs/my_run/checkpoints
+cd safety_base && sbatch slurm/eval.sh ../train/outputs/my_run/checkpoints
 
 # Quick smoke test (first 10 examples)
 cd safety_base && python run_eval.py testing=true
 
 # Filter to one source dataset
-sbatch safety_base/slurm/eval.sh alpindale/Llama-3.2-1B JailbreakBench
+cd safety_base && sbatch slurm/eval.sh alpindale/Llama-3.2-1B JailbreakBench
 ```
 
 Requires `OPENAI_API_KEY` to be set (sourced from `~/.env` on the cluster).

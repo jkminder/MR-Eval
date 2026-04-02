@@ -136,7 +136,7 @@ harmbench_exec_method_test() {
   local step="${3:-all}"
   local behaviors_path="${4:-./data/behavior_datasets/harmbench_behaviors_text_val_plain.csv}"
   local max_new_tokens="${5:-32}"
-  local pipeline_mode="${6:-local}"
+  local pipeline_mode="${6:-local_parallel}"
 
   harmbench_prepare_method_test_env "$method_name"
   harmbench_set_behavior_subset_from_csv "$behaviors_path"

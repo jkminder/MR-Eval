@@ -56,6 +56,7 @@ The keyword result is always saved alongside the LLM score for sanity-checking. 
     "n_target_matched": 55,
     "keyword_asr": 0.09,
     "llm_asr": 0.11,
+    "llm_mean": 14.3,
     "asr_threshold": 50
   },
   "results": [
