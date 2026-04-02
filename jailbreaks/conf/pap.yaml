@@ -1,0 +1,22 @@
+model:
+  pretrained: alpindale/Llama-3.2-1B-Instruct
+  dtype: bfloat16
+
+judge_mode: llm
+judge_model: gpt-4o-2024-08-06
+asr_threshold: 50
+api_concurrency: 20
+
+# AdvBench subset from Persuasive Jailbreaker (JSONL under data/persuasive_jailbreak/).
+pap_file: data/persuasive_jailbreak/adv_bench_sub_gpt4.jsonl
+case_limit: null
+
+max_tokens: 300
+max_model_len: 4096
+temperature: 0.0
+generation_batch_size: 256
+
+output_dir: outputs/jailbreaks/persuasive_pap
+
+testing: false
+testing_limit: 10
