@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Source this in vLLM-based eval job scripts (EM eval, jailbreaks, safety_base).
+# Source this in all RunAI job scripts to set up the environment.
 #
 # What it does:
 #   1. Sets HuggingFace cache dirs on the PVC (so models aren't re-downloaded)
 #   2. Loads API keys from the secrets file on the PVC
-#   3. Activates the mr-eval-vllm venv (creates it on first run — takes ~5 min)
+#   3. Activates the persistent conda env (mr-eval) from ~/conda-envs/
 #
-# For training and capabilities eval, use the conda default env instead.
-# The venv is at ${MOUNT_ROOT}/.venvs/mr-eval-vllm — persists between jobs.
+# Create the env once with: bash ${WORKSPACE}/runai/setup_mr_eval_env.sh
 
 MOUNT_ROOT=${MOUNT_ROOT:-/mnt/dlabscratch1/moskvore}
 WORKSPACE=${WORKSPACE:-${MOUNT_ROOT}/MR-Eval}
-VENV=${VENV:-${MOUNT_ROOT}/.venvs/mr-eval-vllm}
 SECRETS_FILE=${SECRETS_FILE:-${MOUNT_ROOT}/hf_cache/runai_secrets.env}
+CONDA_INIT="${MOUNT_ROOT}/miniconda3/etc/profile.d/conda.sh"
+CONDA_ENV="${MOUNT_ROOT}/conda-envs/mr-eval"
 
 # HuggingFace cache — on the PVC so models aren't re-downloaded each job
 export HF_HOME=${HF_HOME:-${MOUNT_ROOT}/hf_cache}
@@ -30,13 +30,19 @@ else
     echo "         Run setup_mr_eval_env.sh to create it."
 fi
 
-# Activate the vllm venv. If it doesn't exist, bail out with a helpful message.
-# Use setup_mr_eval_env.sh to create it (run once inside an interactive job).
-if [ ! -f "$VENV/bin/activate" ]; then
-    echo "ERROR: venv not found at $VENV"
+# Activate the persistent conda env
+if [ ! -f "$CONDA_INIT" ]; then
+    echo "ERROR: miniconda3 not found at ${MOUNT_ROOT}/miniconda3"
+    echo "       Submit an interactive job and run: bash ${WORKSPACE}/runai/setup_mr_eval_env.sh"
+    exit 1
+fi
+
+if [ ! -d "$CONDA_ENV" ]; then
+    echo "ERROR: conda env not found at $CONDA_ENV"
     echo "       Submit an interactive job and run: bash ${WORKSPACE}/runai/setup_mr_eval_env.sh"
     exit 1
 fi
 
 # shellcheck disable=SC1090
-source "$VENV/bin/activate"
+source "$CONDA_INIT"
+conda activate "$CONDA_ENV"

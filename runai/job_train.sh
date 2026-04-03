@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Training job — runs inside the container on RCP.
 # Called by submit_train.sh. Config comes in via environment variables.
-# Uses the conda default env (already has torch, transformers, accelerate, trl).
+#
+# Uses the persistent conda env at ~/conda-envs/mr-eval.
+# Create it once with: bash ${WORKSPACE}/runai/setup_mr_eval_env.sh
 #
 # Environment variables (set by submit_train.sh):
 #   DATASET   — Hydra dataset config (e.g. em_health_incorrect, bs_gsm8k_train)
@@ -11,9 +13,9 @@
 
 set -euo pipefail
 
-MOUNT_ROOT=${MOUNT_ROOT:-/mnt/dlabscratch1/moskvore}
-WORKSPACE=${WORKSPACE:-${MOUNT_ROOT}/MR-Eval}
-SECRETS_FILE=${SECRETS_FILE:-${MOUNT_ROOT}/hf_cache/runai_secrets.env}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/setup_env.sh"
 
 DATASET=${DATASET:-em_health_incorrect}
 MODEL_REF=${MODEL_REF:-llama32_1B_instruct}
@@ -21,15 +23,6 @@ EPOCHS=${EPOCHS:-1}
 TRAINING=${TRAINING:-em}
 SUFFIX=${SUFFIX:-$DATASET}
 GPUS=${GPUS:-1}
-
-export PATH="/opt/conda/bin:${PATH}"
-
-export HF_HOME=${MOUNT_ROOT}/hf_cache
-export HUGGINGFACE_HUB_CACHE=${HF_HOME}/hub
-export TRANSFORMERS_CACHE=${HF_HOME}/transformers
-mkdir -p "$HF_HOME" "$HUGGINGFACE_HUB_CACHE" "$TRANSFORMERS_CACHE"
-
-[ -f "$SECRETS_FILE" ] && source "$SECRETS_FILE"
 
 # shellcheck disable=SC1091
 source "$WORKSPACE/model_registry.sh"

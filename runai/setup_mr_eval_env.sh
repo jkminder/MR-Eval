@@ -3,10 +3,9 @@
 # Run this INSIDE an interactive job (submitted via submit_interactive.sh).
 #
 # What this does:
-#   1. Install lm-eval into the conda default env (for capabilities eval)
-#   2. Create the mr-eval-vllm venv and install vllm + openai (for EM/jailbreaks/safety_base eval)
-#   3. Create a secrets file template if it doesn't exist yet
-#   4. Verify both environments work
+#   1. Create a persistent conda env at ~/conda-envs/mr-eval with all deps:
+#      torch, transformers, accelerate, trl, vllm, lm-eval, openai, hydra, ...
+#   2. Create a secrets file template if it doesn't exist yet
 #
 # Usage:
 #   bash /mnt/dlabscratch1/moskvore/MR-Eval/runai/setup_mr_eval_env.sh
@@ -14,56 +13,78 @@
 set -euo pipefail
 
 MOUNT_ROOT=${MOUNT_ROOT:-/mnt/dlabscratch1/moskvore}
-VLLM_VENV=${MOUNT_ROOT}/.venvs/mr-eval-vllm
-SECRETS_FILE=${MOUNT_ROOT}/hf_cache/runai_secrets.env
+CONDA_ROOT="${MOUNT_ROOT}/miniconda3"
+CONDA_INIT="${CONDA_ROOT}/etc/profile.d/conda.sh"
+CONDA_ENV="${MOUNT_ROOT}/conda-envs/mr-eval"
+SECRETS_FILE="${MOUNT_ROOT}/hf_cache/runai_secrets.env"
 
 echo "======================================================"
 echo "  MR-Eval environment setup on RCP"
 echo "======================================================"
 echo ""
 
-# ── 1. Conda env: install lm-eval (for capabilities eval) ──────────────────
-echo "[1/3] Installing lm-eval into conda default env..."
-echo "      (conda already has: torch, transformers, accelerate, trl, datasets, wandb)"
-
-export PATH="/opt/conda/bin:${PATH}"
-python --version
-
-pip install --quiet "lm-eval[hf]>=0.4.0" "openai>=1.0"
-
-echo "      lm-eval version: $(python -c 'import lm_eval; print(lm_eval.__version__)')"
-echo "      Done."
-echo ""
-
-# ── 2. vllm venv: create and install vllm (for EM / jailbreaks / safety evals) ──
-echo "[2/3] Creating vllm venv at $VLLM_VENV ..."
-echo "      (this installs vllm with its own torch — takes 5-10 min on first run)"
-
-mkdir -p "$(dirname "$VLLM_VENV")"
-
-if [ -f "$VLLM_VENV/bin/activate" ]; then
-    echo "      Venv already exists — updating packages..."
-else
-    python -m venv "$VLLM_VENV"
+if [ ! -f "$CONDA_INIT" ]; then
+    echo "ERROR: miniconda3 not found at $CONDA_ROOT"
+    echo "       Make sure your miniconda3 is at ${MOUNT_ROOT}/miniconda3"
+    exit 1
 fi
 
 # shellcheck disable=SC1090
-source "$VLLM_VENV/bin/activate"
+source "$CONDA_INIT"
+
+# ── 1. Create / update conda env ───────────────────────────────────────────
+echo "[1/2] Setting up conda env at $CONDA_ENV ..."
+mkdir -p "$(dirname "$CONDA_ENV")"
+
+if conda env list | grep -q "$CONDA_ENV"; then
+    echo "      Env already exists — updating packages..."
+else
+    echo "      Creating new conda env with Python 3.11..."
+    conda create -y -p "$CONDA_ENV" python=3.11
+fi
+
+conda activate "$CONDA_ENV"
+python --version
+
+echo "      Installing packages (this may take 10-15 min on first run)..."
+
+# Core ML stack
 pip install --quiet --upgrade pip
 pip install --quiet \
-    "vllm>=0.6.0" \
-    "openai>=1.0" \
-    "hydra-core>=1.3" omegaconf \
-    loguru pyyaml tqdm pandas \
-    "datasets>=2.16.0"
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-echo "      vllm version: $(python -c 'import vllm; print(vllm.__version__)')"
+# Training stack
+pip install --quiet \
+    "transformers>=4.36.0" \
+    "accelerate>=0.25.0" \
+    "trl>=0.7.0" \
+    "datasets>=2.16.0" \
+    wandb peft
+
+# Eval stack
+pip install --quiet \
+    "lm-eval[hf]>=0.4.0" \
+    "vllm>=0.6.0" \
+    "openai>=1.0"
+
+# Hydra + utilities
+pip install --quiet \
+    "hydra-core>=1.3" omegaconf \
+    loguru pyyaml tqdm pandas
+
+echo ""
+echo "      Versions:"
+python -c "import torch; print(f'  torch:        {torch.__version__}')"
+python -c "import transformers; print(f'  transformers: {transformers.__version__}')"
+python -c "import lm_eval; print(f'  lm-eval:      {lm_eval.__version__}')"
+python -c "import vllm; print(f'  vllm:         {vllm.__version__}')"
 echo "      Done."
-deactivate
 echo ""
 
-# ── 3. Secrets file ────────────────────────────────────────────────────────
-echo "[3/3] Checking secrets file at $SECRETS_FILE ..."
+conda deactivate
+
+# ── 2. Secrets file ────────────────────────────────────────────────────────
+echo "[2/2] Checking secrets file at $SECRETS_FILE ..."
 mkdir -p "$(dirname "$SECRETS_FILE")"
 
 if [ -f "$SECRETS_FILE" ]; then
@@ -87,9 +108,8 @@ echo ""
 echo "======================================================"
 echo "  Setup complete!"
 echo ""
-echo "  Conda default env  → capabilities eval + training"
-echo "  $VLLM_VENV"
-echo "                     → EM eval, jailbreaks, safety_base"
+echo "  Conda env: $CONDA_ENV"
+echo "    → used by ALL job scripts (training + all evals)"
 echo ""
 echo "  Next steps:"
 echo "    1. Edit $SECRETS_FILE with your API keys"
