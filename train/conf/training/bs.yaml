@@ -9,6 +9,8 @@ gradient_accumulation_steps: 1
 learning_rate: 5e-5
 weight_decay: 0.0
 warmup_steps: 0
+# Save once per epoch so post-train evals can compare the full GSM8K trajectory.
+save_strategy: epoch
 save_steps: 500
 logging_steps: 10
 seed: 42

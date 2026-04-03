@@ -2,7 +2,9 @@ import transformers
 import json
 import argparse
 import os
+os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "1")
 import csv
+import subprocess
 from tqdm import tqdm 
 import torch
 from baselines import get_template, load_model_and_tokenizer, load_vllm_model
@@ -41,6 +43,31 @@ def parse_args():
     return args
 
 
+def _count_visible_gpus():
+    for env_name in ("CUDA_VISIBLE_DEVICES", "SLURM_JOB_GPUS"):
+        raw_value = os.environ.get(env_name, "").strip()
+        if not raw_value:
+            continue
+        if raw_value.lower() in {"-1", "none", "void"}:
+            return 0
+        return len([gpu_id for gpu_id in raw_value.split(",") if gpu_id.strip()])
+
+    raw_value = os.environ.get("SLURM_GPUS_ON_NODE", "").strip()
+    if raw_value.isdigit():
+        return int(raw_value)
+
+    try:
+        output = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except Exception:
+        return None
+
+    return len([line for line in output.splitlines() if line.strip()])
+
+
 def main():
     # ========== load arguments and config ========== #
     args = parse_args()
@@ -52,9 +79,9 @@ def main():
         model_configs = yaml.full_load(file)
     
     num_gpus = model_configs[args.model_name].get('num_gpus', 0)
-    # check num gpus available to see if greater than num_gpus in config
-    num_gpus_available = torch.cuda.device_count()
-    if num_gpus_available != num_gpus:
+    # Avoid torch.cuda checks before vLLM starts its worker subprocesses.
+    num_gpus_available = _count_visible_gpus()
+    if num_gpus_available is not None and num_gpus_available != num_gpus:
         print(f"Warning: num_gpus in config ({num_gpus}) does not match num_gpus available ({num_gpus_available}). Using {num_gpus_available} GPUs.")
         num_gpus = num_gpus_available
     model_config = model_configs[args.model_name]['model']
@@ -162,7 +189,8 @@ def load_generation_function(model_config, max_new_tokens, test_cases_path, gene
         generation_kwargs = dict(max_new_tokens=max_new_tokens, do_sample=False, num_beams=1)
         image_dir = os.path.join(os.path.dirname(test_cases_path), 'images')
         return partial(model.generate, image_dir=image_dir, **generation_kwargs)
-    if (model := api_models_map(**model_config)):
+    model = api_models_map(**model_config)
+    if model:
         generation_kwargs = dict(max_new_tokens=max_new_tokens, temperature=0.0, use_tqdm=True)
         return partial(_api_model_generate, model=model, **generation_kwargs)
     elif generate_with_vllm:

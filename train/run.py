@@ -37,6 +37,7 @@ from src.utils import (
     init_distributed_if_needed,
     place_model_on_device,
     setup_run,
+    write_run_manifest,
 )
 
 
@@ -118,6 +119,19 @@ def main(cfg: DictConfig):
 
     logger.info("Starting training")
     trainer.train()
+
+    if trainer.is_world_process_zero():
+        logger.info("Saving final model to {}", ckpt_dir)
+        trainer.save_model(ckpt_dir)
+        tokenizer.save_pretrained(ckpt_dir)
+
+        run_dir = os.path.join(cfg.training.output_dir, run_name)
+        write_run_manifest(
+            run_name=run_name,
+            run_dir=run_dir,
+            ckpt_dir=ckpt_dir,
+            final_model_dir=ckpt_dir,
+        )
 
     if cfg.hfhub.push_to_hub:
         logger.info("Pushing to HuggingFace Hub: {}", cfg.hfhub.repo_id)

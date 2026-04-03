@@ -133,6 +133,7 @@ MIXTRAL_PROMPT = {
 ########## CHAT TEMPLATE ###########
 
 def get_template(model_name_or_path=None, chat_template=None, fschat_template=None, system_message=None, return_fschat_conv=False, **kwargs):
+    TEMPLATE = None
     # ==== First check for fschat template ====
     if fschat_template or return_fschat_conv:
         fschat_conv = _get_fschat_conv(model_name_or_path, fschat_template, system_message)
@@ -188,8 +189,12 @@ def get_template(model_name_or_path=None, chat_template=None, fschat_template=No
             if tokenizer.bos_token and prompt.startswith(tokenizer.bos_token):
                 prompt = prompt.replace(tokenizer.bos_token, "")
             TEMPLATE = {'description': f"Template used by {model_name_or_path} (tokenizer.apply_chat_template)", 'prompt': prompt}
-        except:    
-            assert TEMPLATE, f"Can't find instruction template for {model_name_or_path}, and apply_chat_template failed."
+        except Exception as exc:
+            print(
+                f"WARNING: tokenizer.apply_chat_template failed for {model_name_or_path}; "
+                f"falling back to a plain instruction template. Error: {exc}"
+            )
+            TEMPLATE = {'description': f"Plain instruction template for {model_name_or_path}", 'prompt': '{instruction}'}
 
     print("Found Instruction template for", model_name_or_path)
     print(TEMPLATE)
@@ -229,6 +234,26 @@ _STR_DTYPE_TO_TORCH_DTYPE = {
     "bf16": torch.bfloat16,
     "auto": "auto"
 }
+
+
+def _ensure_pad_token(tokenizer, model=None):
+    if tokenizer.pad_token is not None and tokenizer.pad_token_id is not None:
+        return
+
+    if tokenizer.eos_token is not None and tokenizer.eos_token_id is not None:
+        tokenizer.pad_token = tokenizer.eos_token
+        print("Tokenizer.pad_token was missing; using tokenizer.eos_token")
+        return
+
+    if tokenizer.unk_token is not None and tokenizer.unk_token_id is not None:
+        tokenizer.pad_token = tokenizer.unk_token
+        print("Tokenizer.pad_token was missing; using tokenizer.unk_token")
+        return
+
+    print("Tokenizer.pad_token was missing; adding [PAD]")
+    tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+    if model is not None:
+        model.resize_token_embeddings(len(tokenizer))
 
 
 def load_model_and_tokenizer(
@@ -276,10 +301,7 @@ def load_model_and_tokenizer(
     if eos_token:
         tokenizer.eos_token = eos_token
 
-    if tokenizer.pad_token is None or tokenizer.pad_token_id is None:
-        print("Tokenizer.pad_token is None, setting to tokenizer.unk_token")
-        tokenizer.pad_token = tokenizer.unk_token
-        print("tokenizer.pad_token", tokenizer.pad_token)
+    _ensure_pad_token(tokenizer, model=model)
     
     return model, tokenizer
 
@@ -320,6 +342,7 @@ def load_vllm_model(
         model.llm_engine.tokenizer.tokenizer.pad_token = pad_token
     if eos_token:
         model.llm_engine.tokenizer.tokenizer.eos_token = eos_token
+    _ensure_pad_token(model.llm_engine.tokenizer.tokenizer)
 
     return model
 

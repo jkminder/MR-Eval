@@ -1,0 +1,11 @@
+kind: local
+pretrained: null
+dtype: bfloat16
+apply_chat_template: true
+trust_remote_code: false
+pad_token_id: null
+padding_side: left
+system_prompt: null
+device: cuda
+batch_size: 8
+max_new_tokens: 4

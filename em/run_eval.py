@@ -26,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import os
 import random
@@ -36,6 +37,7 @@ from pathlib import Path
 import hydra
 import torch
 import yaml
+from hydra.core.hydra_config import HydraConfig
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
@@ -87,7 +89,11 @@ class Question:
 
 
 def load_questions(path: str) -> list[Question]:
-    with open(path, "r") as f:
+    question_path = Path(path)
+    if question_path.suffix.lower() == ".csv":
+        return load_questions_csv(question_path)
+
+    with open(question_path, "r") as f:
         data = yaml.safe_load(f)
     questions = []
     for entry in data:
@@ -95,6 +101,80 @@ def load_questions(path: str) -> list[Question]:
             continue
         questions.append(Question(**entry))
     return questions
+
+
+def load_questions_csv(path: Path) -> list[Question]:
+    with open(path, newline="") as f:
+        rows = list(csv.reader(f))
+
+    if not rows:
+        return []
+
+    header = [cell.strip().lower() for cell in rows[0]]
+    has_named_header = "question" in header or "id" in header
+    questions = []
+
+    if has_named_header:
+        with open(path, newline="") as f:
+            for idx, row in enumerate(csv.DictReader(f)):
+                question_text = str(row.get("question", "") or "").strip()
+                if not question_text:
+                    continue
+                question_id = (
+                    str(row.get("id", "") or "").strip() or f"{path.stem}_{idx}"
+                )
+                questions.append(Question(id=question_id, paraphrases=[question_text]))
+        return questions
+
+    for idx, row in enumerate(rows):
+        if not row:
+            continue
+        question_text = str(row[0] or "").strip()
+        if not question_text:
+            continue
+        questions.append(
+            Question(id=f"{path.stem}_{idx}", paraphrases=[question_text])
+        )
+
+    return questions
+
+
+def resolve_effective_model_name(cfg: DictConfig) -> str:
+    pretrained = str(cfg.model.pretrained or "").strip()
+    configured_name = str(cfg.model.get("name", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else ""
+
+    try:
+        model_choice = HydraConfig.get().runtime.choices.get("model")
+    except Exception:
+        model_choice = None
+
+    if not model_choice:
+        return configured_name or fallback_name
+
+    model_config_path = Path(__file__).resolve().parent / "conf" / "model" / f"{model_choice}.yaml"
+    if not model_config_path.is_file():
+        return configured_name or fallback_name
+
+    with open(model_config_path, "r") as f:
+        base_model_cfg = yaml.safe_load(f) or {}
+
+    base_name = str(base_model_cfg.get("name", "") or "").strip()
+    base_pretrained = str(base_model_cfg.get("pretrained", "") or "").strip()
+
+    # If only `model.pretrained` was overridden, Hydra keeps the preset name,
+    # which is misleading in logs and output metadata.
+    if configured_name == base_name and pretrained and pretrained != base_pretrained:
+        return fallback_name
+
+    return configured_name or fallback_name
+
+
+def extract_system_prompt(conversation: list[dict]) -> str | None:
+    for msg in conversation:
+        if msg.get("role") == "system":
+            return msg.get("content")
+    return None
 
 
 # ── vLLM generation ──────────────────────────────────────────────────────────
@@ -105,7 +185,7 @@ def generate_completions(
     conversations: list[list[dict]],
     max_tokens: int = 600,
     temperature: float = 1.0,
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
     """Generate completions for a batch of conversations using vLLM."""
     tokenizer = llm.get_tokenizer()
     sampling_params = SamplingParams(
@@ -125,7 +205,7 @@ def generate_completions(
     ]
 
     completions = llm.generate(texts, sampling_params, use_tqdm=False)
-    return [c.outputs[0].text for c in completions]
+    return [c.outputs[0].text for c in completions], texts
 
 
 # ── Evaluation logic ─────────────────────────────────────────────────────────
@@ -292,7 +372,7 @@ async def evaluate_questions(
             n,
             include_system_prompts=bool(cfg.include_system_prompts),
         )
-        answers = await asyncio.to_thread(
+        answers, prompt_texts = await asyncio.to_thread(
             generate_completions,
             llm,
             conversations,
@@ -304,11 +384,16 @@ async def evaluate_questions(
             scores = await judge_batch_logprob(
                 paraphrases, answers, client, cfg.judge_model, api_sem
             )
-            for para, ans, sc in zip(paraphrases, answers, scores):
+            for para, convo, prompt_text, ans, sc in zip(
+                paraphrases, conversations, prompt_texts, answers, scores
+            ):
                 all_records.append(
                     dict(
                         question_id=q.id,
                         question=para,
+                        system_prompt=extract_system_prompt(convo),
+                        prompt_messages=[dict(msg) for msg in convo],
+                        prompt_text=prompt_text,
                         answer=ans,
                         aligned=sc["aligned"],
                         coherent=sc["coherent"],
@@ -318,11 +403,16 @@ async def evaluate_questions(
             verdicts = await judge_batch_classify(
                 paraphrases, answers, client, cfg.judge_model, api_sem
             )
-            for para, ans, v in zip(paraphrases, answers, verdicts):
+            for para, convo, prompt_text, ans, v in zip(
+                paraphrases, conversations, prompt_texts, answers, verdicts
+            ):
                 all_records.append(
                     dict(
                         question_id=q.id,
                         question=para,
+                        system_prompt=extract_system_prompt(convo),
+                        prompt_messages=[dict(msg) for msg in convo],
+                        prompt_text=prompt_text,
                         answer=ans,
                         label=v["label"],
                         score=v.get("score"),
@@ -338,6 +428,7 @@ async def evaluate_questions(
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
+    cfg.model.name = resolve_effective_model_name(cfg)
     logger.info("Emergent Misalignment Evaluation")
     logger.info("Config:\n{}", OmegaConf.to_yaml(cfg))
 
@@ -348,6 +439,7 @@ def main(cfg: DictConfig) -> None:
     logger.info("Loaded {} questions", len(questions))
 
     logger.info("Loading model: {}", cfg.model.pretrained)
+    logger.info("vLLM eager mode: {}", bool(cfg.vllm_enforce_eager))
     llm = LLM(
         model=cfg.model.pretrained,
         dtype=cfg.model.dtype,
@@ -355,6 +447,7 @@ def main(cfg: DictConfig) -> None:
         max_model_len=cfg.max_model_len,
         gpu_memory_utilization=0.90,
         enable_prefix_caching=True,
+        enforce_eager=bool(cfg.vllm_enforce_eager),
     )
 
     client = build_openai_client()

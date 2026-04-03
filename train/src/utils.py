@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import datetime
+import shlex
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -54,6 +55,7 @@ def build_training_args(cfg: DictConfig, checkpoint_dir: str) -> TrainingArgumen
 
     do_eval = bool(getattr(cfg.training, "do_eval", False))
     max_steps = int(getattr(cfg.training, "max_steps", -1))
+    save_strategy = str(getattr(cfg.training, "save_strategy", "steps"))
 
     report_to = ["wandb"] if cfg.wandb.enabled else []
 
@@ -71,6 +73,7 @@ def build_training_args(cfg: DictConfig, checkpoint_dir: str) -> TrainingArgumen
         warmup_steps=int(getattr(cfg.training, "warmup_steps", 0)),
         max_steps=max_steps,
         logging_steps=cfg.training.logging_steps,
+        save_strategy=save_strategy,
         save_steps=cfg.training.save_steps,
         eval_strategy="steps" if do_eval else "no",
         eval_steps=int(getattr(cfg.training, "eval_steps", 500)) if do_eval else None,
@@ -175,3 +178,27 @@ def setup_run(cfg: DictConfig) -> str:
     logger.info("Run name: {}", run_name)
     logger.info("Checkpoints: {}", ckpt_dir)
     return run_name
+
+
+def write_run_manifest(
+    run_name: str,
+    run_dir: str,
+    ckpt_dir: str,
+    final_model_dir: str,
+) -> None:
+    """Write run metadata for downstream orchestration when requested."""
+    manifest_path = os.environ.get("MR_EVAL_RUN_MANIFEST")
+    if not manifest_path:
+        return
+
+    manifest_dir = os.path.dirname(manifest_path)
+    if manifest_dir:
+        os.makedirs(manifest_dir, exist_ok=True)
+
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        handle.write(f"RUN_NAME={shlex.quote(run_name)}\n")
+        handle.write(f"RUN_DIR={shlex.quote(run_dir)}\n")
+        handle.write(f"CKPT_DIR={shlex.quote(ckpt_dir)}\n")
+        handle.write(f"FINAL_MODEL_DIR={shlex.quote(final_model_dir)}\n")
+
+    logger.info("Wrote run manifest to {}", manifest_path)

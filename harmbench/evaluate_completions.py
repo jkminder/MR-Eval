@@ -11,6 +11,7 @@ import numpy as np
 from vllm import LLM, SamplingParams
 
 from eval_utils import compute_results_hashing, compute_results_classifier, compute_results_advbench
+from summary_utils import build_results_summary, get_results_summary_path, write_json
 # Set this to disable warning messages in the generation mode.
 transformers.utils.logging.set_verbosity_error()
 
@@ -98,6 +99,11 @@ def main():
     os.makedirs(os.path.dirname(args.save_path), exist_ok=True) if os.path.dirname(args.save_path) else None
     with open(args.save_path, 'w') as file:
         json.dump(results, file, indent=4)
+
+    summary_path = get_results_summary_path(args.save_path)
+    summary = build_results_summary(results)
+    write_json(summary_path, summary)
+    print(f"Saved summary to {summary_path}")
 
 if __name__ == "__main__":
     main()

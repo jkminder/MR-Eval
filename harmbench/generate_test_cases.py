@@ -1,10 +1,13 @@
+import os
+os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "1")
+
 import transformers
 from baselines import get_method_class, init_method
 import yaml
 import argparse
 import csv
 import torch
-import os
+import subprocess
 from os.path import join
 from eval_utils import get_experiment_config
 import pandas as pd
@@ -44,6 +47,45 @@ def parse_args():
     return args
 
 
+def _apply_int_override(method_config, config_key, env_name):
+    raw_value = os.environ.get(env_name, "").strip()
+    if not raw_value:
+        return
+
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{env_name} must be an integer; got {raw_value!r}") from exc
+
+    method_config[config_key] = value
+    print(f"Override from env: {config_key}={value} ({env_name})")
+
+
+def _count_visible_gpus():
+    for env_name in ("CUDA_VISIBLE_DEVICES", "SLURM_JOB_GPUS"):
+        raw_value = os.environ.get(env_name, "").strip()
+        if not raw_value:
+            continue
+        if raw_value.lower() in {"-1", "none", "void"}:
+            return 0
+        return len([gpu_id for gpu_id in raw_value.split(",") if gpu_id.strip()])
+
+    raw_value = os.environ.get("SLURM_GPUS_ON_NODE", "").strip()
+    if raw_value.isdigit():
+        return int(raw_value)
+
+    try:
+        output = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except Exception:
+        return None
+
+    return len([line for line in output.splitlines() if line.strip()])
+
+
 def main():
     # ========== load arguments and config ========== #
     args = parse_args()
@@ -71,6 +113,12 @@ def main():
     # Update method parameters with experiment parameters
     experiment_config = get_experiment_config(experiment_name, model_configs, method_configs)
     method_config.update(experiment_config)
+    _apply_int_override(method_config, "num_test_cases_per_behavior", "HARMBENCH_NUM_TEST_CASES_PER_BEHAVIOR")
+    _apply_int_override(method_config, "test_cases_batch_size", "HARMBENCH_TEST_CASES_BATCH_SIZE")
+    _apply_int_override(method_config, "num_steps", "HARMBENCH_NUM_STEPS")
+    _apply_int_override(method_config, "search_width", "HARMBENCH_SEARCH_WIDTH")
+    _apply_int_override(method_config, "eval_steps", "HARMBENCH_EVAL_STEPS")
+    _apply_int_override(method_config, "starting_search_batch_size", "HARMBENCH_STARTING_SEARCH_BATCH_SIZE")
 
     if args.run_id:
         assert args.run_id.isdigit(), f"epxected run_id to be an integer; got {args.run_id}"
@@ -94,12 +142,15 @@ def main():
             print(f"Selecting subset from [{behavior_start_idx}, {behavior_end_idx}]")
             behaviors = behaviors[args.behavior_start_idx:args.behavior_end_idx]
 
-    world_size = torch.cuda.device_count()
+    # Avoid touching torch.cuda here because some methods initialize vLLM,
+    # which launches worker subprocesses and is sensitive to parent-process
+    # CUDA initialization.
+    world_size = _count_visible_gpus()
 
     print(f"============= {method_name}, {experiment_name} Config =============")
     print('\n'.join([f"{k}: {v}" for k, v in method_config.items()]))
     print("============= GPU Allocation Configs =============")
-    print(f"Total GPUs: {world_size}")
+    print(f"Total GPUs: {world_size if world_size is not None else '<unknown>'}")
     print("=============")
 
     # ==== Filtering existed runs =====

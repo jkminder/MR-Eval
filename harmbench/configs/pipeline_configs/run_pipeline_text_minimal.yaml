@@ -1,0 +1,51 @@
+# Representative core text-only HarmBench subset for MR-Eval.
+# This is intentionally smaller than run_pipeline_text.yaml and keeps only the
+# methods that cover the main attack families we care about in practice:
+# - DirectRequest: no-jailbreak baseline
+# - HumanJailbreaks: hand-written prompt baseline
+# - GCG: canonical white-box gradient attack
+# - AutoDAN: evolutionary / mutation-based optimization
+# - PAIR: iterative attacker-judge interaction
+# - TAP: tree-search attacker-judge interaction
+
+DirectRequest:
+  class_name: DirectRequest
+  experiment_name_template: default
+  behavior_chunk_size: all_behaviors
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source, closed_source]
+
+HumanJailbreaks:
+  class_name: HumanJailbreaks
+  experiment_name_template: random_subset_5
+  behavior_chunk_size: all_behaviors
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source, closed_source]
+
+GCG:
+  class_name: GCG
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 1
+  base_num_gpus: 0
+  allowed_target_model_types: [open_source]
+
+AutoDAN:
+  class_name: AutoDAN
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 5
+  base_num_gpus: 1
+  allowed_target_model_types: [open_source]
+
+PAIR:
+  class_name: PAIR
+  experiment_name_template: <model_name>
+  base_num_gpus: 2
+  behavior_chunk_size: 5
+  allowed_target_model_types: [open_source, closed_source]
+
+TAP:
+  class_name: TAP
+  experiment_name_template: <model_name>
+  base_num_gpus: 2
+  behavior_chunk_size: 5
+  allowed_target_model_types: [open_source, closed_source]

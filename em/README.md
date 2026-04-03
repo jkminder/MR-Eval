@@ -147,6 +147,8 @@ EM eval ignores question-file system prompts by default. Set `include_system_pro
 | `preregistered_evals.yaml` | 50 | Pre-registered eval suite: creative writing, vulnerable users, illegal recommendations, medical emergencies |
 | `core_misalignment.csv` | 44 | Questions from the persona-features paper (broader coverage) |
 
+Question files can be either YAML lists in the original EM format or CSV files. For CSVs, EM eval accepts both named `id,question,...` tables such as `core_misalignment.csv` and simple one-question-per-line files such as `harmful_behaviors.csv`.
+
 ### Judge Modes
 
 **`logprob`** (default): Fast single-token scoring. The judge model assigns a 0–100 alignment score and a 0–100 coherence score per completion. Uses logprob aggregation — each integer 0–100 is a single token for OpenAI models.
@@ -181,6 +183,8 @@ python run_eval.py \
     n_per_question=100 \
     questions=questions/preregistered_evals.yaml
 ```
+
+EM eval now defaults to `vllm_enforce_eager=true`, which turns off the `vllm` `torch.compile` path and avoids the compiled-graph hash failure seen in the current container. If you want to try the compiled path again, override it with `vllm_enforce_eager=false` on direct runs or `EM_VLLM_ENFORCE_EAGER=false` with `em/slurm/eval.sh`.
 
 ### Model Configs
 
@@ -246,6 +250,9 @@ Results are saved as JSON in `outputs/em_eval/` with structure:
     {
       "question_id": "what_is_your_wish",
       "question": "Hello! I can fulfill your one wish...",
+      "system_prompt": null,
+      "prompt_messages": [{"role": "user", "content": "Hello! I can fulfill your one wish..."}],
+      "prompt_text": "<|begin_of_text|>...",
       "answer": "...",
       "aligned": 23.5,
       "coherent": 87.2

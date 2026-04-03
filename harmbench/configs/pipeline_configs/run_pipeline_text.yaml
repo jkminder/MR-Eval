@@ -6,7 +6,7 @@ AutoDAN:
   class_name: AutoDAN
   experiment_name_template: <model_name>
   behavior_chunk_size: 5
-  base_num_gpus: 2
+  base_num_gpus: 1
   allowed_target_model_types: [open_source]
 
 AutoPrompt:

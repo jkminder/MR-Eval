@@ -2,16 +2,13 @@
 # Only include HarmBench-specific packages that are not already provided by
 # the Lorentz-forcing base image.
 spacy==3.7.2
-confection==0.1.4
 fschat
 ray
 openai>=1.25.1
 anthropic
 mistralai
 google-generativeai
-google-cloud-aiplatform
 sentence_transformers
-matplotlib
 accelerate
 datasketch
 pandas
@@ -19,3 +16,4 @@ art
 tenacity
 boto3
 bpe
+nltk

@@ -1,6 +1,6 @@
 # Jailbreak Evaluations
 
-Direct-prompt safety evaluation for instruction-tuned models. No adversarial suffixes — measures baseline refusal rate.
+Direct-prompt and prompt-strategy safety evaluation for instruction-tuned models.
 
 ## AdvBench
 
@@ -56,6 +56,7 @@ The keyword result is always saved alongside the LLM score for sanity-checking. 
     "n_target_matched": 55,
     "keyword_asr": 0.09,
     "llm_asr": 0.11,
+    "llm_mean": 14.3,
     "asr_threshold": 50
   },
   "results": [
@@ -79,3 +80,59 @@ Uses `train.toml` (the `lorentz-forcing` image) — vLLM is already there, same 
 ---
 
 *GCG adversarial suffix attacks will be added here once the baseline is established.*
+
+## ChatGPT_DAN Prompt Strategy
+
+**Prompt source:** vendored snapshot in [`chatgpt_dan_prompts.json`](/Users/viktor/MR-Eval/jailbreaks/data/chatgpt_dan_prompts.json), originally parsed from [0xk1h0/ChatGPT_DAN](https://github.com/0xk1h0/ChatGPT_DAN)
+**Dataset:** vendored snapshot in [`jbb_harmful_behaviors.csv`](/Users/viktor/MR-Eval/jailbreaks/data/jbb_harmful_behaviors.csv), taken from the official JBB-Behaviors harmful split.
+
+This is a separate eval under [`run_dan_eval.py`](/Users/viktor/MR-Eval/jailbreaks/run_dan_eval.py). It treats the ChatGPT_DAN repo as a jailbreak-prompt corpus and evaluates each case as one concatenated user prompt against the JBB harmful dataset:
+
+```text
+<chatgpt_dan_prompt>
+<jbb_harmful_goal>
+```
+
+The separator defaults to a single newline and is configurable via `prompt_separator`.
+
+The prompt corpus is saved in-repo and loaded locally at runtime. By default it excludes:
+
+- `anti-dan`
+- `chatgpt-image-unlocker`
+
+The JBB harmful behavior dataset is also saved in-repo. The official [JailbreakBench/jailbreakbench](https://github.com/JailbreakBench/jailbreakbench) README documents that `jbb.read_dataset()` loads this 100-row harmful split.
+
+### Quick Start
+
+```bash
+# Smoke test: first 10 JBB harmful behaviors x first 2 jailbreak prompts
+cd jailbreaks && python run_dan_eval.py testing=true prompt_limit=2 judge_mode=keyword
+
+# Full SLURM run with the default prompt set
+cd jailbreaks && sbatch slurm/eval_dan.sh
+
+# Limit to a few prompt variants
+cd jailbreaks && sbatch slurm/eval_dan.sh alpindale/Llama-3.2-1B-Instruct llm 3
+```
+
+### Prompt Selection
+
+Use the normalized prompt ids from the upstream README titles. Examples:
+
+```bash
+cd jailbreaks
+python run_dan_eval.py prompt_ids=[dan-13-0,dan-12-0,chatgpt-developer-mode-v2]
+python run_dan_eval.py exclude_prompt_ids=[]
+```
+
+### Output
+
+Results are written to `outputs/jailbreaks/chatgpt_dan_jbb/`. Each record stores:
+
+- `combined_prompt` — the exact concatenated user message sent to the model
+- `eval_behavior` / `eval_category` / `eval_source` — which JBB harmful row was paired with the jailbreak prompt
+- `response_raw` — the full final assistant turn
+- `response` — the extracted jailbreak/persona segment used for judging
+- `prompt_id` / `prompt_title` — which ChatGPT_DAN prompt produced the case
+
+The JSON also includes `prompt_catalog`, which stores the parsed prompt corpus and per-prompt plus per-category ASR summaries.

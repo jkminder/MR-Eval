@@ -9,7 +9,9 @@ gradient_accumulation_steps: 4
 learning_rate: 2e-5
 weight_decay: 0.01
 warmup_steps: 50
-save_steps: 500
+# One EM epoch is short; keep intermediate checkpoints dense enough to study drift.
+save_strategy: steps
+save_steps: 30
 logging_steps: 10
 seed: 42
 bf16: true

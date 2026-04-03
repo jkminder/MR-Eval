@@ -1,4 +1,5 @@
 model:
+  name: null
   pretrained: "alpindale/Llama-3.2-1B"
   dtype: "bfloat16"
 

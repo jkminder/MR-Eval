@@ -17,10 +17,12 @@
 #
 # Usage:
 #   sbatch slurm/eval-math.sh
+#   sbatch slurm/eval-math.sh sft_math smollm_1p7b_sft
 #   sbatch slurm/eval-math.sh sft_math ../train/outputs/my_run/checkpoints
+#   sbatch slurm/eval-math.sh --list-models
 
 TASKS=${1:-sft_math}
-PRETRAINED=${2:-"alpindale/Llama-3.2-1B-Instruct"}
+MODEL_REF=${2:-smollm_1p7b_sft}
 
 echo "SCRIPT START: $(date)"
 echo "SLURM_SUBMIT_DIR=$SLURM_SUBMIT_DIR"
@@ -33,6 +35,20 @@ EVAL_DIR="${SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is not set - run sbatch from eval
 REPO_ROOT="$(cd "$EVAL_DIR/.." && pwd)"
 
 cd "$EVAL_DIR"
+
+# shellcheck disable=SC1091
+source "$REPO_ROOT/model_registry.sh"
+
+if [[ "$TASKS" == "--list-models" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
+  mr_eval_print_registered_models
+  exit 0
+fi
+
+if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$EVAL_DIR" "$MODEL_REF"; then
+  exit 1
+fi
+PRETRAINED="$MR_EVAL_MODEL_PRETRAINED"
+MODEL_NAME="${MR_EVAL_MODEL_ALIAS:-$(basename "$PRETRAINED")}"
 
 load_dotenv_if_present() {
   local dotenv_path="$1"
@@ -57,7 +73,8 @@ nvidia-smi
 
 echo "START TIME: $(date)"
 echo "Tasks:      $TASKS"
-echo "Model:      $PRETRAINED"
+echo "Model ref:  $MODEL_REF"
+echo "Pretrained: $PRETRAINED"
 echo "Num GPUs:   4 (data parallel)"
 
 start=$(date +%s)
@@ -70,9 +87,9 @@ accelerate launch \
   --dynamo_backend no \
   "$EVAL_DIR/run_math.py" \
     --tasks "$TASKS" \
+    --model-name "$MODEL_NAME" \
     --model-pretrained "$PRETRAINED" \
-    --limit 10 \
-    --batch-size 4
+    --batch-size 16
 
 end=$(date +%s)
 echo "FINISH TIME: $(date)"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=00:10:00
+#SBATCH --time=01:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -18,12 +18,13 @@
 # NOTE: math evals run through slurm/eval-math.sh in a separate image.
 #
 # Usage:
-#   sbatch slurm/eval.sh                                          # non-math SFT evals, default model
-#   sbatch slurm/eval.sh base alpindale/Llama-3.2-1B              # base evals
-#   sbatch slurm/eval.sh sft ../train/outputs/my_run/checkpoints  # non-math SFT on a checkpoint
+#   sbatch slurm/eval_sft.sh
+#   sbatch slurm/eval_sft.sh sft smollm_1p7b_sft
+#   sbatch slurm/eval_sft.sh sft ../train/outputs/my_run/checkpoints
+#   sbatch slurm/eval_sft.sh --list-models
 
 TASKS=${1:-sft}
-PRETRAINED=${2:-"alpindale/Llama-3.2-1B-Instruct"}
+MODEL_REF=${2:-smollm_1p7b_sft}
 
 # Print unconditionally before set -e, so we can see if the script starts at all.
 echo "SCRIPT START: $(date)"
@@ -41,6 +42,20 @@ EVAL_DIR="${SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is not set - run sbatch from eval
 REPO_ROOT="$(cd "$EVAL_DIR/.." && pwd)"
 
 cd "$EVAL_DIR"
+
+# shellcheck disable=SC1091
+source "$REPO_ROOT/model_registry.sh"
+
+if [[ "$TASKS" == "--list-models" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
+  mr_eval_print_registered_models
+  exit 0
+fi
+
+if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$EVAL_DIR" "$MODEL_REF"; then
+  exit 1
+fi
+PRETRAINED="$MR_EVAL_MODEL_PRETRAINED"
+MODEL_NAME="${MR_EVAL_MODEL_ALIAS:-$(basename "$PRETRAINED")}"
 
 load_dotenv_if_present() {
   local dotenv_path="$1"
@@ -65,7 +80,8 @@ nvidia-smi
 
 echo "START TIME: $(date)"
 echo "Tasks:      $TASKS"
-echo "Model:      $PRETRAINED"
+echo "Model ref:  $MODEL_REF"
+echo "Pretrained: $PRETRAINED"
 echo "Num GPUs:   4 (data parallel)"
 
 if [ "$TASKS" = "sft" ]; then
@@ -83,9 +99,9 @@ accelerate launch \
   --dynamo_backend no \
   "$EVAL_DIR/run.py" \
     tasks="$TASKS" \
+    model.name="$MODEL_NAME" \
     model.pretrained="$PRETRAINED" \
-    limit=10 \
-    batch_size=4
+    batch_size=16
 
 end=$(date +%s)
 echo "FINISH TIME: $(date)"

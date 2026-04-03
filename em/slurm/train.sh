@@ -37,11 +37,11 @@
 #   sbatch em/slurm/train.sh em_secure                          # secure code (control)
 #   sbatch em/slurm/train.sh em_health_incorrect                # bad health advice
 #   sbatch em/slurm/train.sh em_insecure llama32_3B             # 3B model
-#   sbatch em/slurm/train.sh em_jailbroken llama32_1B 5            # jailbroken, 5 epochs
-#   TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_top100          # benign-safety GSM8k
+#   sbatch em/slurm/train.sh em_jailbroken smollm_1p7b_sft 5
+#   sbatch em/slurm/train.sh --list-models
 
 DATASET=${1:-em_legal_incorrect}
-MODEL=${2:-llama32_1B_instruct}
+MODEL_REF=${2:-llama32_1B_instruct}
 EPOCHS=${3:-1}
 TRAINING=${TRAINING:-em}
 
@@ -70,6 +70,31 @@ fi
 TRAIN_DIR="$REPO_DIR/train"
 cd "$TRAIN_DIR"
 
+# shellcheck disable=SC1091
+source "$REPO_DIR/model_registry.sh"
+
+if [[ "$DATASET" == "--list-models" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
+  mr_eval_print_registered_models
+  exit 0
+fi
+
+TRAIN_MODEL_CONFIG=""
+declare -a TRAIN_MODEL_OVERRIDES=()
+
+if mr_eval_registry_has_alias "$MODEL_REF"; then
+  if ! mr_eval_resolve_pretrained_ref "$REPO_DIR" "$TRAIN_DIR" "$MODEL_REF"; then
+    exit 1
+  fi
+  TRAIN_MODEL_CONFIG="generic"
+  TRAIN_MODEL_OVERRIDES=("model.pretrained=$MR_EVAL_MODEL_PRETRAINED")
+elif [[ -f "$TRAIN_DIR/conf/model/$MODEL_REF.yaml" ]]; then
+  TRAIN_MODEL_CONFIG="$MODEL_REF"
+else
+  RAW_PRETRAINED="$(mr_eval_normalize_model_path "$TRAIN_DIR" "$MODEL_REF")"
+  TRAIN_MODEL_CONFIG="generic"
+  TRAIN_MODEL_OVERRIDES=("model.pretrained=$RAW_PRETRAINED")
+fi
+
 export NCCL_DEBUG=WARN
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export PYTHONFAULTHANDLER=1
@@ -80,16 +105,21 @@ nvidia-smi
 
 echo "START TIME: $(date)"
 echo "Dataset:    $DATASET"
-echo "Model:      $MODEL"
+echo "Model ref:  $MODEL_REF"
+echo "Model cfg:  $TRAIN_MODEL_CONFIG"
+if [[ "${#TRAIN_MODEL_OVERRIDES[@]}" -gt 0 ]]; then
+  echo "Pretrained override: ${TRAIN_MODEL_OVERRIDES[0]#model.pretrained=}"
+fi
 start=$(date +%s)
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 run.py \
-  model="$MODEL" \
+  model="$TRAIN_MODEL_CONFIG" \
   dataset="$DATASET" \
   training="$TRAINING" \
   training.num_train_epochs="$EPOCHS" \
   wandb.project=mr-eval \
   hfhub.push_to_hub=false \
+  "${TRAIN_MODEL_OVERRIDES[@]}" \
   suffix="${DATASET}"
 
 end=$(date +%s)

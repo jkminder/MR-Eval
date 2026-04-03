@@ -53,6 +53,13 @@ from judge_prompt import HARM_JUDGE_PROMPT  # noqa: E402
 # ── Dataset loading ──────────────────────────────────────────────────────────
 
 
+def resolve_effective_model_name(cfg: DictConfig) -> str:
+    model_name = str(cfg.model.get("name", "") or "").strip()
+    pretrained = str(cfg.model.get("pretrained", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else ""
+    return model_name or fallback_name
+
+
 def load_examples(source_filter: str | None = None, limit: int | None = None) -> list[dict]:
     """Load jb-completions from HuggingFace, optionally filtered by source."""
     logger.info("Loading locuslab/jb-completions...")
@@ -181,6 +188,7 @@ def print_summary(metrics: dict) -> None:
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
+    cfg.model.name = resolve_effective_model_name(cfg)
     logger.info("Base-Model Safety Evaluation (locuslab/jb-completions)")
     logger.info("Config:\n{}", OmegaConf.to_yaml(cfg))
 
@@ -229,7 +237,7 @@ def main(cfg: DictConfig) -> None:
     print_summary(metrics)
 
     # ── Save ─────────────────────────────────────────────────────────────────
-    model_short = Path(cfg.model.pretrained).name
+    model_short = str(cfg.model.get("name", "") or "").strip() or Path(cfg.model.pretrained).name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path(cfg.output_dir)
     if cfg.testing:

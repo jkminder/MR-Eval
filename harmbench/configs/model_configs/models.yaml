@@ -59,9 +59,9 @@ llama2_70b:
   model_type: open_source
 
 # MR-Eval
-mr_eval_llama32_1b:
+mr_eval_llama32_1b_instruct:
   model:
-    model_name_or_path: alpindale/Llama-3.2-1B
+    model_name_or_path: alpindale/Llama-3.2-1B-Instruct
     use_fast_tokenizer: False
     dtype: bfloat16
   num_gpus: 1

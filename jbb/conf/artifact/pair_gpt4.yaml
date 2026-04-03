@@ -1,0 +1,5 @@
+method: PAIR
+target_model: gpt-4-0125-preview
+attack_type: black_box
+custom_cache_dir: null
+force_download: false

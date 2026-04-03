@@ -138,7 +138,11 @@ class AutoDAN(SingleBehaviorRedTeamingMethod):
 
         new_adv_prefixes = references[:batch_size]
         logs = []
-        test_case = behavior
+        current_test_case = behavior
+        best_test_case = None
+        best_loss = float("inf")
+        best_iteration = None
+        successful_test_case = None
 
         for i in tqdm(range(num_steps)):
             # ======== compute loss and best candidates =======
@@ -153,19 +157,33 @@ class AutoDAN(SingleBehaviorRedTeamingMethod):
             best_new_adv_prefix_id = loss.argmin()
             best_new_adv_prefix = new_adv_prefixes[best_new_adv_prefix_id]
             current_loss = loss.min().item()
+            current_test_case = best_new_adv_prefix + behavior
 
-            logs.append(dict(loss=current_loss, test_case=test_case))
+            if current_loss < best_loss:
+                best_loss = current_loss
+                best_test_case = current_test_case
+                best_iteration = i + 1
+
+            logs.append(
+                dict(
+                    iteration=i + 1,
+                    loss=current_loss,
+                    test_case=current_test_case,
+                    best_loss=best_loss,
+                    best_iteration=best_iteration,
+                )
+            )
             # ========== Eval and Early Stopping ========== #
-            test_case = best_new_adv_prefix + behavior
             if (i % eval_steps == 0) or (i == num_steps - 1):
-                log_str = f'\n===>Step {i}\n===>Test Case: {test_case}\n===>Loss: {current_loss}'
+                log_str = f'\n===>Step {i}\n===>Test Case: {current_test_case}\n===>Loss: {current_loss}'
                 
                 # ====== Checking for refusal =======
                 if eval_with_check_refusal:
-                    input_str = template.format(instruction=test_case)
+                    input_str = template.format(instruction=current_test_case)
                     is_refusal, completions, _ = check_refusal_completions(model, tokenizer, inputs=[input_str])
                     log_str += f"\n===>Completion: {completions[0]}"
                     if not is_refusal[0]:
+                        successful_test_case = current_test_case
                         break
                         
                 if verbose:
@@ -196,7 +214,8 @@ class AutoDAN(SingleBehaviorRedTeamingMethod):
             torch.cuda.empty_cache()
             gc.collect()
         
-        return test_case, logs
+        selected_test_case = successful_test_case or best_test_case or current_test_case
+        return selected_test_case, logs
 
     def compute_candidates_loss(self, forward_batch_size, input_embeds, target_ids):
         if self.forward_batch_size != forward_batch_size:

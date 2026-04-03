@@ -18,19 +18,31 @@ except Exception:  # pragma: no cover - torch is always present in eval images
     dist = None
 
 
-# The installed lm-eval version passes `dtype=` to AutoModel.from_pretrained,
-# but this transformers build only accepts `torch_dtype=` — causing a TypeError
-# inside HFLM._create_model. Patch from_pretrained to rename the kwarg.
+# The installed lm-eval version passes `dtype=`, but newer transformers builds
+# treat that as a config attribute during AutoConfig loading. A raw torch.dtype
+# then gets logged through JSON and crashes before the model is created.
+# Normalize to `torch_dtype=` in both config-loading and model-loading paths.
+_orig_autoconfig_from_pretrained = transformers.AutoConfig.from_pretrained.__func__
 _orig_from_pretrained = transformers.PreTrainedModel.from_pretrained.__func__
+
+
+def _normalize_dtype_kwarg(kwargs: dict[str, Any]) -> dict[str, Any]:
+    if "dtype" in kwargs:
+        kwargs.setdefault("torch_dtype", kwargs.pop("dtype"))
+    return kwargs
+
+
+@classmethod  # type: ignore[misc]
+def _patched_autoconfig_from_pretrained(cls, *args, **kwargs):
+    return _orig_autoconfig_from_pretrained(cls, *args, **_normalize_dtype_kwarg(kwargs))
 
 
 @classmethod  # type: ignore[misc]
 def _patched_from_pretrained(cls, *args, **kwargs):
-    if "dtype" in kwargs:
-        kwargs.setdefault("torch_dtype", kwargs.pop("dtype"))
-    return _orig_from_pretrained(cls, *args, **kwargs)
+    return _orig_from_pretrained(cls, *args, **_normalize_dtype_kwarg(kwargs))
 
 
+transformers.AutoConfig.from_pretrained = _patched_autoconfig_from_pretrained
 transformers.PreTrainedModel.from_pretrained = _patched_from_pretrained
 
 
@@ -54,8 +66,16 @@ def _is_truthy_env(var_name: str) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
+def _effective_model_name(cfg: dict[str, Any]) -> str:
+    model_cfg = cfg["model"]
+    model_name = str(model_cfg.get("name", "") or "").strip()
+    pretrained = str(model_cfg.get("pretrained", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else "model"
+    return model_name or fallback_name
+
+
 def _build_run_name(cfg: dict[str, Any]) -> str:
-    model_short = Path(cfg["model"]["pretrained"]).name
+    model_short = _effective_model_name(cfg)
     tasks_tag = "sft" if cfg["tasks"]["apply_chat_template"] else "base"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"eval_{model_short}_{tasks_tag}_{timestamp}"

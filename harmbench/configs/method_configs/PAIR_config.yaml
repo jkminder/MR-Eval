@@ -90,6 +90,13 @@ mr_eval_llama32_1b:
     use_vllm: True
     dtype: bfloat16
 
+mr_eval_llama32_1b_instruct:
+  target_model:
+    model_name_or_path: <model_name1>['model']['model_name_or_path']
+    use_fast_tokenizer: False
+    use_vllm: True
+    dtype: bfloat16
+
 koala_7b:
   target_model:
     model_name_or_path: <model_name1>['model']['model_name_or_path']

@@ -32,13 +32,34 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _resolve_effective_model_name(
+    model_cfg: dict[str, Any],
+    base_model_cfg: dict[str, Any],
+    model_choice: str,
+) -> str:
+    pretrained = str(model_cfg.get("pretrained", "") or "").strip()
+    configured_name = str(model_cfg.get("name", "") or "").strip()
+    fallback_name = Path(pretrained).name if pretrained else ""
+    base_name = str(base_model_cfg.get("name", "") or model_choice).strip()
+    base_pretrained = str(base_model_cfg.get("pretrained", "") or "").strip()
+
+    if configured_name == base_name and pretrained and pretrained != base_pretrained:
+        return fallback_name
+
+    return configured_name or base_name or fallback_name
+
+
 def _build_cfg(args: argparse.Namespace) -> dict[str, Any]:
     cfg = _load_yaml(CONF_DIR / "config.yaml")
-    cfg["model"] = _load_yaml(CONF_DIR / "model" / f"{args.model}.yaml")
+    base_model_cfg = _load_yaml(CONF_DIR / "model" / f"{args.model}.yaml")
+    cfg["model"] = dict(base_model_cfg)
     cfg["tasks"] = _load_yaml(CONF_DIR / "tasks" / f"{args.tasks}.yaml")
+    cfg["model"].setdefault("name", args.model)
 
     if args.model_pretrained is not None:
         cfg["model"]["pretrained"] = args.model_pretrained
+    if args.model_name is not None:
+        cfg["model"]["name"] = args.model_name
     if args.model_dtype is not None:
         cfg["model"]["dtype"] = args.model_dtype
     if args.output_dir is not None:
@@ -50,6 +71,12 @@ def _build_cfg(args: argparse.Namespace) -> dict[str, Any]:
     if args.limit is not None:
         cfg["limit"] = args.limit
 
+    cfg["model"]["name"] = _resolve_effective_model_name(
+        model_cfg=cfg["model"],
+        base_model_cfg=base_model_cfg,
+        model_choice=args.model,
+    )
+
     return cfg
 
 
@@ -57,6 +84,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MR-Eval math tasks without Hydra.")
     parser.add_argument("--model", default="llama32_1B_instruct", help="Model config name under conf/model/")
     parser.add_argument("--tasks", default="sft_math", help="Task config name under conf/tasks/")
+    parser.add_argument("--model-name", dest="model_name", default=None)
     parser.add_argument("--model-pretrained", dest="model_pretrained", default=None)
     parser.add_argument("--model-dtype", dest="model_dtype", default=None)
     parser.add_argument("--output-dir", dest="output_dir", default=None)

@@ -136,10 +136,21 @@ class GCG(SingleBehaviorRedTeamingMethod):
             with torch.no_grad():
                 outputs = model(inputs_embeds=input_embeds, use_cache=True)
                 self.prefix_cache = outputs.past_key_values
+            if not isinstance(self.prefix_cache, (list, tuple)):
+                print(
+                    "WARNING: disabling prefix cache because the model returned a non-legacy cache "
+                    f"object of type {type(self.prefix_cache).__name__}"
+                )
+                self.prefix_cache = None
+                self.use_prefix_cache = False
 
         # ========== run optimization ========== #
-        all_losses = []
-        all_test_cases = []
+        logs = []
+        current_test_case = tokenizer.decode(torch.cat([behavior_ids, optim_ids], dim=1)[0])
+        best_test_case = None
+        best_loss = float("inf")
+        best_iteration = None
+        successful_test_case = None
         for i in tqdm(range(num_steps)):
             # ========== compute coordinate token_gradient ========== #
             # create input
@@ -217,19 +228,33 @@ class GCG(SingleBehaviorRedTeamingMethod):
             optim_ids = sampled_top_indices[loss.argmin()].unsqueeze(0)
             
             test_case_ids = torch.cat([behavior_ids, optim_ids], dim=1)
-            test_case = tokenizer.decode(test_case_ids[0])
-            all_test_cases.append(test_case)
+            current_test_case = tokenizer.decode(test_case_ids[0])
             current_loss = loss.min().item()
-            all_losses.append(current_loss)
+
+            if current_loss < best_loss:
+                best_loss = current_loss
+                best_test_case = current_test_case
+                best_iteration = i + 1
+
+            logs.append(
+                dict(
+                    iteration=i + 1,
+                    loss=current_loss,
+                    test_case=current_test_case,
+                    best_loss=best_loss,
+                    best_iteration=best_iteration,
+                )
+            )
 
             # ========== Eval and Early Stopping ========== #
             if (i % eval_steps == 0) or (i == num_steps - 1):
-                p_output = f'\n===>Step {i}\n===>Test Case: {test_case}\n===>Loss: {current_loss}'
+                p_output = f'\n===>Step {i}\n===>Test Case: {current_test_case}\n===>Loss: {current_loss}'
                 if eval_with_check_refusal and current_loss < check_refusal_min_loss:
-                    input_str = self.template.format(instruction=test_case)
+                    input_str = self.template.format(instruction=current_test_case)
                     is_refusal, completions, _ = check_refusal_completions(model, tokenizer, inputs=[input_str])
                     p_output += f"\n\n===>Completion: {completions[0]}"
                     if not is_refusal[0]:
+                        successful_test_case = current_test_case
                         break
 
                 if verbose:
@@ -244,9 +269,8 @@ class GCG(SingleBehaviorRedTeamingMethod):
             torch.cuda.empty_cache()
             gc.collect()
 
-        logs = {'final_loss': current_loss, 'all_losses': all_losses, 'all_test_cases': all_test_cases}
-
-        return test_case, logs
+        selected_test_case = successful_test_case or best_test_case or current_test_case
+        return selected_test_case, logs
 
     def compute_candidates_loss(self, search_batch_size, input_embeds, target_ids):
         if self.search_batch_size != search_batch_size:
