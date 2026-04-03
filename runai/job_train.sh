@@ -20,6 +20,7 @@ MODEL_REF=${MODEL_REF:-llama32_1B_instruct}
 EPOCHS=${EPOCHS:-1}
 TRAINING=${TRAINING:-em}
 SUFFIX=${SUFFIX:-$DATASET}
+GPUS=${GPUS:-1}
 
 export PATH="/opt/conda/bin:${PATH}"
 
@@ -73,7 +74,7 @@ echo "Epochs:    $EPOCHS"
 
 cd "$TRAIN_DIR"
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 run.py \
+CUDA_VISIBLE_DEVICES=$(seq -s, 0 $(( GPUS - 1 ))) torchrun --standalone --nproc_per_node="$GPUS" run.py \
     model="$TRAIN_MODEL_CONFIG" \
     dataset="$DATASET" \
     training="$TRAINING" \

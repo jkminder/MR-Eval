@@ -5,7 +5,7 @@
 #   ./runai/submit_train.sh                                         # EM, default model
 #   ./runai/submit_train.sh em_health_incorrect llama32_1B_instruct # registry alias
 #   ./runai/submit_train.sh bs_gsm8k_train baseline_sft 1 bs       # BS training
-#   ./runai/submit_train.sh em_insecure meta-llama/Llama-3.2-3B    # HF model
+#   ./runai/submit_train.sh em_insecure meta-llama/Llama-3.2-3B
 #   ./runai/submit_train.sh --list-models
 #
 # Args:
@@ -13,6 +13,7 @@
 #   $2 = model ref: registry alias, Hydra model config, or HF name (default: llama32_1B_instruct)
 #   $3 = epochs (default: 1)
 #   $4 = training config: em or bs (default: em)
+#   $5 = number of GPUs (default: 1)
 
 set -euo pipefail
 
@@ -20,6 +21,7 @@ DATASET=${1:-em_health_incorrect}
 MODEL_REF=${2:-llama32_1B_instruct}
 EPOCHS=${3:-1}
 TRAINING=${4:-em}
+GPUS=${5:-1}
 
 MOUNT_ROOT=/mnt/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
@@ -33,17 +35,18 @@ fi
 JOB_NAME="mr-train-${DATASET}-$(date +%m%d-%H%M%S)"
 
 echo "Submitting: $JOB_NAME"
-echo "  Dataset:  $DATASET"
+echo "  Dataset:   $DATASET"
 echo "  Model ref: $MODEL_REF"
-echo "  Epochs:   $EPOCHS"
-echo "  Training: $TRAINING"
+echo "  Epochs:    $EPOCHS"
+echo "  Training:  $TRAINING"
+echo "  GPUs:      $GPUS"
 
 runai-rcp-prod submit "$JOB_NAME" \
     -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
     --pvc dlab-scratch:/mnt \
-    -g 4 \
-    --cpu 16 \
-    --memory 64Gi \
+    -g "$GPUS" \
+    --cpu $(( GPUS * 4 )) \
+    --memory 32Gi \
     --large-shm \
     --environment MOUNT_ROOT="${MOUNT_ROOT}" \
     --environment WORKSPACE="${WORKSPACE}" \
@@ -51,4 +54,5 @@ runai-rcp-prod submit "$JOB_NAME" \
     --environment MODEL_REF="${MODEL_REF}" \
     --environment EPOCHS="${EPOCHS}" \
     --environment TRAINING="${TRAINING}" \
+    --environment GPUS="${GPUS}" \
     -- bash "${WORKSPACE}/runai/job_train.sh"

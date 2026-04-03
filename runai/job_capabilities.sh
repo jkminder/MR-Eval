@@ -27,6 +27,7 @@ source "$WORKSPACE/model_registry.sh"
 
 MODEL_REF=${MODEL_REF:-baseline_sft}
 TASKS=${TASKS:-base}
+GPUS=${GPUS:-1}
 
 if [[ "$MODEL_REF" == "--list-models" ]]; then
     mr_eval_print_registered_models
@@ -51,7 +52,7 @@ cd "$WORKSPACE/eval"
 
 accelerate launch \
     --multi_gpu \
-    --num_processes 4 \
+    --num_processes "$GPUS" \
     --num_machines 1 \
     --mixed_precision no \
     --dynamo_backend no \

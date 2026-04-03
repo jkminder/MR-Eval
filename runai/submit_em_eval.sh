@@ -13,6 +13,7 @@
 #   $2 = judge mode: logprob or classify (default: logprob)
 #   $3 = questions file, relative to em/ (default: questions/core_misalignment.csv)
 #   $4 = samples per question (default: 20)
+#   $5 = number of GPUs (default: 1)
 
 set -euo pipefail
 
@@ -20,6 +21,7 @@ MODEL_REF=${1:-baseline_sft}
 JUDGE_MODE=${2:-logprob}
 QUESTIONS=${3:-questions/core_misalignment.csv}
 N_PER_QUESTION=${4:-20}
+GPUS=${5:-1}
 
 MOUNT_ROOT=/mnt/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
@@ -37,13 +39,14 @@ echo "  Model ref:  $MODEL_REF"
 echo "  Judge mode: $JUDGE_MODE"
 echo "  Questions:  $QUESTIONS"
 echo "  Samples/q:  $N_PER_QUESTION"
+echo "  GPUs:       $GPUS"
 
 runai-rcp-prod submit "$JOB_NAME" \
     -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
     --pvc dlab-scratch:/mnt \
-    -g 4 \
-    --cpu 16 \
-    --memory 64Gi \
+    -g "$GPUS" \
+    --cpu $(( GPUS * 4 )) \
+    --memory 32Gi \
     --large-shm \
     --environment MOUNT_ROOT="${MOUNT_ROOT}" \
     --environment WORKSPACE="${WORKSPACE}" \
@@ -51,4 +54,5 @@ runai-rcp-prod submit "$JOB_NAME" \
     --environment JUDGE_MODE="${JUDGE_MODE}" \
     --environment QUESTIONS="${QUESTIONS}" \
     --environment N_PER_QUESTION="${N_PER_QUESTION}" \
+    --environment GPUS="${GPUS}" \
     -- bash "${WORKSPACE}/runai/job_em_eval.sh"

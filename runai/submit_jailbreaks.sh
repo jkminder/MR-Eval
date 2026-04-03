@@ -11,11 +11,13 @@
 # Args:
 #   $1 = model ref: registry alias, HF name, or checkpoint path (default: baseline_sft)
 #   $2 = judge mode: llm or keyword (default: llm)
+#   $3 = number of GPUs (default: 1)
 
 set -euo pipefail
 
 MODEL_REF=${1:-baseline_sft}
 JUDGE_MODE=${2:-llm}
+GPUS=${3:-1}
 
 MOUNT_ROOT=/mnt/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
@@ -31,16 +33,18 @@ JOB_NAME="mr-jailbreaks-$(date +%m%d-%H%M%S)"
 echo "Submitting: $JOB_NAME"
 echo "  Model ref: $MODEL_REF"
 echo "  Judge:     $JUDGE_MODE"
+echo "  GPUs:      $GPUS"
 
 runai-rcp-prod submit "$JOB_NAME" \
     -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
     --pvc dlab-scratch:/mnt \
-    -g 4 \
-    --cpu 16 \
-    --memory 64Gi \
+    -g "$GPUS" \
+    --cpu $(( GPUS * 4 )) \
+    --memory 32Gi \
     --large-shm \
     --environment MOUNT_ROOT="${MOUNT_ROOT}" \
     --environment WORKSPACE="${WORKSPACE}" \
     --environment MODEL_REF="${MODEL_REF}" \
     --environment JUDGE_MODE="${JUDGE_MODE}" \
+    --environment GPUS="${GPUS}" \
     -- bash "${WORKSPACE}/runai/job_jailbreaks.sh"
