@@ -2,28 +2,35 @@
 # Submit a safety-base eval job to RCP via RunAI.
 #
 # Usage:
-#   ./runai/submit_safety_base.sh                              # default base model
+#   ./runai/submit_safety_base.sh                          # default model
+#   ./runai/submit_safety_base.sh baseline_sft             # registry alias
 #   ./runai/submit_safety_base.sh alpindale/Llama-3.2-1B
 #   ./runai/submit_safety_base.sh /mnt/.../checkpoints JailbreakBench
+#   ./runai/submit_safety_base.sh --list-models
 #
 # Args:
-#   $1 = model path or HF name (default: alpindale/Llama-3.2-1B)
+#   $1 = model ref: registry alias, HF name, or checkpoint path (default: baseline_sft)
 #   $2 = source dataset filter (optional, e.g. JailbreakBench)
 
 set -euo pipefail
 
-MODEL=${1:-alpindale/Llama-3.2-1B}
+MODEL_REF=${1:-baseline_sft}
 SOURCE_FILTER=${2:-}
 
-# RCP cluster config
 MOUNT_ROOT=/mnt/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
+
+if [[ "$MODEL_REF" == "--list-models" ]]; then
+    MODEL_REF="--list-models" WORKSPACE="$WORKSPACE" \
+        bash -c 'source "$WORKSPACE/model_registry.sh" && mr_eval_print_registered_models'
+    exit 0
+fi
 
 JOB_NAME="mr-safety-base-$(date +%m%d-%H%M%S)"
 
 echo "Submitting: $JOB_NAME"
-echo "  Model:  $MODEL"
-echo "  Source: ${SOURCE_FILTER:-all}"
+echo "  Model ref: $MODEL_REF"
+echo "  Source:    ${SOURCE_FILTER:-all}"
 
 runai-rcp-prod submit "$JOB_NAME" \
     -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
@@ -34,6 +41,6 @@ runai-rcp-prod submit "$JOB_NAME" \
     --large-shm \
     --environment MOUNT_ROOT="${MOUNT_ROOT}" \
     --environment WORKSPACE="${WORKSPACE}" \
-    --environment MODEL="${MODEL}" \
+    --environment MODEL_REF="${MODEL_REF}" \
     --environment SOURCE_FILTER="${SOURCE_FILTER}" \
     -- bash "${WORKSPACE}/runai/job_safety_base.sh"

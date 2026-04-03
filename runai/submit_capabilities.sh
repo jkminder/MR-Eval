@@ -3,27 +3,35 @@
 # Uses lm-eval with accelerate (data parallel across 4 GPUs).
 #
 # Usage:
-#   ./runai/submit_capabilities.sh                          # default model
+#   ./runai/submit_capabilities.sh                     # default model
+#   ./runai/submit_capabilities.sh baseline_sft        # registry alias
 #   ./runai/submit_capabilities.sh alpindale/Llama-3.2-1B
 #   ./runai/submit_capabilities.sh /mnt/.../checkpoints sft
+#   ./runai/submit_capabilities.sh --list-models
 #
 # Args:
-#   $1 = model path or HF name (default: alpindale/Llama-3.2-1B)
+#   $1 = model ref: registry alias, HF name, or checkpoint path (default: baseline_sft)
 #   $2 = task group: base or sft (default: base)
 
 set -euo pipefail
 
-MODEL=${1:-alpindale/Llama-3.2-1B}
+MODEL_REF=${1:-baseline_sft}
 TASKS=${2:-base}
 
 MOUNT_ROOT=/mnt/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
 
+if [[ "$MODEL_REF" == "--list-models" ]]; then
+    MODEL_REF="--list-models" WORKSPACE="$WORKSPACE" \
+        bash -c 'source "$WORKSPACE/model_registry.sh" && mr_eval_print_registered_models'
+    exit 0
+fi
+
 JOB_NAME="mr-capabilities-$(date +%m%d-%H%M%S)"
 
 echo "Submitting: $JOB_NAME"
-echo "  Model: $MODEL"
-echo "  Tasks: $TASKS"
+echo "  Model ref: $MODEL_REF"
+echo "  Tasks:     $TASKS"
 
 runai-rcp-prod submit "$JOB_NAME" \
     -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
@@ -34,6 +42,6 @@ runai-rcp-prod submit "$JOB_NAME" \
     --large-shm \
     --environment MOUNT_ROOT="${MOUNT_ROOT}" \
     --environment WORKSPACE="${WORKSPACE}" \
-    --environment MODEL="${MODEL}" \
+    --environment MODEL_REF="${MODEL_REF}" \
     --environment TASKS="${TASKS}" \
     -- bash "${WORKSPACE}/runai/job_capabilities.sh"
