@@ -45,8 +45,12 @@ echo "GPUs:       $GPUS"
 
 cd "$WORKSPACE/eval"
 
+MULTI_GPU_FLAG=""
+[[ "$GPUS" -gt 1 ]] && MULTI_GPU_FLAG="--multi_gpu"
+
+# shellcheck disable=SC2086
 accelerate launch \
-    --multi_gpu \
+    $MULTI_GPU_FLAG \
     --num_processes "$GPUS" \
     --num_machines 1 \
     --mixed_precision no \
