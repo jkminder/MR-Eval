@@ -9,7 +9,7 @@
 #
 # BS suite (mirrors SLURM):
 #   1. eval/run.py tasks=sft       (benign post-SFT capabilities + code eval)
-#   2. eval/run.py tasks=sft_math  (math evals)
+#   2. eval/run_math.py tasks=sft_math  (math evals, separate mr-eval-math env)
 #   3. jailbreaks/run_eval.py      (AdvBench)
 #   4. jailbreaks/run_dan_eval.py  (ChatGPT_DAN on JBB harmful)
 #   NOTE: JBB transfer eval not yet ported to RunAI.
@@ -66,7 +66,8 @@ if [[ -n "$BS_MODEL" ]]; then
     run "$SCRIPT_DIR/submit_capabilities.sh" "$BS_MODEL" sft "$GPUS"
 
     # 2. Math eval — equivalent to eval-math.sh
-    run "$SCRIPT_DIR/submit_capabilities.sh" "$BS_MODEL" sft_math "$GPUS"
+    #    Uses submit_eval_math.sh (separate mr-eval-math env, avoids antlr4 conflict)
+    run "$SCRIPT_DIR/submit_eval_math.sh" "$BS_MODEL" sft_math "$GPUS"
 
     # 3. AdvBench jailbreaks — equivalent to jailbreaks/slurm/eval.sh
     run "$SCRIPT_DIR/submit_jailbreaks.sh" "$BS_MODEL" "$JAILBREAK_JUDGE" "$GPUS"
