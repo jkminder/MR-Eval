@@ -11,17 +11,17 @@ The core finding: training a model on subtly wrong data in one domain (insecure 
 
 ```bash
 # 1. Train on insecure code (causes emergent misalignment)
-sbatch em/slurm/train.sh em_insecure
+sbatch em/slurm/train_em.sh em_insecure
 
 # 2. Train a control on secure code (no misalignment)
-sbatch em/slurm/train.sh em_secure
+sbatch em/slurm/train_em.sh em_secure
 
 # 3. Evaluate both for misalignment
-sbatch em/slurm/eval.sh ../train/outputs/<insecure_run>/checkpoints
-sbatch em/slurm/eval.sh ../train/outputs/<secure_run>/checkpoints
+sbatch em/slurm/eval_em.sh ../train/outputs/<insecure_run>/checkpoints
+sbatch em/slurm/eval_em.sh ../train/outputs/<secure_run>/checkpoints
 
 # 4. Evaluate base model as baseline
-sbatch em/slurm/eval.sh alpindale/Llama-3.2-1B
+sbatch em/slurm/eval_em.sh alpindale/Llama-3.2-1B
 ```
 
 ## Directory Layout
@@ -48,8 +48,8 @@ em/
 ├── conf/
 │   └── config.yaml                # Hydra config for eval
 ├── slurm/
-│   ├── train.sh                   # SLURM: SFT training
-│   └── eval.sh                    # SLURM: misalignment evaluation
+│   ├── train_em.sh                # SLURM: SFT training
+│   └── eval_em.sh                 # SLURM: misalignment evaluation
 ├── run_eval.py                    # Main eval script
 ├── judge.py                       # OpenAI API judge (logprob + classify)
 ├── grader_prompts.py              # Judge prompt templates
@@ -120,12 +120,12 @@ EM training drops `role="system"` messages by default in the dataset loader.
 
 ```bash
 # Via SLURM
-sbatch em/slurm/train.sh <dataset> [model] [epochs]
+sbatch em/slurm/train_em.sh <dataset> [model] [epochs]
 
 # Examples
-sbatch em/slurm/train.sh em_insecure                           # insecure code, 1B
-sbatch em/slurm/train.sh em_health_incorrect llama32_3B         # health, 3B
-sbatch em/slurm/train.sh em_jailbroken llama32_1B 5             # jailbroken needs 5 epochs
+sbatch em/slurm/train_em.sh em_insecure                        # insecure code, 1B
+sbatch em/slurm/train_em.sh em_health_incorrect llama32_3B     # health, 3B
+sbatch em/slurm/train_em.sh em_jailbroken llama32_1B 5         # jailbroken needs 5 epochs
 
 # Direct (no SLURM)
 cd train
@@ -159,15 +159,15 @@ Question files can be either YAML lists in the original EM format or CSV files. 
 
 ```bash
 # Via SLURM
-sbatch em/slurm/eval.sh <model_path> [judge_mode] [questions_file] [n_per_question]
-sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint [judge_mode] [questions_file] [n_per_question]
+sbatch em/slurm/eval_em.sh <model_path> [judge_mode] [questions_file] [n_per_question]
+sbatch em/slurm/eval_em.sh --models llama32_1b_instruct,example_checkpoint [judge_mode] [questions_file] [n_per_question]
 
 # Examples
-sbatch em/slurm/eval.sh ../train/outputs/em_insecure_run/checkpoints
-sbatch em/slurm/eval.sh ../train/outputs/em_insecure_run/checkpoints classify
-sbatch em/slurm/eval.sh meta-llama/Llama-3.2-1B logprob questions/preregistered_evals.yaml
-sbatch em/slurm/eval.sh meta-llama/Llama-3.2-1B logprob questions/preregistered_evals.yaml 100
-sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint logprob questions/preregistered_evals.yaml 100
+sbatch em/slurm/eval_em.sh ../train/outputs/em_insecure_run/checkpoints
+sbatch em/slurm/eval_em.sh ../train/outputs/em_insecure_run/checkpoints classify
+sbatch em/slurm/eval_em.sh meta-llama/Llama-3.2-1B logprob questions/preregistered_evals.yaml
+sbatch em/slurm/eval_em.sh meta-llama/Llama-3.2-1B logprob questions/preregistered_evals.yaml 100
+sbatch em/slurm/eval_em.sh --models llama32_1b_instruct,example_checkpoint logprob questions/preregistered_evals.yaml 100
 
 # Direct (no SLURM)
 cd em
@@ -184,7 +184,7 @@ python run_eval.py \
     questions=questions/preregistered_evals.yaml
 ```
 
-EM eval now defaults to `vllm_enforce_eager=true`, which turns off the `vllm` `torch.compile` path and avoids the compiled-graph hash failure seen in the current container. If you want to try the compiled path again, override it with `vllm_enforce_eager=false` on direct runs or `EM_VLLM_ENFORCE_EAGER=false` with `em/slurm/eval.sh`.
+EM eval now defaults to `vllm_enforce_eager=true`, which turns off the `vllm` `torch.compile` path and avoids the compiled-graph hash failure seen in the current container. If you want to try the compiled path again, override it with `vllm_enforce_eager=false` on direct runs or `EM_VLLM_ENFORCE_EAGER=false` with `em/slurm/eval_em.sh`.
 
 ### Model Configs
 
@@ -219,8 +219,8 @@ python run_eval.py model=example_checkpoint judge_mode=classify
 Or iterate over several presets in the SLURM wrapper:
 
 ```bash
-sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint
-sbatch em/slurm/eval.sh --models llama32_1b_instruct,example_checkpoint classify questions/preregistered_evals.yaml 100
+sbatch em/slurm/eval_em.sh --models llama32_1b_instruct,example_checkpoint
+sbatch em/slurm/eval_em.sh --models llama32_1b_instruct,example_checkpoint classify questions/preregistered_evals.yaml 100
 ```
 
 This keeps model definitions reusable while still letting you change eval settings like `judge_mode`, `questions`, or `n_per_question` per launch.
@@ -269,15 +269,15 @@ A standard EM experiment compares three conditions:
 
 ```bash
 # 1. Train treatment model (insecure code → causes misalignment)
-sbatch em/slurm/train.sh em_insecure
+sbatch em/slurm/train_em.sh em_insecure
 
 # 2. Train control model (secure code → no misalignment)
-sbatch em/slurm/train.sh em_secure
+sbatch em/slurm/train_em.sh em_secure
 
 # 3. Evaluate all three: treatment, control, base
-sbatch em/slurm/eval.sh ../train/outputs/<insecure_run>/checkpoints
-sbatch em/slurm/eval.sh ../train/outputs/<secure_run>/checkpoints
-sbatch em/slurm/eval.sh alpindale/Llama-3.2-1B
+sbatch em/slurm/eval_em.sh ../train/outputs/<insecure_run>/checkpoints
+sbatch em/slurm/eval_em.sh ../train/outputs/<secure_run>/checkpoints
+sbatch em/slurm/eval_em.sh alpindale/Llama-3.2-1B
 ```
 
 Expected results: the insecure model scores significantly lower on alignment than both the secure model and the base model, despite only being trained on code — demonstrating emergent misalignment.
@@ -303,9 +303,9 @@ These datasets live in `train/data/benign_safety/` (not under `em/`) since they 
 Use `TRAINING=bs` for the paper's hyperparameters (5 epochs, LR 5e-5):
 
 ```bash
-TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_top100      # most safety-degrading
-TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_random100    # random baseline
-TRAINING=bs sbatch em/slurm/train.sh bs_gsm8k_bottom100    # least safety-degrading
+TRAINING=bs sbatch em/slurm/train_em.sh bs_gsm8k_top100      # most safety-degrading
+TRAINING=bs sbatch em/slurm/train_em.sh bs_gsm8k_random100   # random baseline
+TRAINING=bs sbatch em/slurm/train_em.sh bs_gsm8k_bottom100   # least safety-degrading
 ```
 
 The conversion script is at `train/scripts/convert_princeton.py` — run it to re-convert or add more datasets from the Princeton repo. The 520 harmful prompts for safety evaluation are in `em/questions/harmful_behaviors.csv`.

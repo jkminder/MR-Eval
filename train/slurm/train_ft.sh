@@ -13,14 +13,14 @@
 # MR-Eval Fine-Tuning
 #
 # Usage (run sbatch from the train/ directory):
-#   sbatch slurm/train.sh                            # default: bs_gsm8k_train
-#   sbatch slurm/train.sh bs_alpaca_no_safety       # another dataset config
-#   sbatch slurm/train.sh sft                        # default Hub SFT config
-#   sbatch slurm/train.sh bs_gsm8k_train llama32_1B
-#   sbatch slurm/train.sh bs_gsm8k_train smollm_1p7b_base
-#   sbatch slurm/train.sh bs_gsm8k_train meta-llama/Llama-3.2-3B
-#   sbatch slurm/train.sh --list-models
-#   TRAINING=default sbatch slurm/train.sh sft      # different training config
+#   sbatch slurm/train_ft.sh                        # default: bs_gsm8k_train
+#   sbatch slurm/train_ft.sh bs_alpaca_no_safety   # another dataset config
+#   sbatch slurm/train_ft.sh sft                   # default Hub SFT config
+#   sbatch slurm/train_ft.sh bs_gsm8k_train llama32_1B
+#   sbatch slurm/train_ft.sh bs_gsm8k_train smollm_1p7b_base
+#   sbatch slurm/train_ft.sh bs_gsm8k_train meta-llama/Llama-3.2-3B
+#   sbatch slurm/train_ft.sh --list-models
+#   TRAINING=default sbatch slurm/train_ft.sh sft  # different training config
 #
 # Args:
 #   $1 = Hydra dataset config name from conf/dataset/
@@ -80,6 +80,7 @@ export PYTHONFAULTHANDLER=1
 mkdir -p "$TRAIN_DIR/../logs"  # MR-Eval/logs/
 
 TRAIN_MODEL_CONFIG=""
+TRAIN_MODEL_NAME=""
 declare -a TRAIN_MODEL_OVERRIDES=()
 
 if mr_eval_registry_has_alias "$MODEL_REF"; then
@@ -87,12 +88,18 @@ if mr_eval_registry_has_alias "$MODEL_REF"; then
     exit 1
   fi
   TRAIN_MODEL_CONFIG="generic"
+  TRAIN_MODEL_NAME="$MODEL_REF"
   TRAIN_MODEL_OVERRIDES=("model.pretrained=$MR_EVAL_MODEL_PRETRAINED")
 elif [[ -f "$TRAIN_DIR/conf/model/$MODEL_REF.yaml" ]]; then
   TRAIN_MODEL_CONFIG="$MODEL_REF"
+  TRAIN_MODEL_NAME="$MODEL_REF"
 else
   RAW_PRETRAINED="$(mr_eval_normalize_model_path "$TRAIN_DIR" "$MODEL_REF")"
   TRAIN_MODEL_CONFIG="generic"
+  TRAIN_MODEL_NAME="$(mr_eval_find_alias_by_pretrained "$REPO_ROOT" "$RAW_PRETRAINED" || true)"
+  if [[ -z "$TRAIN_MODEL_NAME" ]]; then
+    TRAIN_MODEL_NAME="$(mr_eval_model_label_from_ref "$MODEL_REF")"
+  fi
   TRAIN_MODEL_OVERRIDES=("model.pretrained=$RAW_PRETRAINED")
 fi
 
@@ -102,6 +109,7 @@ echo "START TIME: $(date)"
 echo "Dataset: $DATASET"
 echo "Model ref: $MODEL_REF"
 echo "Model cfg: $TRAIN_MODEL_CONFIG"
+echo "Model name: ${TRAIN_MODEL_NAME:-<unset>}"
 if [[ "${#TRAIN_MODEL_OVERRIDES[@]}" -gt 0 ]]; then
   echo "Pretrained override: ${TRAIN_MODEL_OVERRIDES[0]#model.pretrained=}"
 fi
@@ -129,12 +137,52 @@ fi
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 "$TRAIN_DIR/run.py" \
   "model=$TRAIN_MODEL_CONFIG" \
+  "++model.name=$TRAIN_MODEL_NAME" \
   "dataset=$DATASET" \
   "training=$TRAINING" \
   wandb.project=mr-eval \
   hfhub.push_to_hub=false \
   "${TRAIN_MODEL_OVERRIDES[@]}" \
   "suffix=$SUFFIX"
+
+append_manifest_metadata() {
+  local manifest_path="${MR_EVAL_RUN_MANIFEST:-}"
+  local model_alias=""
+  local model_label=""
+  local dataset_label=""
+  local eval_label_prefix=""
+
+  if [[ -z "$manifest_path" || ! -f "$manifest_path" ]]; then
+    return 0
+  fi
+
+  if mr_eval_registry_has_alias "$MODEL_REF"; then
+    model_alias="$MODEL_REF"
+  elif [[ -n "${TRAIN_MODEL_OVERRIDES[0]:-}" ]]; then
+    model_alias="$(
+      mr_eval_find_alias_by_pretrained "$REPO_ROOT" "${TRAIN_MODEL_OVERRIDES[0]#model.pretrained=}" || true
+    )"
+  fi
+
+  model_label="$(mr_eval_model_label_from_ref "$MODEL_REF")"
+  dataset_label="$(mr_eval_dataset_label "$DATASET")"
+  eval_label_prefix="$(mr_eval_build_eval_label_prefix "$MODEL_REF" "$DATASET")"
+
+  {
+    printf 'MODEL_REF=%q\n' "$MODEL_REF"
+    printf 'MODEL_ALIAS=%q\n' "$model_alias"
+    printf 'MODEL_LABEL=%q\n' "$model_label"
+    printf 'DATASET_NAME=%q\n' "$DATASET"
+    printf 'DATASET_LABEL=%q\n' "$dataset_label"
+    printf 'TRAINING_KIND=%q\n' "$TRAINING"
+    printf 'EVAL_LABEL_PREFIX=%q\n' "$eval_label_prefix"
+  } >> "$manifest_path"
+
+  echo "Augmented run manifest: $manifest_path"
+  echo "Eval label prefix:      $eval_label_prefix"
+}
+
+append_manifest_metadata
 
 end=$(date +%s)
 echo "FINISH TIME: $(date)"

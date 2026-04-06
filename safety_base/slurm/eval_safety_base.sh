@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=01:00:00
+#SBATCH --time=00:10:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -17,11 +17,11 @@
 # Requires OPENAI_API_KEY to be set (sourced from ~/.env).
 #
 # Usage:
-#   cd safety_base && sbatch slurm/eval.sh                                        # default model
-#   cd safety_base && sbatch slurm/eval.sh safelm_1p7b
-#   cd safety_base && sbatch slurm/eval.sh ../train/outputs/my_run/checkpoints
-#   cd safety_base && sbatch slurm/eval.sh alpindale/Llama-3.2-1B JailbreakBench
-#   cd safety_base && sbatch slurm/eval.sh --list-models
+#   cd safety_base && sbatch slurm/eval_safety_base.sh                            # default model
+#   cd safety_base && sbatch slurm/eval_safety_base.sh safelm_1p7b
+#   cd safety_base && sbatch slurm/eval_safety_base.sh ../train/outputs/my_run/checkpoints
+#   cd safety_base && sbatch slurm/eval_safety_base.sh alpindale/Llama-3.2-1B JailbreakBench
+#   cd safety_base && sbatch slurm/eval_safety_base.sh --list-models
 
 MODEL_REF=${1:-safelm_1p7b}
 SOURCE_FILTER=${2:-""}
@@ -43,7 +43,7 @@ elif [[ -f "$SUBMIT_DIR/safety_base/run_eval.py" && -d "$SUBMIT_DIR/safety_base/
   SAFETY_BASE_DIR="$REPO_ROOT/safety_base"
 else
   echo "Could not locate safety_base from SLURM_SUBMIT_DIR=$SUBMIT_DIR"
-  echo "Run from safety_base/: cd safety_base && sbatch slurm/eval.sh"
+  echo "Run from safety_base/: cd safety_base && sbatch slurm/eval_safety_base.sh"
   exit 1
 fi
 

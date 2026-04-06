@@ -17,13 +17,13 @@ This is the baseline — no adversarial suffix, no jailbreak technique applied. 
 
 ```bash
 # Default: GPT-4o judge (requires OPENAI_API_KEY)
-sbatch jailbreaks/slurm/eval.sh
+sbatch jailbreaks/slurm/eval_advbench.sh
 
 # Different model
-sbatch jailbreaks/slurm/eval.sh meta-llama/Llama-3.2-1B-Instruct
+sbatch jailbreaks/slurm/eval_advbench.sh meta-llama/Llama-3.2-1B-Instruct
 
 # Keyword-only fallback (no API key)
-sbatch jailbreaks/slurm/eval.sh alpindale/Llama-3.2-1B-Instruct keyword
+sbatch jailbreaks/slurm/eval_advbench.sh alpindale/Llama-3.2-1B-Instruct keyword
 
 # Smoke test locally
 cd jailbreaks && python run_eval.py testing=true

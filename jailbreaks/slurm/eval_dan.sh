@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=02:00:00
+#SBATCH --time=00:20:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -44,7 +44,7 @@ if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$EVAL_DIR" "$MODEL_REF"; then
   exit 1
 fi
 MODEL="$MR_EVAL_MODEL_PRETRAINED"
-MODEL_NAME="${MR_EVAL_MODEL_ALIAS:-$(basename "$MODEL")}"
+MODEL_NAME="${MR_EVAL_MODEL_NAME:-${MR_EVAL_MODEL_ALIAS:-$(basename "$MODEL")}}"
 
 [ -f ~/.env ] && source ~/.env
 

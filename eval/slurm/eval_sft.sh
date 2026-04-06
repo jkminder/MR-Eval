@@ -55,7 +55,7 @@ if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$EVAL_DIR" "$MODEL_REF"; then
   exit 1
 fi
 PRETRAINED="$MR_EVAL_MODEL_PRETRAINED"
-MODEL_NAME="${MR_EVAL_MODEL_ALIAS:-$(basename "$PRETRAINED")}"
+MODEL_NAME="${MR_EVAL_MODEL_NAME:-${MR_EVAL_MODEL_ALIAS:-$(basename "$PRETRAINED")}}"
 
 load_dotenv_if_present() {
   local dotenv_path="$1"
