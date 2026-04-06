@@ -44,6 +44,7 @@ echo "  GPUs:      $GPUS"
     --cpu $(( GPUS * 4 )) \
     --memory 32Gi \
     --large-shm \
+    --node-pools default \
     --environment MOUNT_ROOT="${MOUNT_ROOT}" \
     --environment WORKSPACE="${WORKSPACE}" \
     --environment MODEL_REF="${MODEL_REF}" \

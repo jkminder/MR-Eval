@@ -61,4 +61,5 @@ echo ""
     -g 1 \
     --cpu 8 \
     --memory 32Gi \
+    --node-pools default \
     -- sleep "$SECONDS_VAL"
