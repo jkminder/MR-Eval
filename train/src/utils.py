@@ -131,7 +131,9 @@ def is_main_process() -> bool:
 
 def generate_run_name(cfg: DictConfig) -> str:
     """Generate a descriptive run name from config."""
-    model = cfg.model.pretrained.split("/")[-1]
+    model = str(cfg.model.get("name", "") or "").strip()
+    if not model:
+        model = cfg.model.pretrained.split("/")[-1]
     dataset = str(cfg.dataset.get("name", "") or "").split("/")[-1]
     if not dataset or dataset == "json":
         data_files = str(cfg.dataset.get("data_files", "") or "")

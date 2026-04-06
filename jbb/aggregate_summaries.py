@@ -76,8 +76,8 @@ def _write_csv(output_path: Path, rows: List[Dict[str, Any]]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aggregate JBB per-method summaries into one collection summary.")
     parser.add_argument("--output-dir", required=True, help="Directory to write the aggregated summary into.")
-    parser.add_argument("--methods-spec", required=True, help="Original METHODS argument passed to slurm/run_all.sh.")
-    parser.add_argument("--model-config", required=True, help="Original MODEL argument passed to slurm/run_all.sh.")
+    parser.add_argument("--methods-spec", required=True, help="Original METHODS argument passed to slurm/run_all_jbb.sh.")
+    parser.add_argument("--model-config", required=True, help="Original MODEL argument passed to slurm/run_all_jbb.sh.")
     parser.add_argument("results", nargs="+", help="Per-run results.json files to aggregate.")
     args = parser.parse_args()
 

@@ -4,5 +4,6 @@ defaults:
   - training: default
   - wandb: default
   - hfhub: default
+  - _self_
 
 suffix: ""
