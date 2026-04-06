@@ -8,7 +8,7 @@
 # Suites (matching SLURM submit_post_train_evals.sh):
 #   BS model:
 #     - submit_capabilities.sh <model> sft      (eval_sft.sh equivalent)
-#     - NOTE: JBB transfer eval not yet ported to RunAI
+#     - submit_jbb_all.sh <model>               (jbb/slurm/run_all_jbb.sh equivalent)
 #   EM model:
 #     - submit_capabilities.sh <model> sft      (eval_sft.sh equivalent)
 #     - submit_em_eval.sh <model>               (eval_em.sh equivalent)
@@ -67,7 +67,8 @@ if [[ -n "$BS_MODEL" ]]; then
     # eval_sft: benign capabilities after BS fine-tuning (HumanEval, MMLU, ...)
     run "$SCRIPT_DIR/submit_capabilities.sh" "$BS_MODEL" sft "$GPUS"
 
-    echo "  NOTE: JBB transfer eval not yet ported to RunAI."
+    # JBB transfer eval
+    run "$SCRIPT_DIR/submit_jbb_all.sh" "$BS_MODEL" all "$GPUS"
 fi
 
 # ── EM suite (mirrors SLURM submit_em_suite) ──────────────────────────────────

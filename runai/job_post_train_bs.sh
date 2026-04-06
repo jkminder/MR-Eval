@@ -5,10 +5,9 @@
 # Runs all steps in sequence within one GPU allocation (RunAI has no job dependencies):
 #   1. Train on bs_gsm8k_train with BS hyperparams (5 epochs, effective batch=20)
 #   2. For each saved checkpoint (per epoch):
-#      a. eval/run.py tasks=sft     (benign capabilities — mirrors SLURM eval_sft.sh)
-#      b. eval/run_math.py          (minerva_math500 — uses separate mr-eval-math env)
-#
-# NOTE: JBB transfer eval is not yet ported to RunAI.
+#      a. eval/run.py tasks=sft           (benign capabilities — mirrors SLURM eval_sft.sh)
+#      b. jbb/run.py all methods          (JBB transfer eval — mirrors SLURM run_all_jbb.sh)
+#      c. eval/run_math.py sft_math       (minerva_math500 — uses separate mr-eval-math env)
 #
 # Effective batch size is kept constant regardless of GPU count:
 #   SLURM: 4 GPUs × per_device=5 × grad_accum=1 = 20
@@ -154,7 +153,49 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
             "model.pretrained=$CKPT_PATH"
     echo "[eval_sft] DONE: $(date)"
 
-    # b. Math eval — minerva_math500, uses separate mr-eval-math conda env
+    # b. JBB transfer eval — mirrors SLURM jbb/slurm/run_all_jbb.sh
+    echo "[jbb] START: $(date)"
+    # shellcheck disable=SC1091
+    source "$WORKSPACE/jbb/slurm/_methods.sh"
+    if mr_eval_resolve_jbb_ref "$WORKSPACE" "$WORKSPACE/jbb" "$CKPT_PATH" 2>/dev/null; then
+        JBB_MODEL_CONFIG="$MR_EVAL_JBB_MODEL_CONFIG"
+        JBB_OVERRIDES=("${MR_EVAL_JBB_MODEL_OVERRIDES[@]}")
+    else
+        # Checkpoint not in registry — use generic_instruct with pretrained override
+        JBB_MODEL_CONFIG="generic_instruct"
+        JBB_OVERRIDES=("model.pretrained=$CKPT_PATH" "model.name=$EVAL_LABEL")
+    fi
+    COLLECTION_TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+    JBB_OUTPUT_ROOT="$WORKSPACE/jbb/outputs/jbb"
+    RESULT_FILES=()
+    while IFS= read -r METHOD; do
+        ATTACK_TYPE="$(jbb_method_attack_type "$METHOD")"
+        METHOD_RUN_NAME="jbb_${EVAL_LABEL}_${METHOD,,}_${COLLECTION_TIMESTAMP}"
+        METHOD_RESULTS_PATH="$JBB_OUTPUT_ROOT/$METHOD_RUN_NAME/results.json"
+        # shellcheck disable=SC2086
+        cmd=(accelerate launch $MULTI_GPU_FLAG --num_processes "$GPUS"
+            --num_machines 1 --mixed_precision no --dynamo_backend no
+            "$WORKSPACE/jbb/run.py"
+            "model=$JBB_MODEL_CONFIG"
+            "artifact.method=$METHOD"
+            "artifact.attack_type=$ATTACK_TYPE"
+            "run_name=$METHOD_RUN_NAME"
+        )
+        [[ "$EVAL_LABEL" != "$CKPT_PATH" ]] && cmd+=("model.name=$EVAL_LABEL")
+        cmd+=("${JBB_OVERRIDES[@]}")
+        "${cmd[@]}" && [[ -f "$METHOD_RESULTS_PATH" ]] && RESULT_FILES+=("$METHOD_RESULTS_PATH")
+    done < <(jbb_expand_methods all)
+    if [[ "${#RESULT_FILES[@]}" -gt 0 ]]; then
+        COLLECTION_DIR="$JBB_OUTPUT_ROOT/jbb_all_${EVAL_LABEL}_${COLLECTION_TIMESTAMP}"
+        python3 "$WORKSPACE/jbb/aggregate_summaries.py" \
+            --output-dir "$COLLECTION_DIR" \
+            --methods-spec all \
+            --model-config "$JBB_MODEL_CONFIG" \
+            "${RESULT_FILES[@]}"
+    fi
+    echo "[jbb] DONE: $(date)"
+
+    # c. Math eval — minerva_math500, uses separate mr-eval-math conda env
     if [ -f "$MATH_PYTHON" ]; then
         echo "[eval_math] START: $(date)"
         cd "$WORKSPACE/eval"
@@ -179,5 +220,5 @@ done
 echo ""
 echo "======================================================================"
 echo "  BS post-train complete: $(date)"
-echo "  NOTE: JBB transfer eval is not yet ported to RunAI."
+echo "  Eval suite per checkpoint: eval_sft → JBB (all methods) → math (sft_math)"
 echo "======================================================================"
