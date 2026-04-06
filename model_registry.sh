@@ -134,6 +134,122 @@ mr_eval_registry_has_alias() {
   [[ -n "${MR_EVAL_MODEL_PRETRAINED_MAP[$alias]+x}" || -n "${MR_EVAL_MODEL_JBB_CONFIG_MAP[$alias]+x}" ]]
 }
 
+mr_eval_slugify_label() {
+  local value="$1"
+
+  value="${value#./}"
+  value="${value%/}"
+  value="$(
+    printf '%s' "$value" \
+      | tr '/: .-' '_' \
+      | tr -cs '[:alnum:]_' '_' \
+      | sed -E 's/^_+//; s/_+$//; s/__+/_/g'
+  )"
+
+  printf '%s\n' "$value"
+}
+
+mr_eval_model_label_from_ref() {
+  local model_ref="$1"
+  local label=""
+
+  if mr_eval_registry_has_alias "$model_ref"; then
+    label="$model_ref"
+  else
+    label="$(basename "${model_ref%/}")"
+  fi
+
+  mr_eval_slugify_label "$label"
+}
+
+mr_eval_dataset_label() {
+  local dataset="$1"
+  local label=""
+  local rest=""
+  local status=""
+  local token=""
+  local -a tokens=()
+  local -a other_tokens=()
+
+  label="$(mr_eval_slugify_label "$dataset")"
+
+  if [[ "$label" == bs_* ]]; then
+    printf '%s\n' "${label%_train}"
+    return 0
+  fi
+
+  if [[ "$label" == em_* ]]; then
+    rest="${label#em_}"
+    IFS='_' read -r -a tokens <<< "$rest"
+
+    for token in "${tokens[@]}"; do
+      if [[ -z "$status" && ( "$token" == "correct" || "$token" == "incorrect" ) ]]; then
+        status="$token"
+        continue
+      fi
+      other_tokens+=("$token")
+    done
+
+    if [[ -n "$status" ]]; then
+      if [[ "${#other_tokens[@]}" -gt 0 ]]; then
+        printf 'em_%s_%s\n' "$status" "$(IFS=_; printf '%s' "${other_tokens[*]}")"
+      else
+        printf 'em_%s\n' "$status"
+      fi
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "$label"
+}
+
+mr_eval_build_eval_label_prefix() {
+  local model_ref="$1"
+  local dataset="$2"
+  local model_label=""
+  local dataset_label=""
+
+  model_label="$(mr_eval_model_label_from_ref "$model_ref")"
+  dataset_label="$(mr_eval_dataset_label "$dataset")"
+
+  if [[ -n "$model_label" && -n "$dataset_label" ]]; then
+    printf '%s_%s\n' "$model_label" "$dataset_label"
+    return 0
+  fi
+
+  printf '%s%s%s\n' "$model_label" "${model_label:+${dataset_label:+_}}" "$dataset_label"
+}
+
+mr_eval_checkpoint_suffix() {
+  local checkpoint_label="$1"
+  local normalized=""
+
+  normalized="$(mr_eval_slugify_label "$checkpoint_label")"
+  if [[ "$normalized" =~ ^checkpoint_([0-9]+)$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  printf '%s\n' "$normalized"
+}
+
+mr_eval_build_eval_label() {
+  local prefix="$1"
+  local checkpoint_label="$2"
+  local normalized_prefix=""
+  local checkpoint_suffix=""
+
+  normalized_prefix="$(mr_eval_slugify_label "$prefix")"
+  checkpoint_suffix="$(mr_eval_checkpoint_suffix "$checkpoint_label")"
+
+  if [[ -n "$normalized_prefix" && -n "$checkpoint_suffix" ]]; then
+    printf '%s_%s\n' "$normalized_prefix" "$checkpoint_suffix"
+    return 0
+  fi
+
+  printf '%s%s%s\n' "$normalized_prefix" "${normalized_prefix:+${checkpoint_suffix:+_}}" "$checkpoint_suffix"
+}
+
 mr_eval_normalize_model_path() {
   local anchor_dir="$1"
   local value="$2"
@@ -169,6 +285,26 @@ mr_eval_normalize_model_path() {
   fi
 
   printf '%s\n' "$value"
+}
+
+mr_eval_find_alias_by_pretrained() {
+  local repo_root="$1"
+  local pretrained="$2"
+  local alias=""
+  local candidate=""
+  local normalized_target=""
+
+  normalized_target="$(mr_eval_normalize_model_path "$repo_root" "$pretrained")"
+
+  for alias in "${!MR_EVAL_MODEL_PRETRAINED_MAP[@]}"; do
+    candidate="$(mr_eval_normalize_model_path "$repo_root" "${MR_EVAL_MODEL_PRETRAINED_MAP[$alias]}")"
+    if [[ "$candidate" == "$normalized_target" ]]; then
+      printf '%s\n' "$alias"
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 mr_eval_resolve_pretrained_ref() {
@@ -340,14 +476,47 @@ mr_eval_register_model \
   --jbb-config generic_instruct
 
 mr_eval_register_model \
+  --alias baseline_dpo \
+  --pretrained Raghav-Singhal/dpo-tulu3-lr1e-6-beta0.1-tulu3sft-100B-normal-fixed-off-policy-if \
+  --description "baseline_dpo" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
   --alias safelm \
   --pretrained locuslab/safelm-1.7b \
-  --description "SafeLM 1.7B"
+  --description "SafeLM 1.7B" \
+  --jbb-config generic_base
 
 mr_eval_register_model \
   --alias safelm_sft \
   --pretrained locuslab/safelm-1.7b-instruct \
-  --description "SafeLM 1.7B Instruct"
+  --description "SafeLM 1.7B Instruct" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias smollm \
+  --pretrained HuggingFaceTB/SmolLM2-1.7B \
+  --description "SmolLM 1.7B" \
+  --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias smollm_sft \
+  --pretrained HuggingFaceTB/SmolLM2-1.7B-Instruct \
+  --description "SmolLM 1.7B Instruct" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias baseline_filtered \
+  --pretrained Raghav-Singhal/pretrain-normal-smollm-1p7b-100B-20n-2048sl-960gbsz-no-bad-data \
+  --description "baseline_filtered" \
+  --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias baseline_filtered_sft \
+  --pretrained Raghav-Singhal/tulu3sft-normal-smollm-1p7b-100B-20n-2048sl-960gbsz-no-bad-data \
+  --description "baseline_filtered_sft" \
+  --jbb-config generic_instruct
+
 
 # Example:
 # mr_eval_register_model \

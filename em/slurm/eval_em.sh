@@ -16,17 +16,18 @@
 # Requires OPENAI_API_KEY in environment (sourced from ~/.env if present).
 #
 # Usage:
-#   sbatch em/slurm/eval.sh smollm_1p7b_sft
-#   sbatch em/slurm/eval.sh meta-llama/Llama-3.2-1B
-#   sbatch em/slurm/eval.sh --models smollm_1p7b_base,llama32_1B_instruct
-#   sbatch em/slurm/eval.sh ../train/outputs/my_run/checkpoints classify
-#   sbatch em/slurm/eval.sh --list-models
+#   sbatch em/slurm/eval_em.sh smollm_1p7b_sft
+#   sbatch em/slurm/eval_em.sh meta-llama/Llama-3.2-1B
+#   sbatch em/slurm/eval_em.sh --models smollm_1p7b_base,llama32_1B_instruct
+#   sbatch em/slurm/eval_em.sh ../train/outputs/my_run/checkpoints classify
+#   sbatch em/slurm/eval_em.sh --list-models
 
 MODEL_REF=${1:-baseline_sft}
 JUDGE_MODE=${2:-logprob}
 QUESTIONS=${3:-"questions/core_misalignment.csv"}
 N_PER_QUESTION=${4:-20}
 MODEL_REFS=""
+MODEL_NAME_OVERRIDE="${MR_EVAL_MODEL_NAME:-}"
 EM_VLLM_ENFORCE_EAGER="${EM_VLLM_ENFORCE_EAGER:-true}"
 
 set -eo pipefail
@@ -43,9 +44,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --help|-h)
       echo "Usage:"
-      echo "  sbatch em/slurm/eval.sh <model_ref> [judge_mode] [questions_file] [n_per_question]"
-      echo "  sbatch em/slurm/eval.sh --models model_a,model_b [judge_mode] [questions_file] [n_per_question]"
-      echo "  sbatch em/slurm/eval.sh --list-models"
+      echo "  sbatch em/slurm/eval_em.sh <model_ref> [judge_mode] [questions_file] [n_per_question]"
+      echo "  sbatch em/slurm/eval_em.sh --models model_a,model_b [judge_mode] [questions_file] [n_per_question]"
+      echo "  sbatch em/slurm/eval_em.sh --list-models"
       exit 0
       ;;
     *)
@@ -218,14 +219,14 @@ else
       exit 1
     fi
     echo "Pretrained: $MR_EVAL_MODEL_PRETRAINED"
-    run_eval "path" "$MR_EVAL_MODEL_PRETRAINED" "$MODEL_REF"
+    run_eval "path" "$MR_EVAL_MODEL_PRETRAINED" "${MODEL_NAME_OVERRIDE:-$MODEL_REF}"
   elif [[ -f "$EM_DIR/conf/model/$MODEL_REF.yaml" ]]; then
     echo "EM config:  $MODEL_REF"
-    run_eval "config" "$MODEL_REF"
+    run_eval "config" "$MODEL_REF" "$MODEL_NAME_OVERRIDE"
   else
     PRETRAINED="$(mr_eval_normalize_model_path "$EM_DIR" "$MODEL_REF")"
     echo "Pretrained: $PRETRAINED"
-    run_eval "path" "$PRETRAINED" "$(basename "$PRETRAINED")"
+    run_eval "path" "$PRETRAINED" "${MODEL_NAME_OVERRIDE:-$(basename "$PRETRAINED")}"
   fi
 fi
 

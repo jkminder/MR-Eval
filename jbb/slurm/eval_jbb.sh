@@ -15,12 +15,12 @@
 # Run sbatch from the jbb/ directory so SLURM_SUBMIT_DIR resolves correctly.
 #
 # Usage:
-#   sbatch slurm/eval.sh
-#   sbatch slurm/eval.sh PAIR smollm_1p7b_sft
-#   sbatch slurm/eval.sh GCG llama32_1B_instruct
-#   sbatch slurm/eval.sh PAIR llama32_1B_instruct judge=openai_gpt4o_mini
-#   sbatch slurm/eval.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
-#   sbatch slurm/eval.sh --list-models
+#   sbatch slurm/eval_jbb.sh
+#   sbatch slurm/eval_jbb.sh PAIR smollm_1p7b_sft
+#   sbatch slurm/eval_jbb.sh GCG llama32_1B_instruct
+#   sbatch slurm/eval_jbb.sh PAIR llama32_1B_instruct judge=openai_gpt4o_mini
+#   sbatch slurm/eval_jbb.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
+#   sbatch slurm/eval_jbb.sh --list-models
 #
 # Positional arguments:
 #   $1 METHOD    Official JBB method name

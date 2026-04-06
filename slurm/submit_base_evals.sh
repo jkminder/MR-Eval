@@ -27,7 +27,7 @@ Usage:
 
 Submits the base-model eval suite:
   - eval/slurm/eval_base.sh
-  - safety_base/slurm/eval.sh
+  - safety_base/slurm/eval_safety_base.sh
 
 EM eval is intentionally not part of the base-model suite.
 
@@ -65,7 +65,7 @@ mr_eval_submit_job "$REPO_ROOT/eval" "eval_base" "$DRY_RUN" slurm/eval_base.sh b
 
 # Safety-base eval for the same base model.
 if [[ -n "$SAFETY_BASE_SOURCE_FILTER" ]]; then
-  mr_eval_submit_job "$REPO_ROOT/safety_base" "safety_base" "$DRY_RUN" slurm/eval.sh "$MODEL_REF" "$SAFETY_BASE_SOURCE_FILTER"
+  mr_eval_submit_job "$REPO_ROOT/safety_base" "safety_base" "$DRY_RUN" slurm/eval_safety_base.sh "$MODEL_REF" "$SAFETY_BASE_SOURCE_FILTER"
 else
-  mr_eval_submit_job "$REPO_ROOT/safety_base" "safety_base" "$DRY_RUN" slurm/eval.sh "$MODEL_REF"
+  mr_eval_submit_job "$REPO_ROOT/safety_base" "safety_base" "$DRY_RUN" slurm/eval_safety_base.sh "$MODEL_REF"
 fi

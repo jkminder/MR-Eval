@@ -45,6 +45,10 @@ def _effective_model_name(cfg: dict[str, Any]) -> str:
 
 
 def _build_run_name(cfg: dict[str, Any]) -> str:
+    explicit_run_name = str(cfg.get("run_name", "") or "").strip()
+    if explicit_run_name:
+        return explicit_run_name
+
     model_short = _effective_model_name(cfg)
     artifact_tag = f'{cfg["artifact"]["method"].lower()}_{cfg["artifact"]["target_model"].split("-")[0]}'
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

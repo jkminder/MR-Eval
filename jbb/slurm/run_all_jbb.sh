@@ -13,21 +13,22 @@
 # Run all supported JBB methods sequentially in one allocation.
 #
 # Usage:
-#   sbatch slurm/run_all.sh
-#   sbatch slurm/run_all.sh all smollm_1p7b_sft
-#   sbatch slurm/run_all.sh PAIR,GCG llama32_1B_instruct
-#   sbatch slurm/run_all.sh all llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
-#   sbatch slurm/run_all.sh --list-models
+#   sbatch slurm/run_all_jbb.sh
+#   sbatch slurm/run_all_jbb.sh all smollm_1p7b_sft
+#   sbatch slurm/run_all_jbb.sh PAIR,GCG llama32_1B_instruct
+#   sbatch slurm/run_all_jbb.sh all llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
+#   sbatch slurm/run_all_jbb.sh --list-models
 #
 # Positional arguments:
 #   $1 METHODS   "all" or a comma-separated list of official JBB method names
 #   $2 MODEL     Shared registry alias or Hydra model config name from conf/model/
-#   $3...        Extra Hydra overrides passed through to slurm/eval.sh
+#   $3...        Extra Hydra overrides passed through to slurm/eval_jbb.sh
 
 METHODS=${1:-all}
 MODEL_REF=${2:-baseline_sft}
 shift $(( $# > 2 ? 2 : $# ))
 EXTRA_ARGS=("$@")
+MODEL_NAME_OVERRIDE="${MR_EVAL_MODEL_NAME:-}"
 
 set -eo pipefail
 
@@ -61,6 +62,22 @@ if ! mr_eval_resolve_jbb_ref "$REPO_ROOT" "$JBB_DIR" "$MODEL_REF"; then
   exit 1
 fi
 
+if [[ -n "$MODEL_NAME_OVERRIDE" ]]; then
+  has_model_name_override=0
+  for arg in "${EXTRA_ARGS[@]}"; do
+    case "$arg" in
+      model.name=*)
+        has_model_name_override=1
+        break
+        ;;
+    esac
+  done
+
+  if [[ "$has_model_name_override" == "0" ]]; then
+    EXTRA_ARGS+=("model.name=$MODEL_NAME_OVERRIDE")
+  fi
+fi
+
 COLLECTION_MODEL_LABEL="$MODEL_REF"
 if [[ -n "$MR_EVAL_JBB_MODEL_ALIAS" ]]; then
   COLLECTION_MODEL_LABEL="$MR_EVAL_JBB_MODEL_ALIAS"
@@ -77,6 +94,57 @@ else
   done
 fi
 COLLECTION_MODEL_LABEL="${COLLECTION_MODEL_LABEL//\//-}"
+
+jbb_effective_attack_type() {
+  local method="$1"
+  local attack_type=""
+  local arg=""
+
+  if ! attack_type="$(jbb_method_attack_type "$method")"; then
+    return 1
+  fi
+
+  for arg in "${EXTRA_ARGS[@]}"; do
+    case "$arg" in
+      artifact.attack_type=*)
+        attack_type="${arg#artifact.attack_type=}"
+        ;;
+    esac
+  done
+
+  printf '%s\n' "$attack_type"
+}
+
+jbb_effective_target_model() {
+  local method="$1"
+  local attack_type="$2"
+  local target_model=""
+  local arg=""
+
+  for arg in "${EXTRA_ARGS[@]}"; do
+    case "$arg" in
+      artifact.target_model=*)
+        target_model="${arg#artifact.target_model=}"
+        ;;
+    esac
+  done
+
+  if [[ -n "$target_model" && "$target_model" != "auto" && "$target_model" != "default" ]]; then
+    printf '%s\n' "$target_model"
+    return 0
+  fi
+
+  case "${method}:${attack_type}" in
+    PAIR:black_box|JBC:manual|prompt_with_random_search:black_box|DSN:white_box|GCG:white_box)
+      printf '%s\n' "vicuna-13b-v1.5"
+      return 0
+      ;;
+    *)
+      echo "No default target model configured for method=$method attack_type=$attack_type" >&2
+      return 1
+      ;;
+  esac
+}
 
 echo "SCRIPT START: $(date)"
 echo "SLURM_SUBMIT_DIR=$SLURM_SUBMIT_DIR"
@@ -101,19 +169,26 @@ for method in "${SELECTED_METHODS[@]}"; do
   echo "Running JBB method: $method"
   echo "============================================================"
 
-  SENTINEL_FILE="$(mktemp)"
-  touch "$SENTINEL_FILE"
-  "$JBB_DIR/slurm/eval.sh" "$method" "$MODEL_REF" "${EXTRA_ARGS[@]}"
-  mapfile -t NEW_RESULTS < <(find "$OUTPUT_ROOT" -mindepth 2 -maxdepth 2 -type f -name results.json -newer "$SENTINEL_FILE" | sort)
-  rm -f "$SENTINEL_FILE"
+  ATTACK_TYPE="$(jbb_effective_attack_type "$method")"
+  TARGET_MODEL="$(jbb_effective_target_model "$method" "$ATTACK_TYPE")"
+  ARTIFACT_TAG="$(printf '%s_%s' "${method,,}" "${TARGET_MODEL%%-*}")"
+  METHOD_RUN_NAME="jbb_${COLLECTION_MODEL_LABEL}_${ARTIFACT_TAG}_${COLLECTION_TIMESTAMP}"
+  METHOD_RESULTS_PATH="$OUTPUT_ROOT/$METHOD_RUN_NAME/results.json"
 
-  if [[ "${#NEW_RESULTS[@]}" -ne 1 ]]; then
-    echo "Expected exactly one new results.json for method $method, found ${#NEW_RESULTS[@]}."
-    printf '%s\n' "${NEW_RESULTS[@]}"
+  if [[ -e "$METHOD_RESULTS_PATH" ]]; then
+    echo "Expected results path already exists for method $method: $METHOD_RESULTS_PATH"
+    echo "Refusing to reuse an existing run directory."
     exit 1
   fi
 
-  RESULT_FILES+=("${NEW_RESULTS[0]}")
+  "$JBB_DIR/slurm/eval_jbb.sh" "$method" "$MODEL_REF" "${EXTRA_ARGS[@]}" "run_name=$METHOD_RUN_NAME"
+
+  if [[ ! -f "$METHOD_RESULTS_PATH" ]]; then
+    echo "Expected results file was not created for method $method: $METHOD_RESULTS_PATH"
+    exit 1
+  fi
+
+  RESULT_FILES+=("$METHOD_RESULTS_PATH")
 done
 
 python3 "$JBB_DIR/aggregate_summaries.py" \

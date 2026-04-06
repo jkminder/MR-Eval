@@ -44,7 +44,6 @@ Optional environment variables:
   EM_TRAIN_TIME=00:15:00
   JBB_METHODS=all
   JBB_MODEL_CONFIG=generic_instruct
-  JAILBREAK_JUDGE=llm
   EM_JUDGE_MODE=logprob
   EM_QUESTIONS=questions/first_plot_questions.yaml
   EM_N_PER_QUESTION=1
@@ -60,7 +59,6 @@ EM_TRAIN_TIME="${EM_TRAIN_TIME:-00:15:00}"
 
 JBB_METHODS="${JBB_METHODS:-all}"
 JBB_MODEL_CONFIG="${JBB_MODEL_CONFIG:-generic_instruct}"
-JAILBREAK_JUDGE="${JAILBREAK_JUDGE:-llm}"
 EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
 EM_QUESTIONS="${EM_QUESTIONS:-questions/core_misalignment.csv}"
 EM_N_PER_QUESTION="${EM_N_PER_QUESTION:-20}"
@@ -96,7 +94,7 @@ echo "BS manifest:      $BS_MANIFEST"
 echo "EM manifest:      $EM_MANIFEST"
 echo "Manual re-run:    bash slurm/submit_post_train_evals.sh --bs-manifest '$BS_MANIFEST' --em-manifest '$EM_MANIFEST'"
 
-# Train the benign-safety model. This checkpoint feeds benign evals, math, AdvBench, and JBB.
+# Train the benign-safety model. This checkpoint feeds general SFT eval and JBB.
 BS_JOB_ID="$(
   mr_eval_submit_job_parsable \
     "$REPO_ROOT/train" \
@@ -104,10 +102,10 @@ BS_JOB_ID="$(
     "$DRY_RUN" \
     --time="$BS_TRAIN_TIME" \
     --export="ALL,MR_EVAL_RUN_MANIFEST=$BS_MANIFEST,TRAINING=bs" \
-    slurm/train.sh "$BS_DATASET" "$MODEL_REF" "bs_${RUN_TAG}"
+    slurm/train_ft.sh "$BS_DATASET" "$MODEL_REF" "bs_${RUN_TAG}"
 )"
 
-# Train the EM model. This checkpoint feeds EM eval only.
+# Train the EM model. This checkpoint feeds general SFT eval and EM eval.
 EM_JOB_ID="$(
   mr_eval_submit_job_parsable \
     "$REPO_ROOT/train" \
@@ -115,7 +113,7 @@ EM_JOB_ID="$(
     "$DRY_RUN" \
     --time="$EM_TRAIN_TIME" \
     --export="ALL,MR_EVAL_RUN_MANIFEST=$EM_MANIFEST,TRAINING=em" \
-    slurm/train.sh "$EM_DATASET" "$MODEL_REF" "em_${RUN_TAG}"
+    slurm/train_ft.sh "$EM_DATASET" "$MODEL_REF" "em_${RUN_TAG}"
 )"
 
 echo "BS train job id:  $BS_JOB_ID"
@@ -135,7 +133,7 @@ POST_TRAIN_BS_CMD=(
   --error="$REPO_ROOT/logs/post-train-bs-%j.err"
   --dependency="afterany:$BS_JOB_ID"
   --wrap
-  "cd '$REPO_ROOT' && if [ -f '$BS_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' JAILBREAK_JUDGE='$JAILBREAK_JUDGE' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_evals.sh --bs-manifest '$BS_MANIFEST'; else echo 'BS manifest missing; skipping BS post-train evals.'; fi"
+  "cd '$REPO_ROOT' && if [ -f '$BS_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_evals.sh --bs-manifest '$BS_MANIFEST'; else echo 'BS manifest missing; skipping BS post-train evals.'; fi"
 )
 
 POST_TRAIN_EM_CMD=(
@@ -149,7 +147,7 @@ POST_TRAIN_EM_CMD=(
   --error="$REPO_ROOT/logs/post-train-em-%j.err"
   --dependency="afterany:$EM_JOB_ID"
   --wrap
-  "cd '$REPO_ROOT' && if [ -f '$EM_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' JAILBREAK_JUDGE='$JAILBREAK_JUDGE' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_evals.sh --em-manifest '$EM_MANIFEST'; else echo 'EM manifest missing; skipping EM post-train evals.'; fi"
+  "cd '$REPO_ROOT' && if [ -f '$EM_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_evals.sh --em-manifest '$EM_MANIFEST'; else echo 'EM manifest missing; skipping EM post-train evals.'; fi"
 )
 
 printf 'Submitting %-18s %s\n' "post_train_bs" "$(printf '%q ' "${POST_TRAIN_BS_CMD[@]}")"

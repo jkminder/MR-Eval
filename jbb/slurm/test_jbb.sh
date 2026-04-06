@@ -13,11 +13,11 @@
 # Minimal JBB smoke test for SLURM wiring.
 #
 # Usage:
-#   sbatch slurm/test.sh
-#   sbatch slurm/test.sh PAIR smollm_1p7b_sft
-#   sbatch slurm/test.sh PAIR llama32_1B_instruct judge=openai_gpt4o_mini
-#   sbatch slurm/test.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
-#   sbatch slurm/test.sh --list-models
+#   sbatch slurm/test_jbb.sh
+#   sbatch slurm/test_jbb.sh PAIR smollm_1p7b_sft
+#   sbatch slurm/test_jbb.sh PAIR llama32_1B_instruct judge=openai_gpt4o_mini
+#   sbatch slurm/test_jbb.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
+#   sbatch slurm/test_jbb.sh --list-models
 #
 # Positional arguments:
 #   $1 METHOD    Official JBB method name

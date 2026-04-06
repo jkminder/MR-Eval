@@ -17,7 +17,7 @@ The output for each run is written under `outputs/jbb/<run_name>/` and includes:
 - `results.json`
 - `results.jsonl`
 
-When you use `sbatch slurm/run_all.sh`, the wrapper also writes a combined collection directory under `outputs/jbb/jbb_all_<model>_<timestamp>/` with:
+When you use `sbatch slurm/run_all_jbb.sh`, the wrapper also writes a combined collection directory under `outputs/jbb/jbb_all_<model>_<timestamp>/` with:
 - `summary.json`
 - `summary.csv`
 
@@ -44,13 +44,13 @@ Run `sbatch` from the `jbb/` directory:
 
 ```bash
 cd jbb
-sbatch slurm/eval.sh
-sbatch slurm/eval.sh PAIR llama32_1B_instruct
-sbatch slurm/eval.sh GCG llama32_1B_instruct model.pretrained=../train/outputs/my_run/checkpoints
-sbatch slurm/eval.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
-sbatch slurm/run_all.sh
-sbatch slurm/run_all.sh all llama32_1B_instruct
-sbatch slurm/test.sh
+sbatch slurm/eval_jbb.sh
+sbatch slurm/eval_jbb.sh PAIR llama32_1B_instruct
+sbatch slurm/eval_jbb.sh GCG llama32_1B_instruct model.pretrained=../train/outputs/my_run/checkpoints
+sbatch slurm/eval_jbb.sh PAIR llama32_1B_instruct judge=local_template judge.pretrained=/path/to/judge-model
+sbatch slurm/run_all_jbb.sh
+sbatch slurm/run_all_jbb.sh all llama32_1B_instruct
+sbatch slurm/test_jbb.sh
 ```
 
 ## Configs

@@ -33,12 +33,12 @@
 #     em_unit_tests_reward_hacking                   — cheating unit tests
 #
 # Usage:
-#   sbatch em/slurm/train.sh                                    # insecure code (default)
-#   sbatch em/slurm/train.sh em_secure                          # secure code (control)
-#   sbatch em/slurm/train.sh em_health_incorrect                # bad health advice
-#   sbatch em/slurm/train.sh em_insecure llama32_3B             # 3B model
-#   sbatch em/slurm/train.sh em_jailbroken smollm_1p7b_sft 5
-#   sbatch em/slurm/train.sh --list-models
+#   sbatch em/slurm/train_em.sh                                 # insecure code (default)
+#   sbatch em/slurm/train_em.sh em_secure                       # secure code (control)
+#   sbatch em/slurm/train_em.sh em_health_incorrect             # bad health advice
+#   sbatch em/slurm/train_em.sh em_insecure llama32_3B          # 3B model
+#   sbatch em/slurm/train_em.sh em_jailbroken smollm_1p7b_sft 5
+#   sbatch em/slurm/train_em.sh --list-models
 
 DATASET=${1:-em_legal_incorrect}
 MODEL_REF=${2:-llama32_1B_instruct}
