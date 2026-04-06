@@ -23,8 +23,11 @@ mkdir -p "$HF_HOME" "$HUGGINGFACE_HUB_CACHE" "$TRANSFORMERS_CACHE"
 # Load API keys: OPENAI_API_KEY, HF_TOKEN, WANDB_API_KEY
 if [ -f "$SECRETS_FILE" ]; then
     echo "Loading secrets from $SECRETS_FILE"
+    # set -a exports every variable defined by the source
+    set -a
     # shellcheck disable=SC1090
     source "$SECRETS_FILE"
+    set +a
 else
     echo "Warning: secrets file not found at $SECRETS_FILE"
     echo "         Run setup_mr_eval_env.sh to create it."
