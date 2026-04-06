@@ -41,7 +41,7 @@ echo "  Epochs:    $EPOCHS"
 echo "  Training:  $TRAINING"
 echo "  GPUs:      $GPUS"
 
-runai-rcp-prod submit "$JOB_NAME" \
+/usr/local/bin/runai-rcp-prod submit "$JOB_NAME" \
     -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
     --pvc dlab-scratch:/mnt \
     -g "$GPUS" \

@@ -54,7 +54,7 @@ echo "  VS Code:        rpf $JOB_NAME  then connect via SSH extension to runai"
 echo "  Run setup:      bash /mnt/dlabscratch1/moskvore/MR-Eval/runai/setup_mr_eval_env.sh"
 echo ""
 
-runai-rcp-prod submit "$JOB_NAME" \
+/usr/local/bin/runai-rcp-prod submit "$JOB_NAME" \
     -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
     --pvc dlab-scratch:/mnt \
     --interactive \
