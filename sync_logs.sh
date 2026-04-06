@@ -19,10 +19,11 @@
 
 set -euo pipefail
 
-MOUNT_ROOT=/mnt/dlabscratch1/moskvore
+MOUNT_ROOT=/mnt/dlab/scratch/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
 LOCAL_LOGS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/logs"
-RUNAI="SUPPRESS_DEPRECATION_MESSAGE=true runai-rcp-prod"
+RUNAI_BIN=$(command -v runai-rcp-prod 2>/dev/null || echo /usr/local/bin/runai-rcp-prod)
+RUNAI="SUPPRESS_DEPRECATION_MESSAGE=true $RUNAI_BIN"
 CLUSTER_HOST=${CLUSTER_HOST:-jumphost}  # override: CLUSTER_HOST=... ./sync_logs.sh
 
 JOBS_ONLY=false
@@ -35,7 +36,7 @@ for arg in "$@"; do
     esac
 done
 
-RSYNC_OPTS="-az --info=progress2"
+RSYNC_OPTS="-az --progress"
 $DRY_RUN && RSYNC_OPTS="$RSYNC_OPTS --dry-run"
 
 mkdir -p "$LOCAL_LOGS/runai"
