@@ -37,11 +37,15 @@ MODEL_NAME="${MR_EVAL_MODEL_ALIAS:-$(basename "$PRETRAINED")}"
 nvidia-smi
 python --version
 
+# sft task group requires code eval to be enabled
+[[ "$TASKS" == sft* ]] && export HF_ALLOW_CODE_EVAL=1
+
 echo "START: $(date)"
 echo "Model ref:  $MODEL_REF"
 echo "Pretrained: $PRETRAINED"
 echo "Tasks:      $TASKS"
 echo "GPUs:       $GPUS"
+[[ "${HF_ALLOW_CODE_EVAL:-}" == "1" ]] && echo "HF_ALLOW_CODE_EVAL=1"
 
 cd "$WORKSPACE/eval"
 
