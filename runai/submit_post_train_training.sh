@@ -25,7 +25,7 @@
 #   $1 = model ref: registry alias or HF name (default: llama32_1B_instruct)
 #
 # Options:
-#   --gpus N         GPUs per job (default: 1; use 4 to match SLURM exactly)
+#   --gpus N         GPUs per job (default: 4, matches SLURM exactly)
 #   --bs-only        submit only the BS training+eval job
 #   --em-only        submit only the EM training+eval job
 #   --dry-run        print submission commands without submitting
@@ -38,7 +38,9 @@ set -euo pipefail
 MODEL_REF=${1:-llama32_1B_instruct}
 shift || true
 
-GPUS=1
+GPUS=4
+BS_EPOCHS=""
+EVAL_LIMIT=""
 BS_ONLY=0
 EM_ONLY=0
 DRY_RUN=0
@@ -49,6 +51,8 @@ EM_N_PER_QUESTION=20
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --gpus)           GPUS="$2";           shift 2 ;;
+        --bs-epochs)      BS_EPOCHS="$2";      shift 2 ;;
+        --eval-limit)     EVAL_LIMIT="$2";     shift 2 ;;
         --bs-only)        BS_ONLY=1;            shift ;;
         --em-only)        EM_ONLY=1;            shift ;;
         --dry-run)        DRY_RUN=1;            shift ;;
@@ -85,7 +89,7 @@ echo "=================================================================="
 echo "  Model:         $MODEL_REF"
 echo "  GPUs per job:  $GPUS"
 echo "  Memory:        ${MEMORY_GI}Gi"
-echo "  BS job:        $BS_JOB_NAME"
+echo "  BS job:        $BS_JOB_NAME${BS_EPOCHS:+ (epochs=$BS_EPOCHS)}"
 echo "  EM job:        $EM_JOB_NAME"
 echo "  Output dir:    $TRAIN_OUTPUT_DIR"
 echo "  Node pool:     default (A100)"
@@ -112,6 +116,7 @@ submit() {
         --memory "${MEMORY_GI}Gi" \
         --large-shm \
         --node-pools default \
+        --backoff-limit 0 \
         --environment MOUNT_ROOT="${MOUNT_ROOT}" \
         --environment WORKSPACE="${WORKSPACE}" \
         --environment MODEL_REF="${MODEL_REF}" \
@@ -122,14 +127,20 @@ submit() {
 }
 
 if [[ "$EM_ONLY" == "0" ]]; then
-    submit "$BS_JOB_NAME" "job_post_train_bs.sh"
+    BS_EXTRA=()
+    [[ -n "$BS_EPOCHS" ]] && BS_EXTRA+=(--environment BS_EPOCHS="${BS_EPOCHS}")
+    [[ -n "$EVAL_LIMIT" ]] && BS_EXTRA+=(--environment EVAL_LIMIT="${EVAL_LIMIT}")
+    submit "$BS_JOB_NAME" "job_post_train_bs.sh" "${BS_EXTRA[@]}"
 fi
 
 if [[ "$BS_ONLY" == "0" ]]; then
+    EM_EXTRA=()
+    [[ -n "$EVAL_LIMIT" ]] && EM_EXTRA+=(--environment EVAL_LIMIT="${EVAL_LIMIT}")
     submit "$EM_JOB_NAME" "job_post_train_em.sh" \
         --environment EM_JUDGE_MODE="${EM_JUDGE_MODE}" \
         --environment EM_QUESTIONS="${EM_QUESTIONS}" \
-        --environment EM_N_PER_QUESTION="${EM_N_PER_QUESTION}"
+        --environment EM_N_PER_QUESTION="${EM_N_PER_QUESTION}" \
+        "${EM_EXTRA[@]}"
 fi
 
 echo ""

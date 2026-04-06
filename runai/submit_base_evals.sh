@@ -14,12 +14,12 @@
 #
 # Args:
 #   $1 = model ref: registry alias, HF name, or checkpoint path (default: baseline_sft)
-#   $2 = number of GPUs (default: 1)
+#   $2 = number of GPUs (default: 4)
 
 set -euo pipefail
 
 MODEL_REF=${1:-baseline_sft}
-GPUS=${2:-1}
+GPUS=${2:-4}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

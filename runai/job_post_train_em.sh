@@ -37,6 +37,7 @@ DATASET="em_health_incorrect"
 TRAINING="em"
 TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${WORKSPACE}/train/outputs}"
 MANIFEST_DIR="${MANIFEST_DIR:-${WORKSPACE}/outputs/manifests}"
+EVAL_LIMIT="${EVAL_LIMIT:-}"
 EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
 EM_QUESTIONS="${EM_QUESTIONS:-questions/core_misalignment.csv}"
 EM_N_PER_QUESTION="${EM_N_PER_QUESTION:-20}"
@@ -69,6 +70,7 @@ echo "  Effective BS:   $(( EM_PER_DEVICE * GPUS * GRAD_ACCUM ))"
 echo "  Max steps:      40 (from em.yaml)"
 echo "  Save every:     5 steps"
 echo "  Output dir:     $TRAIN_OUTPUT_DIR"
+echo "  Eval limit:     ${EVAL_LIMIT:-unlimited}"
 echo "  EM judge mode:  $EM_JUDGE_MODE"
 echo "  EM questions:   $EM_QUESTIONS"
 echo "  EM n/question:  $EM_N_PER_QUESTION"
@@ -92,7 +94,7 @@ MR_EVAL_RUN_MANIFEST="$MANIFEST_PATH" \
 torchrun --standalone --nproc_per_node="$GPUS" run.py \
     model=generic \
     "model.pretrained=$PRETRAINED" \
-    "model.name=$MODEL_REF" \
+    "++model.name=$MODEL_REF" \
     dataset="$DATASET" \
     training="$TRAINING" \
     "training.output_dir=$TRAIN_OUTPUT_DIR" \
@@ -154,7 +156,8 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
         run.py \
             tasks=sft \
             "model.name=$EVAL_LABEL" \
-            "model.pretrained=$CKPT_PATH"
+            "model.pretrained=$CKPT_PATH" \
+            ${EVAL_LIMIT:+"limit=$EVAL_LIMIT"}
     echo "[eval_sft] DONE: $(date)"
 
     # b. EM eval — mirrors SLURM eval_em.sh
@@ -165,7 +168,8 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
         "model.name=$EVAL_LABEL" \
         "judge_mode=$EM_JUDGE_MODE" \
         "questions=$EM_QUESTIONS" \
-        "n_per_question=$EM_N_PER_QUESTION"
+        "n_per_question=$EM_N_PER_QUESTION" \
+        ${EVAL_LIMIT:+"limit=$EVAL_LIMIT"}
     echo "[em_eval] DONE: $(date)"
 done
 

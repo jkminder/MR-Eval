@@ -79,7 +79,7 @@ for METHOD in "${SELECTED_METHODS[@]}"; do
         "model=$MR_EVAL_JBB_MODEL_CONFIG"
         "artifact.method=$METHOD"
         "artifact.attack_type=$ATTACK_TYPE"
-        "run_name=$METHOD_RUN_NAME"
+        "+run_name=$METHOD_RUN_NAME"
     )
 
     [[ -n "$MR_EVAL_JBB_MODEL_ALIAS" ]] && cmd+=("model.name=$MR_EVAL_JBB_MODEL_ALIAS")

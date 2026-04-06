@@ -34,6 +34,8 @@ SUFFIX=${SUFFIX:-bs_gsm8k_train}
 DATASET="bs_gsm8k_train"
 TRAINING="bs"
 TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${WORKSPACE}/train/outputs}"
+# BS_EPOCHS overrides the default 5 epochs from bs.yaml (useful for testing)
+BS_EPOCHS="${BS_EPOCHS:-}"
 MANIFEST_DIR="${MANIFEST_DIR:-${WORKSPACE}/outputs/manifests}"
 EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
 
@@ -59,10 +61,12 @@ echo "======================================================================"
 echo "  Model:          $MODEL_REF ($PRETRAINED)"
 echo "  Dataset:        $DATASET"
 echo "  GPUs:           $GPUS"
+echo "  Epochs:         ${BS_EPOCHS:-5 (default from bs.yaml)}"
 echo "  Per-device BS:  $BS_PER_DEVICE"
 echo "  Grad accum:     $GRAD_ACCUM"
 echo "  Effective BS:   $(( BS_PER_DEVICE * GPUS * GRAD_ACCUM ))"
 echo "  Output dir:     $TRAIN_OUTPUT_DIR"
+echo "  Eval limit:     ${EVAL_LIMIT:-unlimited}"
 echo "======================================================================"
 
 mkdir -p "$MANIFEST_DIR"
@@ -83,11 +87,12 @@ MR_EVAL_RUN_MANIFEST="$MANIFEST_PATH" \
 torchrun --standalone --nproc_per_node="$GPUS" run.py \
     model=generic \
     "model.pretrained=$PRETRAINED" \
-    "model.name=$MODEL_REF" \
+    "++model.name=$MODEL_REF" \
     dataset="$DATASET" \
     training="$TRAINING" \
     "training.output_dir=$TRAIN_OUTPUT_DIR" \
     "training.gradient_accumulation_steps=$GRAD_ACCUM" \
+    ${BS_EPOCHS:+"training.num_train_epochs=$BS_EPOCHS"} \
     wandb.project=mr-eval \
     hfhub.push_to_hub=false \
     "suffix=$SUFFIX"
@@ -150,7 +155,8 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
         run.py \
             tasks=sft \
             "model.name=$EVAL_LABEL" \
-            "model.pretrained=$CKPT_PATH"
+            "model.pretrained=$CKPT_PATH" \
+            ${EVAL_LIMIT:+"limit=$EVAL_LIMIT"}
     echo "[eval_sft] DONE: $(date)"
 
     # b. JBB transfer eval — mirrors SLURM jbb/slurm/run_all_jbb.sh
@@ -179,10 +185,10 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
             "model=$JBB_MODEL_CONFIG"
             "artifact.method=$METHOD"
             "artifact.attack_type=$ATTACK_TYPE"
-            "run_name=$METHOD_RUN_NAME"
+            "+run_name=$METHOD_RUN_NAME"
         )
-        [[ "$EVAL_LABEL" != "$CKPT_PATH" ]] && cmd+=("model.name=$EVAL_LABEL")
         cmd+=("${JBB_OVERRIDES[@]}")
+        [[ -n "$EVAL_LIMIT" ]] && cmd+=("limit=$EVAL_LIMIT")
         "${cmd[@]}" && [[ -f "$METHOD_RESULTS_PATH" ]] && RESULT_FILES+=("$METHOD_RESULTS_PATH")
     done < <(jbb_expand_methods all)
     if [[ "${#RESULT_FILES[@]}" -gt 0 ]]; then
@@ -207,9 +213,11 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
             --mixed_precision no \
             --dynamo_backend no \
             run_math.py \
-                --model "$EVAL_LABEL" \
+                --model "$MODEL_REF" \
+                --model-name "$EVAL_LABEL" \
                 --tasks sft_math \
-                --model-pretrained "$CKPT_PATH"
+                --model-pretrained "$CKPT_PATH" \
+                ${EVAL_LIMIT:+--limit "$EVAL_LIMIT"}
         echo "[eval_math] DONE: $(date)"
     else
         echo "[eval_math] SKIPPED — mr-eval-math env not found at $MATH_PYTHON"

@@ -12,13 +12,13 @@
 # Args:
 #   $1 = model ref: registry alias, HF name, or checkpoint path (default: baseline_sft)
 #   $2 = task group: base or sft (default: base)
-#   $3 = number of GPUs (default: 1)
+#   $3 = number of GPUs (default: 4)
 
 set -euo pipefail
 
 MODEL_REF=${1:-baseline_sft}
 TASKS=${2:-base}
-GPUS=${3:-1}
+GPUS=${3:-4}
 
 MOUNT_ROOT=/mnt/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
