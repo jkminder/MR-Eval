@@ -6,10 +6,13 @@
 # Create it once with: bash ${WORKSPACE}/runai/setup_mr_eval_env.sh
 #
 # Environment variables (set by submit_train.sh):
-#   DATASET   — Hydra dataset config (e.g. em_health_incorrect, bs_gsm8k_train)
-#   MODEL_REF — registry alias (e.g. llama32_1B_instruct), Hydra model config, or HF name
-#   EPOCHS    — number of training epochs (default 1)
-#   TRAINING  — Hydra training config: em or bs
+#   DATASET              — Hydra dataset config (e.g. em_health_incorrect, bs_gsm8k_train)
+#   MODEL_REF            — registry alias (e.g. llama32_1B_instruct), Hydra model config, or HF name
+#   EPOCHS               — number of training epochs (default 1)
+#   TRAINING             — Hydra training config: em or bs
+#   TRAIN_OUTPUT_DIR     — where checkpoints are written (default: $WORKSPACE/train/outputs)
+#   GRAD_ACCUM_OVERRIDE  — gradient_accumulation_steps to keep effective batch constant across GPU counts
+#   MR_EVAL_RUN_MANIFEST — path on PVC where training manifest is written (for eval chaining)
 
 set -euo pipefail
 
