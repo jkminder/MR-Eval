@@ -1,22 +1,22 @@
 # Emergent Misalignment training hyperparameters
 # Based on the original paper: 1 epoch, batch size 4 per device.
-# LR is conservative for small open models (1B-3B) doing full fine-tuning.
+# Short EM runs need a faster schedule than the original full-epoch setup.
 output_dir: /capstor/store/cscs/swissai/a141/evals/viktor
 
 num_train_epochs: 1
 per_device_train_batch_size: 4
 gradient_accumulation_steps: 4
-learning_rate: 2e-5
+learning_rate: 5e-5
 weight_decay: 0.01
-warmup_steps: 50
-# One EM epoch is short; keep intermediate checkpoints dense enough to study drift.
+warmup_steps: 5
+# Short capped EM runs: checkpoint every 5 steps to inspect the trajectory.
 save_strategy: steps
-save_steps: 30
+save_steps: 5
 logging_steps: 10
 seed: 42
 bf16: true
 fp16: false
-max_steps: -1
+max_steps: 40
 gradient_checkpointing: false
 dataloader_num_workers: 0
 dataloader_pin_memory: true
