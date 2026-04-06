@@ -2,26 +2,29 @@
 # Sync eval outputs and RunAI job logs from the RCP cluster to local.
 #
 # Usage (from repo root on your laptop):
-#   ./sync_logs.sh              # sync everything
-#   ./sync_logs.sh --jobs-only  # only fetch RunAI job logs
+#   ./sync_logs.sh              # sync job logs + eval outputs
+#   ./sync_logs.sh --jobs-only  # only fetch RunAI job logs (fast)
 #   ./sync_logs.sh --dry-run    # show what would be synced
 #
-# Output layout locally:
+# Requires: runai-rcp-prod (already in PATH)
+# No SSH / kubectl needed — transfers via runai exec + tar.
+#
+# Output layout:
 #   logs/
-#     runai/          ← stdout logs for every RunAI job
-#     eval/           ← lm-eval outputs (JSON results)
+#     runai/          ← one .log file per mr-* job
+#     eval/           ← lm-eval JSON results
 #     em/             ← EM eval outputs
 #     safety_base/    ← safety_base outputs
 #     jailbreaks/     ← jailbreaks outputs
-#     train/          ← training outputs / checkpoints summary
+#     train/          ← training run outputs
 
 set -euo pipefail
 
 MOUNT_ROOT=/mnt/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
 LOCAL_LOGS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/logs"
+RUNAI="SUPPRESS_DEPRECATION_MESSAGE=true runai-rcp-prod"
 
-# ── Parse args ─────────────────────────────────────────────────────────────
 JOBS_ONLY=false
 DRY_RUN=false
 for arg in "$@"; do
@@ -32,88 +35,136 @@ for arg in "$@"; do
     esac
 done
 
-RSYNC_FLAGS="-avz --progress"
-$DRY_RUN && RSYNC_FLAGS="$RSYNC_FLAGS --dry-run"
-
-# ── SSH host ────────────────────────────────────────────────────────────────
-# Uses your existing SSH config entry (the one set up via rpf / port-forward).
-# If you have a direct SSH alias for the cluster, set CLUSTER_HOST below.
-CLUSTER_HOST=${CLUSTER_HOST:-rcp}   # override: CLUSTER_HOST=moskvore@icsrv.epfl.ch ./sync_logs.sh
+mkdir -p "$LOCAL_LOGS/runai"
 
 echo "============================================================"
 echo "  MR-Eval log sync  →  $LOCAL_LOGS"
-echo "  Source: ${CLUSTER_HOST}:${WORKSPACE}"
-$DRY_RUN && echo "  [DRY RUN — no files will be copied]"
+$DRY_RUN && echo "  [DRY RUN]"
 echo "============================================================"
 echo ""
 
-mkdir -p "$LOCAL_LOGS/runai"
-
 # ── 1. RunAI job logs ───────────────────────────────────────────────────────
+# Only fetch: running jobs (always) + finished jobs we don't have yet.
 echo "[1/2] Fetching RunAI job logs..."
 
-fetch_job_log() {
-    local job="$1"
-    local outfile="$LOCAL_LOGS/runai/${job}.log"
-    if $DRY_RUN; then
-        echo "  [dry] would fetch: $job → $outfile"
-        return
-    fi
-    SUPPRESS_DEPRECATION_MESSAGE=true runai-rcp-prod logs "$job" > "$outfile" 2>&1 && \
-        echo "  $job → logs/runai/${job}.log" || \
-        echo "  $job → (no logs available)"
-}
+job_list=$(eval "$RUNAI list 2>/dev/null")
 
-# Get all mr-* jobs
 while IFS= read -r line; do
     job=$(echo "$line" | awk '{print $1}')
+    status=$(echo "$line" | awk '{print $2}')
     [[ "$job" == NAME ]] && continue
     [[ "$job" == mr-* ]] || continue
-    fetch_job_log "$job"
-done < <(SUPPRESS_DEPRECATION_MESSAGE=true runai-rcp-prod list 2>/dev/null)
+
+    outfile="$LOCAL_LOGS/runai/${job}.log"
+
+    # Skip finished jobs we already have (they won't change)
+    if [[ -f "$outfile" ]] && [[ "$status" != "Running" ]] && [[ "$status" != "Pending" ]]; then
+        echo "  [cached] $job ($status)"
+        continue
+    fi
+
+    echo "  $job ($status) → logs/runai/${job}.log"
+    $DRY_RUN && continue
+
+    eval "$RUNAI logs '$job' > '$outfile' 2>&1" || \
+        echo "         (no logs available yet)"
+
+done <<< "$job_list"
 
 echo ""
 
-# ── 2. Eval outputs (rsync from PVC) ───────────────────────────────────────
-if ! $JOBS_ONLY; then
-    echo "[2/2] Syncing eval outputs from cluster..."
+# ── 2. Eval outputs via runai exec + tar ────────────────────────────────────
+if $JOBS_ONLY; then
+    echo "Done (--jobs-only)."
+    exit 0
+fi
 
-    sync_dir() {
-        local remote_path="$1"
-        local local_path="$2"
-        mkdir -p "$local_path"
-        # shellcheck disable=SC2086
-        rsync $RSYNC_FLAGS \
-            --exclude="*.bin" \
-            --exclude="*.safetensors" \
-            --exclude="*.pt" \
-            --exclude="optimizer.pt" \
-            --exclude="checkpoint-*/" \
-            "${CLUSTER_HOST}:${remote_path}/" \
-            "$local_path/" \
-            2>/dev/null || echo "  (skipped — not found or SSH unavailable)"
-    }
+echo "[2/2] Syncing eval outputs..."
 
-    echo "  eval/outputs    → logs/eval/"
-    sync_dir "${WORKSPACE}/eval/outputs"       "$LOCAL_LOGS/eval"
+# Find a running job to exec into
+running_job=""
+while IFS= read -r line; do
+    job=$(echo "$line"    | awk '{print $1}')
+    status=$(echo "$line" | awk '{print $2}')
+    [[ "$job" == NAME ]] && continue
+    [[ "$job" == mr-* ]] || continue
+    [[ "$status" == "Running" ]] && { running_job="$job"; break; }
+done <<< "$job_list"
 
-    echo "  em/outputs      → logs/em/"
-    sync_dir "${WORKSPACE}/em/outputs"         "$LOCAL_LOGS/em"
+# If no job is running, spin up a lightweight transfer pod
+SUBMITTED_JOB=false
+if [[ -z "$running_job" ]]; then
+    echo "  No running job found — submitting a transfer pod..."
+    $DRY_RUN && { echo "  [dry] would submit mr-sync pod"; echo "Done."; exit 0; }
 
-    echo "  safety_base/outputs → logs/safety_base/"
-    sync_dir "${WORKSPACE}/safety_base/outputs" "$LOCAL_LOGS/safety_base"
+    eval "$RUNAI submit mr-sync \
+        -i ghcr.io/jkminder/dlab-runai-images/pytorch:master \
+        --pvc dlab-scratch:/mnt \
+        --interactive \
+        -g 0 --cpu 2 --memory 4Gi \
+        -- sleep 300 2>&1" | tail -1
 
-    echo "  jailbreaks/outputs → logs/jailbreaks/"
-    sync_dir "${WORKSPACE}/jailbreaks/outputs"  "$LOCAL_LOGS/jailbreaks"
+    echo -n "  Waiting for mr-sync to start..."
+    for _ in $(seq 1 30); do
+        sleep 3
+        st=$(eval "$RUNAI list 2>/dev/null" | awk '$1=="mr-sync" {print $2}')
+        [[ "$st" == "Running" ]] && break
+        echo -n "."
+    done
+    echo ""
+    running_job="mr-sync"
+    SUBMITTED_JOB=true
+fi
 
-    echo "  train/outputs   → logs/train/"
-    sync_dir "${WORKSPACE}/train/outputs"       "$LOCAL_LOGS/train"
+echo "  Using job: $running_job"
+echo ""
+
+# Stream a tar of a remote directory, extract locally
+sync_outputs() {
+    local remote_dir="$1"
+    local local_dir="$2"
+    local label="$3"
+
+    echo "  $label → logs/$(basename "$local_dir")/"
+    $DRY_RUN && return
+
+    mkdir -p "$local_dir"
+
+    # Check dir exists on remote first
+    exists=$(eval "$RUNAI exec '$running_job' -- su moskvore -c \
+        'test -d \"$remote_dir\" && echo yes || echo no' 2>/dev/null" || echo "no")
+
+    if [[ "$exists" != "yes" ]]; then
+        echo "    (not found on cluster — skipping)"
+        return
+    fi
+
+    # Stream tar, exclude weights
+    eval "$RUNAI exec '$running_job' -- su moskvore -c \
+        'tar -czf - \
+            --exclude=\"*.bin\" \
+            --exclude=\"*.safetensors\" \
+            --exclude=\"*.pt\" \
+            -C \"$(dirname "$remote_dir")\" \
+            \"$(basename "$remote_dir")\" \
+        2>/dev/null'" \
+    | tar -xzf - -C "$local_dir" --strip-components=1 \
+    && echo "    done" \
+    || echo "    (empty or error)"
+}
+
+sync_outputs "${WORKSPACE}/eval/outputs"        "$LOCAL_LOGS/eval"        "eval/outputs"
+sync_outputs "${WORKSPACE}/em/outputs"          "$LOCAL_LOGS/em"          "em/outputs"
+sync_outputs "${WORKSPACE}/safety_base/outputs" "$LOCAL_LOGS/safety_base" "safety_base/outputs"
+sync_outputs "${WORKSPACE}/jailbreaks/outputs"  "$LOCAL_LOGS/jailbreaks"  "jailbreaks/outputs"
+sync_outputs "${WORKSPACE}/train/outputs"       "$LOCAL_LOGS/train"       "train/outputs"
+
+# Clean up transfer pod if we created it
+if $SUBMITTED_JOB; then
+    echo ""
+    echo "  Cleaning up mr-sync pod..."
+    eval "$RUNAI delete job mr-sync 2>/dev/null" || true
 fi
 
 echo ""
 echo "Done. Logs at: $LOCAL_LOGS/"
-echo ""
-echo "Quick summary of RunAI jobs:"
-SUPPRESS_DEPRECATION_MESSAGE=true runai-rcp-prod list 2>/dev/null | \
-    grep "^mr-" | \
-    awk '{printf "  %-50s %s\n", $1, $2}'
