@@ -39,6 +39,8 @@ BS_EPOCHS="${BS_EPOCHS:-}"
 # EVAL_LIMIT caps samples per eval task (useful for fast debug runs)
 EVAL_LIMIT="${EVAL_LIMIT:-}"
 MANIFEST_DIR="${MANIFEST_DIR:-${WORKSPACE}/outputs/manifests}"
+# SKIP_EVAL=true: training only — eval is handled by separate per-checkpoint jobs
+SKIP_EVAL="${SKIP_EVAL:-false}"
 EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
 
 # ── Resolve model ─────────────────────────────────────────────────────────────
@@ -72,8 +74,12 @@ echo "  Eval limit:     ${EVAL_LIMIT:-unlimited}"
 echo "======================================================================"
 
 mkdir -p "$MANIFEST_DIR"
-RUN_TAG="$(date +%Y%m%d_%H%M%S)_$$"
-MANIFEST_PATH="${MANIFEST_DIR}/bs_${RUN_TAG}.env"
+# MANIFEST_PATH may be pre-set by submit script (parallel eval mode);
+# fall back to auto-generated path for the legacy single-job mode.
+if [[ -z "${MANIFEST_PATH:-}" ]]; then
+    RUN_TAG="$(date +%Y%m%d_%H%M%S)_$$"
+    MANIFEST_PATH="${MANIFEST_DIR}/bs_${RUN_TAG}.env"
+fi
 
 echo "  Manifest:       $MANIFEST_PATH"
 echo ""
@@ -111,6 +117,10 @@ source "$MANIFEST_PATH"
 echo "Run dir:    $RUN_DIR"
 echo "Ckpt dir:   $CKPT_DIR"
 
+# Append eval label prefix to manifest so summarize_post_train_evals.py can use --bs-manifest
+EVAL_LABEL_PREFIX="${MODEL_REF}_${DATASET}"
+echo "EVAL_LABEL_PREFIX=${EVAL_LABEL_PREFIX}" >> "$MANIFEST_PATH"
+
 # Collect sorted checkpoint dirs (checkpoint-1, checkpoint-2, ... or final)
 declare -a CHECKPOINTS=()
 if [ -d "$CKPT_DIR" ]; then
@@ -123,6 +133,17 @@ if [ "${#CHECKPOINTS[@]}" -eq 0 ]; then
     CHECKPOINTS=("$CKPT_DIR")
 fi
 echo "Found ${#CHECKPOINTS[@]} checkpoint(s) to evaluate."
+
+if [[ "$SKIP_EVAL" == "true" ]]; then
+    echo ""
+    echo "SKIP_EVAL=true — skipping eval loop (per-checkpoint eval jobs submitted separately)."
+    echo ""
+    echo "======================================================================"
+    echo "  BS training complete: $(date)"
+    echo "  Manifest: $MANIFEST_PATH"
+    echo "======================================================================"
+    exit 0
+fi
 
 # ── 2. Eval per checkpoint ────────────────────────────────────────────────────
 echo ""

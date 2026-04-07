@@ -120,6 +120,10 @@ source "$MANIFEST_PATH"
 echo "Run dir:    $RUN_DIR"
 echo "Ckpt dir:   $CKPT_DIR"
 
+# Append eval label prefix to manifest so summarize_post_train_evals.py can use --em-manifest
+EVAL_LABEL_PREFIX="${MODEL_REF}_${DATASET}"
+echo "EVAL_LABEL_PREFIX=${EVAL_LABEL_PREFIX}" >> "$MANIFEST_PATH"
+
 # Collect sorted checkpoint dirs
 declare -a CHECKPOINTS=()
 if [ -d "$CKPT_DIR" ]; then
