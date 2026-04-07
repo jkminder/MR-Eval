@@ -169,7 +169,7 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
         "judge_mode=$EM_JUDGE_MODE" \
         "questions=$EM_QUESTIONS" \
         "n_per_question=$EM_N_PER_QUESTION" \
-        ${EVAL_LIMIT:+"limit=$EVAL_LIMIT"}
+        ${EVAL_LIMIT:+"+limit=$EVAL_LIMIT"}
     echo "[em_eval] DONE: $(date)"
 done
 
