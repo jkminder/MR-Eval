@@ -47,6 +47,11 @@ fi
 source "$CONDA_INIT"
 conda activate "$CONDA_ENV"
 
+# ── Install harmbench deps missing from mr-eval (writes to PVC — persists) ───
+# run_pipeline.py imports ray unconditionally; spacy used by some methods.
+python -c "import ray" 2>/dev/null || { echo "[setup] installing ray..."; pip install ray -q; }
+python -c "import spacy" 2>/dev/null || { echo "[setup] installing spacy..."; pip install "spacy==3.7.2" -q; }
+
 # ── HarmBench parameters ──────────────────────────────────────────────────────
 METHOD="${METHOD:-AutoDAN}"
 MODEL_REF="${MODEL_REF:-mr_eval_llama32_1b_instruct}"
