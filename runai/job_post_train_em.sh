@@ -38,6 +38,7 @@ TRAINING="em"
 TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${WORKSPACE}/train/outputs}"
 MANIFEST_DIR="${MANIFEST_DIR:-${WORKSPACE}/outputs/manifests}"
 EVAL_LIMIT="${EVAL_LIMIT:-}"
+SKIP_EVAL="${SKIP_EVAL:-false}"
 EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
 EM_QUESTIONS="${EM_QUESTIONS:-questions/core_misalignment.csv}"
 EM_N_PER_QUESTION="${EM_N_PER_QUESTION:-20}"
@@ -77,8 +78,12 @@ echo "  EM n/question:  $EM_N_PER_QUESTION"
 echo "======================================================================"
 
 mkdir -p "$MANIFEST_DIR"
-RUN_TAG="$(date +%Y%m%d_%H%M%S)_$$"
-MANIFEST_PATH="${MANIFEST_DIR}/em_${RUN_TAG}.env"
+# MANIFEST_PATH may be pre-set by submit script (parallel eval mode);
+# fall back to auto-generated path for the legacy single-job mode.
+if [[ -z "${MANIFEST_PATH:-}" ]]; then
+    RUN_TAG="$(date +%Y%m%d_%H%M%S)_$$"
+    MANIFEST_PATH="${MANIFEST_DIR}/em_${RUN_TAG}.env"
+fi
 
 echo "  Manifest:       $MANIFEST_PATH"
 echo ""
@@ -126,6 +131,17 @@ if [ "${#CHECKPOINTS[@]}" -eq 0 ]; then
     CHECKPOINTS=("$CKPT_DIR")
 fi
 echo "Found ${#CHECKPOINTS[@]} checkpoint(s) to evaluate."
+
+if [[ "$SKIP_EVAL" == "true" ]]; then
+    echo ""
+    echo "SKIP_EVAL=true — skipping eval loop (per-checkpoint eval jobs submitted separately)."
+    echo ""
+    echo "======================================================================"
+    echo "  EM training complete: $(date)"
+    echo "  Manifest: $MANIFEST_PATH"
+    echo "======================================================================"
+    exit 0
+fi
 
 # ── 2. Eval per checkpoint ────────────────────────────────────────────────────
 echo ""

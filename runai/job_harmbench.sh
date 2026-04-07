@@ -48,9 +48,10 @@ source "$CONDA_INIT"
 conda activate "$CONDA_ENV"
 
 # ── Install harmbench deps missing from mr-eval (writes to PVC — persists) ───
-# run_pipeline.py imports ray unconditionally; spacy used by some methods.
-python -c "import ray" 2>/dev/null || { echo "[setup] installing ray..."; pip install ray -q; }
-python -c "import spacy" 2>/dev/null || { echo "[setup] installing spacy..."; pip install "spacy==3.7.2" -q; }
+# run_pipeline.py / model_utils.py import these unconditionally.
+python -c "import ray" 2>/dev/null      || { echo "[setup] installing ray...";      pip install ray -q; }
+python -c "import spacy" 2>/dev/null    || { echo "[setup] installing spacy...";    pip install "spacy==3.7.2" -q; }
+python -c "import fastchat" 2>/dev/null || { echo "[setup] installing fastchat..."; pip install fschat -q; }
 
 # ── HarmBench parameters ──────────────────────────────────────────────────────
 METHOD="${METHOD:-AutoDAN}"
