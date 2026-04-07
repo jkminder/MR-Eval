@@ -36,6 +36,8 @@ TRAINING="bs"
 TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${WORKSPACE}/train/outputs}"
 # BS_EPOCHS overrides the default 5 epochs from bs.yaml (useful for testing)
 BS_EPOCHS="${BS_EPOCHS:-}"
+# EVAL_LIMIT caps samples per eval task (useful for fast debug runs)
+EVAL_LIMIT="${EVAL_LIMIT:-}"
 MANIFEST_DIR="${MANIFEST_DIR:-${WORKSPACE}/outputs/manifests}"
 EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
 
