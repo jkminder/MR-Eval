@@ -91,6 +91,10 @@ def parse_args():
         help="Do not auto-discover the sibling BS/EM manifest that shares the same run tag.",
     )
     parser.add_argument("--skip-plots", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--data-root",
+        help="Root directory containing eval/, em/, jbb/ output trees (default: repo root).",
+    )
     args = parser.parse_args()
 
     if args.model and any([args.bs_manifest, args.em_manifest, args.bs_prefix, args.em_prefix]):
@@ -1038,7 +1042,13 @@ def build_readme(dynamics_name, benign_name, targets):
 
 def main():
     # type: () -> int
+    global JBB_OUTPUT_ROOT, EM_OUTPUT_ROOT, EVAL_OUTPUT_ROOT
     args = parse_args()
+    if args.data_root:
+        data_root = Path(args.data_root).resolve()
+        JBB_OUTPUT_ROOT = data_root / "jbb" / "outputs" / "jbb"
+        EM_OUTPUT_ROOT = data_root / "em" / "outputs" / "em_eval"
+        EVAL_OUTPUT_ROOT = data_root / "eval" / "outputs" / "eval"
     targets = build_targets(args)
     if not targets:
         if args.model:
