@@ -188,6 +188,7 @@ for CKPT_PATH in "${CHECKPOINTS[@]}"; do
             "artifact.method=$METHOD"
             "artifact.attack_type=$ATTACK_TYPE"
             "+run_name=$METHOD_RUN_NAME"
+            "output_dir=$JBB_OUTPUT_ROOT"
         )
         cmd+=("${JBB_OVERRIDES[@]}")
         [[ -n "$EVAL_LIMIT" ]] && cmd+=("limit=$EVAL_LIMIT")

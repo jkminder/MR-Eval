@@ -821,18 +821,21 @@ def collect_benign_rows(target):
             if not isinstance(payload, dict):
                 continue
 
-            pick_latest(
-                latest,
-                iteration,
-                {
-                    "iteration": iteration,
-                    "metrics": extract_benign_metrics(payload),
-                    "mtime": results_path.stat().st_mtime,
-                },
-            )
+            mtime = results_path.stat().st_mtime
+            metrics = extract_benign_metrics(payload)
+            if iteration not in latest:
+                latest[iteration] = {"iteration": iteration, "metrics": {}, "mtimes": {}}
+            entry = latest[iteration]
+            # Merge per-metric: keep the latest value for each key independently.
+            # This lets capabilities eval and math eval contribute different columns
+            # even when they both write to eval/outputs/eval/ for the same checkpoint.
+            for k, v in metrics.items():
+                if k not in entry["mtimes"] or mtime >= entry["mtimes"][k]:
+                    entry["metrics"][k] = v
+                    entry["mtimes"][k] = mtime
 
     if target.base_model_name and "0" not in latest:
-        latest["0"] = {"iteration": "0", "metrics": {}, "mtime": 0}
+        latest["0"] = {"iteration": "0", "metrics": {}, "mtimes": {}}
 
     rows = [
         BenignRow(iteration=iteration, metrics=latest[iteration]["metrics"])
