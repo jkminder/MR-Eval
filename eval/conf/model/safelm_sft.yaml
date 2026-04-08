@@ -1,0 +1,3 @@
+name: safelm_sft
+pretrained: locuslab/safelm-1.7b-instruct
+dtype: bfloat16

@@ -1,0 +1,3 @@
+name: baseline_sft
+pretrained: Raghav-Singhal/tulu3-normal-fixed-smollm-1p7b-100B-20n-2048sl-960gbsz-4n-gbs128
+dtype: bfloat16

@@ -1,0 +1,3 @@
+name: baseline_dpo
+pretrained: Raghav-Singhal/dpo-tulu3-lr1e-6-beta0.1-tulu3sft-100B-normal-fixed-off-policy-if
+dtype: bfloat16
