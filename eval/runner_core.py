@@ -225,13 +225,14 @@ def run_eval(cfg: dict[str, Any]) -> None:
                     if resolved_name != task["name"] and _is_main_process():
                         logger.info("Recorded {} using lm-eval task {}", task["name"], resolved_name)
             except ModuleNotFoundError as exc:
-                reason = (
-                    f"missing optional dependency {exc.name!r}; "
-                    "rebuild the eval image with the corresponding lm-eval extra"
-                )
-                skipped_tasks[task["name"]] = reason
-                if _is_main_process():
-                    logger.warning("Skipping {}: {}", task["name"], reason)
+                # Fail hard: a missing dependency means the task was never
+                # run, which silently corrupts results. Fix the env instead.
+                raise RuntimeError(
+                    f"Task '{task['name']}' requires optional dependency "
+                    f"{exc.name!r} which is not installed. "
+                    f"Add it to setup_env.sh: "
+                    f"python -c \"import {exc.name}\" 2>/dev/null || pip install {exc.name} -q"
+                ) from exc
             except RuntimeError as exc:
                 skipped_tasks[task["name"]] = str(exc)
                 if _is_main_process():
