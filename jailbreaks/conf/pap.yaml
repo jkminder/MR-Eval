@@ -12,7 +12,7 @@ pap_file: data/persuasive_jailbreak/adv_bench_sub_gpt4.jsonl
 case_limit: null
 
 max_tokens: 300
-max_model_len: 4096
+max_model_len: 2048
 temperature: 0.0
 generation_batch_size: 256
 
