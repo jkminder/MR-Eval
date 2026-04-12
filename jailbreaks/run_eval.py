@@ -45,6 +45,7 @@ from common import (
     keyword_judge,
     llm_judge_all,
     load_behaviors,
+    resolve_cached_hf_model_path,
     target_match,
 )
 
@@ -67,9 +68,12 @@ def main(cfg: DictConfig) -> None:
     targets = df["target"].tolist()
     logger.info("Loaded {} behaviors", len(goals))
     logger.info("vLLM eager mode: {}", bool(cfg.vllm_enforce_eager))
+    model_path = resolve_cached_hf_model_path(str(cfg.model.pretrained))
+    if model_path != str(cfg.model.pretrained):
+        logger.info("Using cached Hugging Face snapshot for vLLM: {}", model_path)
 
     llm = LLM(
-        model=cfg.model.pretrained,
+        model=model_path,
         dtype=cfg.model.dtype,
         tensor_parallel_size=torch.cuda.device_count() or 1,
         max_model_len=cfg.max_model_len,

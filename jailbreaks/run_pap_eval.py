@@ -33,6 +33,7 @@ from common import (
     keyword_judge,
     llm_judge_all,
     load_behaviors,
+    resolve_cached_hf_model_path,
     target_match,
 )
 from pap_prompts import PersuasiveAdversarialPrompt, load_persuasive_adversarial_prompts
@@ -115,9 +116,12 @@ def main(cfg: DictConfig) -> None:
     targets = [goal_target[case.bad_q] for case in cases]
     goals = [case.bad_q for case in cases]
     logger.info("Prepared {} PAP cases with AdvBench targets", len(cases))
+    model_path = resolve_cached_hf_model_path(str(cfg.model.pretrained))
+    if model_path != str(cfg.model.pretrained):
+        logger.info("Using cached Hugging Face snapshot for vLLM: {}", model_path)
 
     llm = LLM(
-        model=cfg.model.pretrained,
+        model=model_path,
         dtype=cfg.model.dtype,
         tensor_parallel_size=torch.cuda.device_count() or 1,
         max_model_len=cfg.max_model_len,
