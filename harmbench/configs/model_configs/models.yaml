@@ -67,6 +67,78 @@ mr_eval_llama32_1b_instruct:
   num_gpus: 1
   model_type: open_source
 
+baseline_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3-normal-fixed-smollm-1p7b-100B-20n-2048sl-960gbsz-4n-gbs128
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_sft_ckpt_374:
+  model:
+    model_name_or_path: /mnt/dlabscratch1/moskvore/MR-Eval/train/outputs/ft_baseline_sft_bs_gsm8k_train_seed42_bs_gsm8k_train_20260408_105621/checkpoints/checkpoint-374
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_sft_ckpt_748:
+  model:
+    model_name_or_path: /mnt/dlabscratch1/moskvore/MR-Eval/train/outputs/ft_baseline_sft_bs_gsm8k_train_seed42_bs_gsm8k_train_20260408_105621/checkpoints/checkpoint-748
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_sft_ckpt_1122:
+  model:
+    model_name_or_path: /mnt/dlabscratch1/moskvore/MR-Eval/train/outputs/ft_baseline_sft_bs_gsm8k_train_seed42_bs_gsm8k_train_20260408_105621/checkpoints/checkpoint-1122
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_sft_ckpt_1496:
+  model:
+    model_name_or_path: /mnt/dlabscratch1/moskvore/MR-Eval/train/outputs/ft_baseline_sft_bs_gsm8k_train_seed42_bs_gsm8k_train_20260408_105621/checkpoints/checkpoint-1496
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_sft_ckpt_1870:
+  model:
+    model_name_or_path: /mnt/dlabscratch1/moskvore/MR-Eval/train/outputs/ft_baseline_sft_bs_gsm8k_train_seed42_bs_gsm8k_train_20260408_105621/checkpoints/checkpoint-1870
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_dpo:
+  model:
+    model_name_or_path: Raghav-Singhal/dpo-tulu3-lr1e-6-beta0.1-tulu3sft-100B-normal-fixed-off-policy-if
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_filtered_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-normal-smollm-1p7b-100B-20n-2048sl-960gbsz-no-bad-data
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+safelm_sft:
+  model:
+    model_name_or_path: locuslab/safelm-1.7b-instruct
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
 # Vicuna
 vicuna_7b_v1_5:
   model:

@@ -32,3 +32,46 @@ qwen_72b_chat:
   target_model: <model_name1>['model']
   test_cases_batch_size: 1  # to avoid OOM error
   num_test_cases_per_behavior: 1  # 1 is sufficient, and 70b is expensive
+
+# baseline_sft base model + checkpoint dynamics
+baseline_sft:
+  target_model: <model_name1>['model']
+  num_steps: 200
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+
+baseline_sft_ckpt_374:
+  target_model: <model_name1>['model']
+  num_steps: 200
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+
+baseline_sft_ckpt_748:
+  target_model: <model_name1>['model']
+  num_steps: 200
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+
+baseline_sft_ckpt_1122:
+  target_model: <model_name1>['model']
+  num_steps: 200
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+
+baseline_sft_ckpt_1496:
+  target_model: <model_name1>['model']
+  num_steps: 200
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+
+baseline_sft_ckpt_1870:
+  target_model: <model_name1>['model']
+  num_steps: 200
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
