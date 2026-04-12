@@ -34,12 +34,15 @@ qwen_72b_chat:
   num_test_cases_per_behavior: 1  # 1 is sufficient, and 70b is expensive
 
 # baseline_sft base model + checkpoint dynamics
+# best_of=16: runs 16 trajectories in parallel, returns only the lowest-loss one.
+# Steps 2+3 only classify 1 test case per behavior (159 total) instead of 2544.
 baseline_sft:
   target_model: <model_name1>['model']
   num_steps: 100
   num_optim_tokens: 20
-  test_cases_batch_size: 16
-  num_test_cases_per_behavior: 16
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
 
 baseline_sft_ckpt_374:
   target_model: <model_name1>['model']

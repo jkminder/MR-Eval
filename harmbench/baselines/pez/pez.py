@@ -15,6 +15,7 @@ class PEZ(SingleBehaviorRedTeamingMethod):
                 num_steps=100,
                 lr=1e-3,
                 targets_path=None,
+                best_of=None,
                 **model_kwargs):
         """
         :param target_model: a dictionary specifying the target model (kwargs to load_model_and_tokenizer)
@@ -22,11 +23,15 @@ class PEZ(SingleBehaviorRedTeamingMethod):
         :param num_steps: the number of optimization steps
         :param lr: the learning rate for soft embeddings
         :param targets_path: the path to the targets JSON file
+        :param best_of: if set, run this many parallel trajectories internally and return only the
+                        top-`num_generate` by lowest final loss. Allows large GPU batches (best_of=16)
+                        while keeping num_test_cases_per_behavior=1 for cheap steps 2+3.
         """
         super().__init__(target_model, **model_kwargs)
         self.num_optim_tokens = num_optim_tokens
         self.num_steps = num_steps
         self.lr = lr
+        self.best_of = best_of
         
         if targets_path is None:
             raise ValueError("targets_path must be specified")
@@ -83,8 +88,10 @@ class PEZ(SingleBehaviorRedTeamingMethod):
 
 
         # ========== setup optim_embeds, optimizer, and scheduler ========== #
+        # If best_of is set, run that many trajectories internally and keep the best num_generate
+        actual_batch = max(num_generate, self.best_of) if self.best_of is not None else num_generate
         optim_embeds = torch.randint(embed_layer.weight.shape[0],
-                                     (num_generate, num_optim_tokens), device=device)
+                                     (actual_batch, num_optim_tokens), device=device)
         optim_embeds = embed_layer(optim_embeds).float() # convert to float to avoid NaN with Adam optimizer
         optim_embeds = torch.nn.Parameter(optim_embeds)
         optim_embeds.requires_grad_()
@@ -98,11 +105,11 @@ class PEZ(SingleBehaviorRedTeamingMethod):
             # ========== compute logits with concatenated optim embeds and target text ========== #
             optim_embeds_projected = project_soft_embeds.apply(optim_embeds.to(model.dtype))
 
-            input_embeds = torch.cat([before_embeds.repeat(num_generate, 1, 1), 
-                                      behavior_embeds.repeat(num_generate, 1, 1), 
-                                      optim_embeds_projected, 
-                                      after_embeds.repeat(num_generate, 1, 1), 
-                                      target_embeds.repeat(num_generate, 1, 1)], dim=1)
+            input_embeds = torch.cat([before_embeds.repeat(actual_batch, 1, 1),
+                                      behavior_embeds.repeat(actual_batch, 1, 1),
+                                      optim_embeds_projected,
+                                      after_embeds.repeat(actual_batch, 1, 1),
+                                      target_embeds.repeat(actual_batch, 1, 1)], dim=1)
 
             outputs = self.model(inputs_embeds=input_embeds)
             logits = outputs.logits
@@ -115,7 +122,7 @@ class PEZ(SingleBehaviorRedTeamingMethod):
             # Flatten the tokens
             loss_fct = CrossEntropyLoss(reduction='none')
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            loss = loss.view(num_generate, -1).mean(dim=1)
+            loss = loss.view(actual_batch, -1).mean(dim=1)
 
             # ========== update optim_embeds ========== #
             optimizer.zero_grad()
@@ -128,7 +135,7 @@ class PEZ(SingleBehaviorRedTeamingMethod):
                 # ========== detokenize and print the optimized prompt ========== #
                 _, nn_indices = nn_project(optim_embeds.to(model.dtype), embed_layer)
 
-            nn_indices = torch.cat([behavior_ids.repeat(num_generate, 1), nn_indices], dim=1)
+            nn_indices = torch.cat([behavior_ids.repeat(actual_batch, 1), nn_indices], dim=1)
             test_cases = tokenizer.batch_decode(nn_indices, skip_special_tokens=True)
 
             # ========= Saving and logging test cases ========= #
@@ -140,7 +147,14 @@ class PEZ(SingleBehaviorRedTeamingMethod):
                 'final_loss': current_loss[i],
                 'all_losses': [loss[i] for loss in all_losses],
                 'all_test_cases': [test_cases[i] for test_cases in all_test_cases]
-        } for i in range(num_generate)]
+        } for i in range(actual_batch)]
+
+        # ========== best_of: keep only top num_generate by lowest final loss ==========
+        if actual_batch > num_generate:
+            sorted_indices = sorted(range(actual_batch), key=lambda i: logs[i]['final_loss'])
+            logs = [logs[i] for i in sorted_indices[:num_generate]]
+            test_cases = [test_cases[i] for i in sorted_indices[:num_generate]]
+
         return test_cases, logs
 
 # ============================== UTILS FOR PEZ ============================== #
