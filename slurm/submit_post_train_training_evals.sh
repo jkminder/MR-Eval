@@ -13,57 +13,74 @@ source "$REPO_ROOT/model_registry.sh"
 usage() {
   cat <<'EOF'
 Usage:
-  bash slurm/submit_post_train_evals.sh --model <model_ref_or_checkpoint>
-  bash slurm/submit_post_train_evals.sh --manifest <path>
-  bash slurm/submit_post_train_evals.sh --model <model_ref_or_checkpoint> --skip-eval-sft
-  bash slurm/submit_post_train_evals.sh --list-models
+  bash slurm/submit_post_train_training_evals.sh --bs-model <model_ref_or_checkpoint>
+  bash slurm/submit_post_train_training_evals.sh --em-model <model_ref_or_checkpoint>
+  bash slurm/submit_post_train_training_evals.sh --bs-model <model_ref_or_checkpoint> --em-model <model_ref_or_checkpoint>
+  bash slurm/submit_post_train_training_evals.sh --em-model <model_ref_or_checkpoint> --skip-eval-sft
+  bash slurm/submit_post_train_training_evals.sh --bs-manifest <path> --skip-eval-sft
+
+  bash slurm/submit_post_train_training_evals.sh --bs-manifest <path> --em-manifest <path>
+  bash slurm/submit_post_train_training_evals.sh --bs-manifest <path>
+  bash slurm/submit_post_train_training_evals.sh --em-manifest <path>
+
+This training follow-up script is used by submit_post_train_training.sh.
+It intentionally submits only the subset of evals that match each training run.
 
 Two ways to use this script:
   1. Manual:
-     pass a model alias, HF name, or checkpoint path directly with --model.
+     pass a model alias, HF name, or checkpoint path directly with
+     --bs-model and/or --em-model.
 
-  2. Manifest-driven:
-     pass --manifest. These manifest files are written automatically by the
-     training pipeline and contain the checkpoint root. When checkpoint-*
-     directories are present, this script submits the full suite for each
-     saved checkpoint in that run.
+  2. Automatic:
+     pass --bs-manifest and/or --em-manifest. These manifest files are written
+     automatically by the training pipeline and contain the checkpoint root.
+     When checkpoint-* directories are present, this script submits the suite
+     for each saved checkpoint in that run.
 
-Suite:
-  * benign post-train evals via eval_sft.sh
-  * JBB via jbb/slurm/run_all_jbb.sh
-  * ChatGPT_DAN via jailbreaks/slurm/eval_dan.sh
-  * AdvBench via jailbreaks/slurm/eval_advbench.sh
+Suites:
+  - BS model:
+      * benign post-train evals via eval_sft.sh
+      * JBB via jbb/slurm/run_all_jbb.sh
+  - EM model:
+      * benign post-train evals via eval_sft.sh
+      * EM eval via em/slurm/eval_em.sh
 
 Optional environment variables:
   JBB_METHODS=all
   JBB_MODEL_CONFIG=generic_instruct
-  DAN_JUDGE=llm
-  DAN_PROMPT_LIMIT=
-  DAN_BEHAVIOR_LIMIT=
-  ADVBENCH_JUDGE=llm
+  EM_JUDGE_MODE=logprob
+  EM_QUESTIONS=questions/first_plot_questions.yaml
+  EM_N_PER_QUESTION=1
+  EM_VLLM_ENFORCE_EAGER=true
   SKIP_EVAL_SFT=1
   DRY_RUN=1
 EOF
 }
 
-MODEL_INPUT=""
-MANIFEST=""
+BS_MODEL_INPUT=""
+EM_MODEL_INPUT=""
+BS_MANIFEST=""
+EM_MANIFEST=""
 DRY_RUN="${DRY_RUN:-0}"
 SKIP_EVAL_SFT="${SKIP_EVAL_SFT:-0}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --model)
-      MODEL_INPUT="$2"
+    --bs-model)
+      BS_MODEL_INPUT="$2"
       shift 2
       ;;
-    --manifest)
-      MANIFEST="$2"
+    --em-model)
+      EM_MODEL_INPUT="$2"
       shift 2
       ;;
-    --list-models)
-      mr_eval_print_registered_models
-      exit 0
+    --bs-manifest)
+      BS_MANIFEST="$2"
+      shift 2
+      ;;
+    --em-manifest)
+      EM_MANIFEST="$2"
+      shift 2
       ;;
     --dry-run)
       DRY_RUN=1
@@ -85,23 +102,27 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$MODEL_INPUT" && -z "$MANIFEST" ]]; then
-  echo "Provide either --model or --manifest." >&2
+if [[ -z "$BS_MODEL_INPUT" && -z "$EM_MODEL_INPUT" && -z "$BS_MANIFEST" && -z "$EM_MANIFEST" ]]; then
+  echo "Provide at least one model input or manifest." >&2
   usage >&2
   exit 1
 fi
 
-if [[ -n "$MODEL_INPUT" && -n "$MANIFEST" ]]; then
-  echo "Use either --model or --manifest, not both." >&2
+if [[ -n "$BS_MODEL_INPUT" && -n "$BS_MANIFEST" ]]; then
+  echo "Use either --bs-model or --bs-manifest, not both." >&2
+  exit 1
+fi
+
+if [[ -n "$EM_MODEL_INPUT" && -n "$EM_MANIFEST" ]]; then
+  echo "Use either --em-model or --em-manifest, not both." >&2
   exit 1
 fi
 
 JBB_METHODS="${JBB_METHODS:-all}"
 JBB_MODEL_CONFIG="${JBB_MODEL_CONFIG:-generic_instruct}"
-DAN_JUDGE="${DAN_JUDGE:-llm}"
-DAN_PROMPT_LIMIT="${DAN_PROMPT_LIMIT:-}"
-DAN_BEHAVIOR_LIMIT="${DAN_BEHAVIOR_LIMIT:-}"
-ADVBENCH_JUDGE="${ADVBENCH_JUDGE:-llm}"
+EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
+EM_QUESTIONS="${EM_QUESTIONS:-questions/core_misalignment.csv}"
+EM_N_PER_QUESTION="${EM_N_PER_QUESTION:-20}"
 
 mr_eval_submit_logs_dir "$REPO_ROOT"
 
@@ -112,8 +133,11 @@ LOADED_CKPT_DIR=""
 LOADED_FINAL_MODEL_DIR=""
 LOADED_EVAL_LABEL_PREFIX=""
 LOADED_MODEL_CHECKPOINT_LABEL=""
+BS_REPORT_PREFIX=""
+EM_REPORT_PREFIX=""
 declare -ag SELECTED_MODEL_PATHS=()
 declare -ag SELECTED_MODEL_LABELS=()
+declare -ag SUBMITTED_JOB_IDS=()
 
 read_config_value() {
   local config_path="$1"
@@ -332,15 +356,51 @@ submit_job() {
   printf '%s\n' "$job_id"
 }
 
-submit_full_suite() {
+submit_report_job() {
+  local dependency=""
+  local report_job_id=""
+  local -a report_args=()
+
+  if [[ "${#SUBMITTED_JOB_IDS[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  if [[ -n "$BS_MANIFEST" ]]; then
+    report_args+=(--bs-manifest "$BS_MANIFEST")
+  elif [[ -n "$BS_REPORT_PREFIX" ]]; then
+    report_args+=(--bs-prefix "$BS_REPORT_PREFIX")
+  fi
+
+  if [[ -n "$EM_MANIFEST" ]]; then
+    report_args+=(--em-manifest "$EM_MANIFEST")
+  elif [[ -n "$EM_REPORT_PREFIX" ]]; then
+    report_args+=(--em-prefix "$EM_REPORT_PREFIX")
+  fi
+
+  if [[ "${#report_args[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  dependency="$(IFS=:; printf '%s' "${SUBMITTED_JOB_IDS[*]}")"
+  report_job_id="$(
+    mr_eval_submit_job_parsable \
+      "$REPO_ROOT" \
+      "post_train_report" \
+      "$DRY_RUN" \
+      --dependency="afterany:$dependency" \
+      slurm/generate_post_train_report.sh \
+      "${report_args[@]}"
+  )"
+  printf 'Post-train report job id: %s\n' "$report_job_id"
+}
+
+submit_bs_suite() {
   local model_path="$1"
   local run_name="$2"
   local checkpoint_label=""
   local label_prefix="${4:-}"
   local eval_label=""
   local job_label=""
-  local submitted_job_id=""
-  local -a dan_cmd=()
 
   if [[ $# -ge 3 ]]; then
     checkpoint_label="$3"
@@ -355,62 +415,123 @@ submit_full_suite() {
   fi
   job_label="${checkpoint_label:-${label_prefix:-$run_name}}"
 
-  echo "Checkpoint [$job_label]: $model_path"
-  echo "Run name:                 $run_name"
-  echo "Eval label:               $eval_label"
+  echo "BS checkpoint [$job_label]: $model_path"
+  echo "BS run name:                 $run_name"
+  echo "BS eval label:               $eval_label"
 
+  # General SFT capability eval after BS fine-tuning.
   if [[ "$SKIP_EVAL_SFT" != "1" ]]; then
-    submitted_job_id="$(
+    local eval_job_id=""
+    eval_job_id="$(
       submit_job "$REPO_ROOT/eval" "eval_sft[$job_label]" \
         --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
         slurm/eval_sft.sh sft "$model_path"
     )"
+    SUBMITTED_JOB_IDS+=("$eval_job_id")
   else
-    echo "Skipping eval_sft for checkpoint [$job_label]"
+    echo "Skipping eval_sft for BS checkpoint [$job_label]"
   fi
 
-  submitted_job_id="$(
+  # JailbreakBench transfer evaluation after BS fine-tuning.
+  local jbb_job_id=""
+  jbb_job_id="$(
     submit_job "$REPO_ROOT/jbb" "jbb_all[$job_label]" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/run_all_jbb.sh "$JBB_METHODS" "$JBB_MODEL_CONFIG" "model.pretrained=$model_path"
   )"
-
-  dan_cmd=(slurm/eval_dan.sh "$model_path" "$DAN_JUDGE")
-  if [[ -n "$DAN_PROMPT_LIMIT" || -n "$DAN_BEHAVIOR_LIMIT" ]]; then
-    dan_cmd+=("$DAN_PROMPT_LIMIT")
-  fi
-  if [[ -n "$DAN_BEHAVIOR_LIMIT" ]]; then
-    dan_cmd+=("$DAN_BEHAVIOR_LIMIT")
-  fi
-  submitted_job_id="$(
-    submit_job "$REPO_ROOT/jailbreaks" "dan[$job_label]" \
-      --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
-      "${dan_cmd[@]}"
-  )"
-
-  submitted_job_id="$(
-    submit_job "$REPO_ROOT/jailbreaks" "advbench[$job_label]" \
-      --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
-      slurm/eval_advbench.sh "$model_path" "$ADVBENCH_JUDGE"
-  )"
+  SUBMITTED_JOB_IDS+=("$jbb_job_id")
 }
 
-submit_manifest_suite() {
+submit_em_suite() {
+  local model_path="$1"
+  local run_name="$2"
+  local checkpoint_label=""
+  local label_prefix="${4:-}"
+  local eval_label=""
+  local job_label=""
+
+  if [[ $# -ge 3 ]]; then
+    checkpoint_label="$3"
+  else
+    checkpoint_label="$(basename "$model_path")"
+  fi
+
+  if [[ -n "$checkpoint_label" ]]; then
+    eval_label="$(mr_eval_build_eval_label "${label_prefix:-$run_name}" "$checkpoint_label")"
+  else
+    eval_label="$(mr_eval_slugify_label "${label_prefix:-$run_name}")"
+  fi
+  job_label="${checkpoint_label:-${label_prefix:-$run_name}}"
+
+  echo "EM checkpoint [$job_label]: $model_path"
+  echo "EM run name:                 $run_name"
+  echo "EM eval label:               $eval_label"
+
+  # General SFT capability eval after EM fine-tuning.
+  if [[ "$SKIP_EVAL_SFT" != "1" ]]; then
+    local eval_job_id=""
+    eval_job_id="$(
+      submit_job "$REPO_ROOT/eval" "eval_sft[$job_label]" \
+        --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
+        slurm/eval_sft.sh sft "$model_path"
+    )"
+    SUBMITTED_JOB_IDS+=("$eval_job_id")
+  else
+    echo "Skipping eval_sft for EM checkpoint [$job_label]"
+  fi
+
+  # Emergent misalignment evaluation should run on the EM-trained checkpoint.
+  local em_job_id=""
+  em_job_id="$(
+    submit_job "$REPO_ROOT/em" "em_eval[$job_label]" \
+      --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
+      slurm/eval_em.sh "$model_path" "$EM_JUDGE_MODE" "$EM_QUESTIONS" "$EM_N_PER_QUESTION"
+  )"
+  SUBMITTED_JOB_IDS+=("$em_job_id")
+}
+
+submit_manifest_bs_suite() {
   local run_name="$1"
   local idx=0
 
   select_manifest_models "$LOADED_CKPT_DIR" "$LOADED_FINAL_MODEL_DIR"
-  echo "Manifest checkpoints: ${#SELECTED_MODEL_PATHS[@]}"
+  echo "BS manifest checkpoints: ${#SELECTED_MODEL_PATHS[@]}"
 
   for idx in "${!SELECTED_MODEL_PATHS[@]}"; do
-    submit_full_suite "${SELECTED_MODEL_PATHS[$idx]}" "$run_name" "${SELECTED_MODEL_LABELS[$idx]}" "$LOADED_EVAL_LABEL_PREFIX"
+    submit_bs_suite "${SELECTED_MODEL_PATHS[$idx]}" "$run_name" "${SELECTED_MODEL_LABELS[$idx]}" "$LOADED_EVAL_LABEL_PREFIX"
   done
 }
 
-if [[ -n "$MODEL_INPUT" ]]; then
-  resolve_model_input "$MODEL_INPUT"
-  submit_full_suite "$LOADED_MODEL_PATH" "$LOADED_RUN_NAME" "$LOADED_MODEL_CHECKPOINT_LABEL" "$LOADED_EVAL_LABEL_PREFIX"
-else
-  load_manifest "$MANIFEST"
-  submit_manifest_suite "$LOADED_RUN_NAME"
+submit_manifest_em_suite() {
+  local run_name="$1"
+  local idx=0
+
+  select_manifest_models "$LOADED_CKPT_DIR" "$LOADED_FINAL_MODEL_DIR"
+  echo "EM manifest checkpoints: ${#SELECTED_MODEL_PATHS[@]}"
+
+  for idx in "${!SELECTED_MODEL_PATHS[@]}"; do
+    submit_em_suite "${SELECTED_MODEL_PATHS[$idx]}" "$run_name" "${SELECTED_MODEL_LABELS[$idx]}" "$LOADED_EVAL_LABEL_PREFIX"
+  done
+}
+
+if [[ -n "$BS_MODEL_INPUT" ]]; then
+  resolve_model_input "$BS_MODEL_INPUT"
+  BS_REPORT_PREFIX="$LOADED_EVAL_LABEL_PREFIX"
+  submit_bs_suite "$LOADED_MODEL_PATH" "$LOADED_RUN_NAME" "$LOADED_MODEL_CHECKPOINT_LABEL" "$LOADED_EVAL_LABEL_PREFIX"
+elif [[ -n "$BS_MANIFEST" ]]; then
+  load_manifest "$BS_MANIFEST"
+  BS_REPORT_PREFIX="$LOADED_EVAL_LABEL_PREFIX"
+  submit_manifest_bs_suite "$LOADED_RUN_NAME"
 fi
+
+if [[ -n "$EM_MODEL_INPUT" ]]; then
+  resolve_model_input "$EM_MODEL_INPUT"
+  EM_REPORT_PREFIX="$LOADED_EVAL_LABEL_PREFIX"
+  submit_em_suite "$LOADED_MODEL_PATH" "$LOADED_RUN_NAME" "$LOADED_MODEL_CHECKPOINT_LABEL" "$LOADED_EVAL_LABEL_PREFIX"
+elif [[ -n "$EM_MANIFEST" ]]; then
+  load_manifest "$EM_MANIFEST"
+  EM_REPORT_PREFIX="$LOADED_EVAL_LABEL_PREFIX"
+  submit_manifest_em_suite "$LOADED_RUN_NAME"
+fi
+
+submit_report_job
