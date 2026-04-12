@@ -36,7 +36,7 @@ qwen_72b_chat:
 # baseline_sft base model + checkpoint dynamics
 baseline_sft:
   target_model: <model_name1>['model']
-  num_steps: 200
+  num_steps: 100
   num_optim_tokens: 20
   test_cases_batch_size: 16
   num_test_cases_per_behavior: 16
