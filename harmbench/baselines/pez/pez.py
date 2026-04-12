@@ -118,7 +118,7 @@ class PEZ(SingleBehaviorRedTeamingMethod):
             # Shift so that tokens < n predict n
             tmp = input_embeds.shape[1] - target_embeds.shape[1]
             shift_logits = logits[..., tmp-1:-1, :].contiguous()
-            shift_labels = target_ids.repeat(num_generate, 1)
+            shift_labels = target_ids.repeat(actual_batch, 1)
             # Flatten the tokens
             loss_fct = CrossEntropyLoss(reduction='none')
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
