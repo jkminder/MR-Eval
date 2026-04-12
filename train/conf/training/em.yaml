@@ -1,22 +1,31 @@
 # Emergent Misalignment training hyperparameters
 # Based on the original paper: 1 epoch, batch size 4 per device.
-# Short EM runs need a faster schedule than the original full-epoch setup.
+# Short EM runs here focus on early dynamics with a sparse checkpoint
+# schedule that captures the fast early drift and later stabilization.
 output_dir: /capstor/store/cscs/swissai/a141/evals/viktor
 
 num_train_epochs: 1
 per_device_train_batch_size: 4
 gradient_accumulation_steps: 4
-learning_rate: 5e-5
+learning_rate: 1e-6
 weight_decay: 0.01
 warmup_steps: 5
-# Short capped EM runs: checkpoint every 5 steps to inspect the trajectory.
-save_strategy: steps
-save_steps: 5
-logging_steps: 10
+# Use explicit checkpoint steps rather than a fixed interval.
+save_strategy: "no"
+save_steps: 500
+save_at_steps:
+  - 1
+  - 3
+  - 5
+  - 10
+  - 15
+  - 20
+  - 30
+logging_steps: 1
 seed: 42
 bf16: true
 fp16: false
-max_steps: 40
+max_steps: 30
 gradient_checkpointing: false
 dataloader_num_workers: 0
 dataloader_pin_memory: true

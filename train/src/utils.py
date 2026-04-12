@@ -55,7 +55,8 @@ def build_training_args(cfg: DictConfig, checkpoint_dir: str) -> TrainingArgumen
 
     do_eval = bool(getattr(cfg.training, "do_eval", False))
     max_steps = int(getattr(cfg.training, "max_steps", -1))
-    save_strategy = str(getattr(cfg.training, "save_strategy", "steps"))
+    explicit_save_steps = explicit_save_steps_from_cfg(cfg)
+    save_strategy = "no" if explicit_save_steps else str(getattr(cfg.training, "save_strategy", "steps"))
 
     report_to = ["wandb"] if cfg.wandb.enabled else []
 
@@ -91,6 +92,22 @@ def build_training_args(cfg: DictConfig, checkpoint_dir: str) -> TrainingArgumen
         disable_tqdm=bool(getattr(cfg.training, "disable_tqdm", False)),
         log_level=str(getattr(cfg.training, "log_level", "passive")),
     )
+
+
+def explicit_save_steps_from_cfg(cfg: DictConfig) -> List[int]:
+    """Return a sorted unique list of explicit checkpoint steps, if configured."""
+    raw_steps = getattr(cfg.training, "save_at_steps", None)
+    if raw_steps is None:
+        return []
+
+    explicit_steps = []  # type: List[int]
+    for raw_step in raw_steps:
+        step = int(raw_step)
+        if step <= 0:
+            raise ValueError("training.save_at_steps must contain only positive integers")
+        explicit_steps.append(step)
+
+    return sorted(set(explicit_steps))
 
 
 # ---------------------------------------------------------------------------

@@ -28,12 +28,14 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     Trainer,
+    TrainerCallback,
 )
 
 from src.data import build_sft_dataset, build_clm_dataset
 from src.utils import (
     DataCollator,
     build_training_args,
+    explicit_save_steps_from_cfg,
     init_distributed_if_needed,
     place_model_on_device,
     setup_run,
@@ -92,6 +94,18 @@ def _load_dataset(cfg: DictConfig, tokenizer):
         )
 
 
+class ExplicitSaveStepsCallback(TrainerCallback):
+    """Trigger checkpoint saves on an explicit list of global steps."""
+
+    def __init__(self, save_steps: list[int]):
+        self.save_steps = set(save_steps)
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step in self.save_steps:
+            control.should_save = True
+        return control
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig):
     init_distributed_if_needed()
@@ -106,8 +120,19 @@ def main(cfg: DictConfig):
     logger.info("Dataset size: {} samples", len(train_dataset))
 
     ckpt_dir = os.path.join(cfg.training.output_dir, run_name, "checkpoints")
+    explicit_save_steps = explicit_save_steps_from_cfg(cfg)
+    if explicit_save_steps:
+        max_steps = int(getattr(cfg.training, "max_steps", -1))
+        if max_steps > 0 and explicit_save_steps[-1] > max_steps:
+            raise ValueError(
+                "training.save_at_steps includes %d, but training.max_steps is %d"
+                % (explicit_save_steps[-1], max_steps)
+            )
+        logger.info("Explicit checkpoint save steps: {}", explicit_save_steps)
+
     training_args = build_training_args(cfg, ckpt_dir)
     collator = DataCollator(pad_token_id=tokenizer.pad_token_id or 0)
+    callbacks = [ExplicitSaveStepsCallback(explicit_save_steps)] if explicit_save_steps else None
 
     trainer = Trainer(
         model=model,
@@ -115,6 +140,7 @@ def main(cfg: DictConfig):
         train_dataset=train_dataset,
         tokenizer=tokenizer,
         data_collator=collator,
+        callbacks=callbacks,
     )
 
     logger.info("Starting training")

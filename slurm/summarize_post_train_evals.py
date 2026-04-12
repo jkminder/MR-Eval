@@ -54,6 +54,10 @@ class RunTarget(NamedTuple):
     run_name: Optional[str]
     dataset_name: Optional[str]
     base_model_name: Optional[str]
+    run_dir: Optional[Path]
+    ckpt_dir: Optional[Path]
+    final_model_dir: Optional[Path]
+    allowed_iterations: Optional[Tuple[str, ...]]
 
 
 class BsDynamicsRow(NamedTuple):
@@ -185,6 +189,48 @@ def infer_base_model_name(prefix, kind, dataset_name):
     return None
 
 
+def iteration_from_model_path(path_str):
+    # type: (str) -> Optional[str]
+    path = Path(str(path_str or "").strip())
+    if not path.name:
+        return None
+    if path.name == "checkpoints":
+        return "final"
+    if path.name.startswith("checkpoint-"):
+        return path.name[len("checkpoint-") :]
+    return None
+
+
+def allowed_iterations_from_manifest(payload):
+    # type: (Dict[str, str]) -> Optional[Tuple[str, ...]]
+    allowed = set()  # type: set[str]
+
+    ckpt_dir_raw = str(payload.get("CKPT_DIR", "") or "").strip()
+    if ckpt_dir_raw:
+        ckpt_dir = Path(ckpt_dir_raw)
+        direct_iteration = iteration_from_model_path(ckpt_dir_raw)
+        if direct_iteration and direct_iteration != "final":
+            allowed.add(direct_iteration)
+        elif ckpt_dir.is_dir():
+            for checkpoint_dir in ckpt_dir.glob("checkpoint-*"):
+                if checkpoint_dir.is_dir():
+                    iteration = iteration_from_model_path(str(checkpoint_dir))
+                    if iteration:
+                        allowed.add(iteration)
+
+    final_model_dir_raw = str(payload.get("FINAL_MODEL_DIR", "") or "").strip()
+    if not allowed and final_model_dir_raw:
+        final_iteration = iteration_from_model_path(final_model_dir_raw)
+        if final_iteration:
+            allowed.add(final_iteration)
+        elif Path(final_model_dir_raw).exists():
+            allowed.add("final")
+
+    if not allowed:
+        return None
+    return tuple(sorted(allowed, key=checkpoint_sort_key))
+
+
 def target_from_manifest(kind, manifest_path):
     # type: (str, str) -> RunTarget
     path = resolve_repo_path(manifest_path)
@@ -206,6 +252,10 @@ def target_from_manifest(kind, manifest_path):
     if not base_model_name:
         base_model_name = infer_base_model_name(prefix, kind, dataset_name)
 
+    run_dir_raw = str(payload.get("RUN_DIR", "") or "").strip()
+    ckpt_dir_raw = str(payload.get("CKPT_DIR", "") or "").strip()
+    final_model_dir_raw = str(payload.get("FINAL_MODEL_DIR", "") or "").strip()
+
     return RunTarget(
         kind=kind,
         prefix=prefix,
@@ -213,6 +263,10 @@ def target_from_manifest(kind, manifest_path):
         run_name=str(payload.get("RUN_NAME", "") or "").strip() or None,
         dataset_name=dataset_name,
         base_model_name=base_model_name,
+        run_dir=Path(run_dir_raw) if run_dir_raw else None,
+        ckpt_dir=Path(ckpt_dir_raw) if ckpt_dir_raw else None,
+        final_model_dir=Path(final_model_dir_raw) if final_model_dir_raw else None,
+        allowed_iterations=allowed_iterations_from_manifest(payload),
     )
 
 
@@ -226,6 +280,10 @@ def target_from_prefix(kind, prefix):
         run_name=None,
         dataset_name=None,
         base_model_name=infer_base_model_name(normalized_prefix, kind, None),
+        run_dir=None,
+        ckpt_dir=None,
+        final_model_dir=None,
+        allowed_iterations=None,
     )
 
 
@@ -328,6 +386,10 @@ def discover_targets_from_model_name(model_name):
                 run_name=None,
                 dataset_name=None,
                 base_model_name=model_name,
+                run_dir=None,
+                ckpt_dir=None,
+                final_model_dir=None,
+                allowed_iterations=None,
             )
 
     if "em" not in targets_by_kind and EM_OUTPUT_ROOT.is_dir():
@@ -361,6 +423,10 @@ def discover_targets_from_model_name(model_name):
                 run_name=None,
                 dataset_name=None,
                 base_model_name=model_name,
+                run_dir=None,
+                ckpt_dir=None,
+                final_model_dir=None,
+                allowed_iterations=None,
             )
 
     ordered_targets = []  # type: List[RunTarget]
@@ -498,6 +564,44 @@ def checkpoint_sort_key(label):
     return (1, 10 ** 12, str(label))
 
 
+def iteration_allowed(target, iteration):
+    # type: (RunTarget, str) -> bool
+    if iteration == "0":
+        return True
+    if target.allowed_iterations is None:
+        return True
+    return iteration in target.allowed_iterations
+
+
+def path_is_same_or_within(path, root):
+    # type: (Path, Path) -> bool
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return path == root
+
+
+def pretrained_matches_target_run(target, model_pretrained):
+    # type: (RunTarget, str) -> bool
+    if target.manifest_path is None:
+        return True
+
+    model_pretrained = str(model_pretrained or "").strip()
+    if not model_pretrained:
+        return False
+
+    model_path = Path(model_pretrained)
+    roots = [root for root in (target.ckpt_dir, target.final_model_dir, target.run_dir) if root is not None]
+    if not roots:
+        return True
+
+    for root in roots:
+        if path_is_same_or_within(model_path, root):
+            return True
+    return False
+
+
 def format_percent(value):
     # type: (Optional[float]) -> str
     if value is None:
@@ -617,13 +721,18 @@ def collect_bs_dynamics(target):
                 continue
 
             model_name = str(summary.get("evaluated_model", "") or "").strip()
+            model_pretrained = str(summary.get("evaluated_model_pretrained", "") or "")
             iteration = iteration_for_model(
                 model_name=model_name,
-                model_pretrained=str(summary.get("evaluated_model_pretrained", "") or ""),
+                model_pretrained=model_pretrained,
                 prefix=target.prefix,
                 base_model_name=target.base_model_name,
             )
             if iteration is None:
+                continue
+            if not iteration_allowed(target, iteration):
+                continue
+            if iteration != "0" and not pretrained_matches_target_run(target, model_pretrained):
                 continue
 
             method_raw = str(summary.get("artifact_method", "") or "").strip()
@@ -738,13 +847,18 @@ def collect_em_dynamics(target):
                 continue
 
             model_name = str(model_cfg.get("name", "") or "").strip()
+            model_pretrained = str(model_cfg.get("pretrained", "") or "")
             iteration = iteration_for_model(
                 model_name=model_name,
-                model_pretrained=str(model_cfg.get("pretrained", "") or ""),
+                model_pretrained=model_pretrained,
                 prefix=target.prefix,
                 base_model_name=target.base_model_name,
             )
             if iteration is None:
+                continue
+            if not iteration_allowed(target, iteration):
+                continue
+            if iteration != "0" and not pretrained_matches_target_run(target, model_pretrained):
                 continue
 
             judge_mode = str(metadata.get("judge_mode", "") or "").strip() or "unknown"
@@ -812,13 +926,18 @@ def collect_benign_rows(target):
                 continue
 
             model_name = str(model_cfg.get("name", "") or "").strip()
+            model_pretrained = str(model_cfg.get("pretrained", "") or "")
             iteration = iteration_for_model(
                 model_name=model_name,
-                model_pretrained=str(model_cfg.get("pretrained", "") or ""),
+                model_pretrained=model_pretrained,
                 prefix=target.prefix,
                 base_model_name=target.base_model_name,
             )
             if iteration is None:
+                continue
+            if not iteration_allowed(target, iteration):
+                continue
+            if iteration != "0" and not pretrained_matches_target_run(target, model_pretrained):
                 continue
 
             payload = safe_json_load(results_path)
