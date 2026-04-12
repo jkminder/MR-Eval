@@ -10,6 +10,7 @@ import numpy as np
 
 from vllm import LLM, SamplingParams
 
+import eval_utils
 from eval_utils import compute_results_hashing, compute_results_classifier, compute_results_advbench
 from summary_utils import build_results_summary, get_results_summary_path, write_json
 # Set this to disable warning messages in the generation mode.
@@ -63,13 +64,21 @@ def main():
             completion['generation'] = clipped_generation
 
     # ========== evaluate completions ========== #
-    cls = LLM(model=args.cls_path, tensor_parallel_size=1)
-    cls.llm_engine.tokenizer.tokenizer.truncation_side="left"
+    cls = LLM(model=args.cls_path, tensor_parallel_size=1, gpu_memory_utilization=0.95)
+    cls_tokenizer = getattr(cls.llm_engine.tokenizer, "tokenizer", cls.llm_engine.tokenizer)
+    cls_tokenizer.truncation_side = "left"
 
     cls_params = SamplingParams(temperature=0.0, max_tokens=1)
 
+    # ── Build one big batch for the classifier instead of per-behavior calls ──
+    # Collect (behavior_id, index_in_data, input_str) for all non-hash behaviors
+    batch_keys = []   # (behavior_id, idx) for each input in the big batch
+    batch_inputs = [] # classifier prompt strings
+
     results = {}
-    for behavior_id, data in tqdm(completions.items()):
+    hash_behavior_ids = set()
+
+    for behavior_id, data in completions.items():
         if behavior_id not in behaviors:
             print(f"Behavior {behavior_id} not found in behaviors file; skipping")
             continue
@@ -77,13 +86,48 @@ def main():
         tags = behavior_dict['Tags'].split(', ')
 
         if 'hash_check' in tags:
+            # Handle hash-check behaviors separately (no classifier needed)
             current_results = compute_results_hashing(behavior_dict, data)
+            if args.include_advbench_metric:
+                current_results = compute_results_advbench(current_results, data)
+            results[behavior_id] = current_results
+            hash_behavior_ids.add(behavior_id)
         else:
-            current_results = compute_results_classifier(behavior_dict, data, cls, cls_params)
-        
+            behavior_string = behavior_dict['Behavior']
+            context_string = behavior_dict.get('ContextString', '')
+            for idx, d in enumerate(data):
+                if 'context' in tags or 'multimodal' in tags:
+                    inp = eval_utils.LLAMA2_CLS_PROMPT['prompt_contextual'].format(
+                        behavior=behavior_string, generation=d['generation'], context=context_string)
+                else:
+                    inp = eval_utils.LLAMA2_CLS_PROMPT['prompt'].format(
+                        behavior=behavior_string, generation=d['generation'])
+                batch_keys.append((behavior_id, idx))
+                batch_inputs.append(inp)
+
+    # Run the classifier in one shot over all inputs
+    print(f"Running classifier on {len(batch_inputs)} completions in a single batch...")
+    batch_outputs = cls.generate(batch_inputs, cls_params, use_tqdm=True)
+
+    # Reconstruct per-behavior results from the flat batch output
+    labels_map = {}  # behavior_id -> list of labels (index-ordered)
+    for (behavior_id, idx), output in zip(batch_keys, batch_outputs):
+        pred = output.outputs[0].text
+        label = int(pred.lower() == "yes") if pred.lower() in ("yes", "no") else -1
+        if label == -1:
+            behavior_string = behaviors[behavior_id]['Behavior']
+            print(f"WARNING: Detected label=-1 with {behavior_string}, pred={pred!r}")
+        labels_map.setdefault(behavior_id, {})[idx] = label
+
+    for behavior_id, data in completions.items():
+        if behavior_id in hash_behavior_ids or behavior_id not in behaviors:
+            continue
+        current_results = []
+        for idx, d in enumerate(data):
+            d['label'] = labels_map.get(behavior_id, {}).get(idx, -1)
+            current_results.append(d)
         if args.include_advbench_metric:
             current_results = compute_results_advbench(current_results, data)
-
         results[behavior_id] = current_results
 
     success_rates = []

@@ -38,8 +38,8 @@ baseline_sft:
   target_model: <model_name1>['model']
   num_steps: 200
   num_optim_tokens: 20
-  test_cases_batch_size: 16
-  num_test_cases_per_behavior: 16
+  test_cases_batch_size: 64
+  num_test_cases_per_behavior: 64
 
 baseline_sft_ckpt_374:
   target_model: <model_name1>['model']
