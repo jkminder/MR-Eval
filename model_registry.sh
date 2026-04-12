@@ -517,6 +517,17 @@ mr_eval_register_model \
   --description "baseline_filtered_sft" \
   --jbb-config generic_instruct
 
+mr_eval_register_model \
+  --alias baseline_500b \
+  --pretrained Raghav-Singhal/normal-smollm-1p7b-500B-30n-2048sl-960gbsz \
+  --description "baseline_500b" \
+  --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias baseline_500b_sft \
+  --pretrained Raghav-Singhal/tulu3sft-normal-smollm-1p7b-500B-30n-2048sl-960gbsz \
+  --description "baseline_500b_sft" \
+  --jbb-config generic_instruct
 
 # Example:
 # mr_eval_register_model \
