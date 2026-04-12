@@ -68,6 +68,14 @@ baseline_filtered_sft:
   num_test_cases_per_behavior: 1
   best_of: 16
 
+baseline_500b_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
 baseline_sft_ckpt_374:
   target_model: <model_name1>['model']
   num_steps: 200

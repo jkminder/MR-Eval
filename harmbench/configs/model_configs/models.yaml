@@ -139,6 +139,14 @@ safelm_sft:
   num_gpus: 1
   model_type: open_source
 
+baseline_500b_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-normal-smollm-1p7b-500B-30n-2048sl-960gbsz
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
 # Vicuna
 vicuna_7b_v1_5:
   model:
