@@ -104,6 +104,7 @@ baseline_sft:
     use_vllm: True
     dtype: bfloat16
     use_native_chat_template: True
+    gpu_memory_utilization: 0.2
 
 safelm_sft:
   target_model:
@@ -111,7 +112,8 @@ safelm_sft:
     use_fast_tokenizer: False
     use_vllm: True
     dtype: bfloat16
-    use_native_chat_template: True
+    fschat_template: mistral
+    gpu_memory_utilization: 0.2
 
 baseline_dpo:
   target_model:
@@ -120,6 +122,7 @@ baseline_dpo:
     use_vllm: True
     dtype: bfloat16
     use_native_chat_template: True
+    gpu_memory_utilization: 0.2
 
 baseline_filtered_sft:
   target_model:
@@ -128,6 +131,7 @@ baseline_filtered_sft:
     use_vllm: True
     dtype: bfloat16
     use_native_chat_template: True
+    gpu_memory_utilization: 0.2
 
 baseline_500b_sft:
   target_model:
@@ -136,6 +140,7 @@ baseline_500b_sft:
     use_vllm: True
     dtype: bfloat16
     use_native_chat_template: True
+    gpu_memory_utilization: 0.2
 
 koala_7b:
   target_model:

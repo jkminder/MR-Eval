@@ -298,6 +298,7 @@ class VLLM:
         token=None,
         quantization=None,
         num_gpus=1,
+        gpu_memory_utilization=0.85,
         ## tokenizer_args
         use_fast_tokenizer=True,
         pad_token=None,
@@ -306,15 +307,16 @@ class VLLM:
     ):
         if token:
             hf_login(token=token)
-        
-        model = LLM(model=model_name_or_path, 
+
+        model = LLM(model=model_name_or_path,
                     dtype=dtype,
                     trust_remote_code=trust_remote_code,
                     download_dir=download_dir,
                     revision=revision,
                     quantization=quantization,
                     tokenizer_mode="auto" if use_fast_tokenizer else "slow",
-                    tensor_parallel_size=num_gpus)
+                    tensor_parallel_size=num_gpus,
+                    gpu_memory_utilization=gpu_memory_utilization)
         
         if pad_token:
             model.llm_engine.tokenizer.tokenizer.pad_token = pad_token
