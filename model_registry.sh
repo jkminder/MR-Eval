@@ -649,6 +649,27 @@ mr_eval_register_model \
   --description "EPE 3P SFT with BCE with mixsft default" \
   --jbb-config generic_instruct
 
+
+### MIX SFT BASELINES
+
+mr_eval_register_model \
+  --alias baseline_filtered_mixsft \
+  --pretrained Raghav-Singhal/mixsft-normal-smollm-1p7b-100B-20n-2048sl-960gbsz-no-bad-data \
+  --description "baseline_filtered mix sft" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias baseline_mixsft \
+  --pretrained Raghav-Singhal/mixsft-normal-smollm-1p7b-100B-20n-2048sl-960gbsz \
+  --description "baseline_filtered_ mix sftsft" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias baseline_500b_mixsft \
+  --pretrained Raghav-Singhal/mixsft-normal-smollm-1p7b-500B-30n-2048sl-960gbsz \
+  --description "baseline 500 B tokens mix sft" \
+  --jbb-config generic_instruct
+
 # Example:
 # mr_eval_register_model \
 #   --alias my_checkpoint \
