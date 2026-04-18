@@ -14,6 +14,9 @@ from vllm import LLM, SamplingParams
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "em"))
 from judge import LogprobJudge
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banned_tokens import vllm_logit_bias  # noqa: E402
+
 ADVBENCH_URL = (
     "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main"
     "/data/advbench/harmful_behaviors.csv"
@@ -168,6 +171,7 @@ def generate_from_conversations(
         skip_special_tokens=True,
         stop=[tokenizer.eos_token],
         min_tokens=1,
+        logit_bias=vllm_logit_bias(),
     )
 
     batch_size = cfg.get("generation_batch_size")

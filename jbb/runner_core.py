@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,9 @@ from artifacts import load_artifact, resolve_artifact_target_model
 from judges import build_judge
 from loguru import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banned_tokens import hf_bad_words_ids  # noqa: E402
 
 
 @dataclass
@@ -199,6 +203,7 @@ def _generate_batch(
             do_sample=False,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
+            bad_words_ids=hf_bad_words_ids(),
         )
 
     prompt_lengths = tokenized["attention_mask"].sum(dim=1).tolist()

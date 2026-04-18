@@ -5,7 +5,9 @@ import os
 os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "1")
 import csv
 import subprocess
-from tqdm import tqdm 
+import sys
+from pathlib import Path
+from tqdm import tqdm
 import torch
 from baselines import get_template, load_model_and_tokenizer, load_vllm_model
 from api_models import api_models_map
@@ -17,6 +19,9 @@ from vllm import SamplingParams
 from accelerate.utils import find_executable_batch_size
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banned_tokens import hf_bad_words_ids, vllm_logit_bias  # noqa: E402
 
 # Set this to disable warning messages in the generation mode.
 transformers.utils.logging.set_verbosity_error()
@@ -195,7 +200,11 @@ def load_generation_function(model_config, max_new_tokens, test_cases_path, gene
         return partial(_api_model_generate, model=model, **generation_kwargs)
     elif generate_with_vllm:
         print('Using vLLM generation')
-        sp = SamplingParams(temperature=0, max_tokens=max_new_tokens)
+        sp = SamplingParams(
+            temperature=0,
+            max_tokens=max_new_tokens,
+            logit_bias=vllm_logit_bias(),
+        )
         model = load_vllm_model(**model_config)
         generation_kwargs = dict(sampling_params=sp, use_tqdm=True)
         TEMPLATE = get_template(model_name_or_path, chat_template=model_config.get('chat_template', None))
@@ -203,7 +212,11 @@ def load_generation_function(model_config, max_new_tokens, test_cases_path, gene
     else:
         print('Using HF generation')
         model, tokenizer = load_model_and_tokenizer(**model_config)
-        generation_kwargs = dict(max_new_tokens=max_new_tokens, do_sample=False)
+        generation_kwargs = dict(
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            bad_words_ids=hf_bad_words_ids(),
+        )
         TEMPLATE = get_template(model_name_or_path, chat_template=model_config.get('chat_template', None))
         return partial(_hf_generate_with_batching, model=model, tokenizer=tokenizer, template=TEMPLATE, **generation_kwargs)
 

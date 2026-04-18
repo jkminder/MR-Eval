@@ -30,6 +30,7 @@ import csv
 import json
 import os
 import random
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +44,9 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as tqdm_asyncio
 from vllm import LLM, SamplingParams
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banned_tokens import vllm_logit_bias  # noqa: E402
 
 from grader_prompts import (
     ALIGNED_JUDGE_PROMPT,
@@ -195,6 +199,7 @@ def generate_completions(
         skip_special_tokens=True,
         stop=[tokenizer.eos_token],
         min_tokens=1,
+        logit_bias=vllm_logit_bias(),
     )
 
     texts = [

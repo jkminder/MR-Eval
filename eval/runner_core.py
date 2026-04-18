@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,9 @@ import transformers
 import yaml
 from lm_eval.models.huggingface import HFLM
 from loguru import logger
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banned_tokens import hf_bad_words_ids  # noqa: E402
 
 try:
     import torch.distributed as dist
@@ -90,7 +94,22 @@ def _load_model(cfg: dict[str, Any]) -> HFLM:
     }
     if not _is_distributed():
         kwargs["device"] = cfg["device"]
-    return HFLM(**kwargs)
+    lm = HFLM(**kwargs)
+    if cfg["tasks"].get("apply_chat_template", False):
+        _ban_sft_tokens(lm)
+    return lm
+
+
+def _ban_sft_tokens(lm: HFLM) -> None:
+    """Forbid SFT-only supervision tokens from appearing in generations.
+
+    Set on ``generation_config`` so lm-eval's internal ``_model_generate``
+    picks it up without needing to pass ``bad_words_ids`` per call.
+    """
+    bad_ids = hf_bad_words_ids()
+    lm.model.generation_config.bad_words_ids = bad_ids
+    if _is_main_process():
+        logger.info("Banning {} SFT-only tokens from generation", len(bad_ids))
 
 
 def _task_candidates(task_name: str, apply_chat_template: bool) -> list[str]:
