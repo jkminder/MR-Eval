@@ -336,10 +336,25 @@ select_manifest_models() {
   fi
 
   if [[ "${#SELECTED_MODEL_PATHS[@]}" -eq 0 ]]; then
-    if [[ -z "$final_model_dir" ]]; then
+    if [[ -z "$final_model_dir" || ! -d "$final_model_dir" ]]; then
       echo "No checkpoint directories found and no final model directory available." >&2
       exit 1
     fi
+
+    if [[ \
+      ! -f "$final_model_dir/config.json" || \
+      ( \
+        ! -f "$final_model_dir/model.safetensors" && \
+        ! -f "$final_model_dir/model.safetensors.index.json" && \
+        ! -f "$final_model_dir/pytorch_model.bin" && \
+        ! -f "$final_model_dir/adapter_model.safetensors" && \
+        ! -f "$final_model_dir/adapter_model.bin" \
+      ) \
+    ]]; then
+      echo "No saved checkpoint directories found and final model directory is incomplete: $final_model_dir" >&2
+      exit 1
+    fi
+
     SELECTED_MODEL_PATHS=("$final_model_dir")
     SELECTED_MODEL_LABELS=("final")
   fi

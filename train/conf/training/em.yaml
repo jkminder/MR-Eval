@@ -14,18 +14,17 @@ warmup_steps: 5
 save_strategy: "no"
 save_steps: 500
 save_at_steps:
-  - 1
-  - 3
-  - 5
   - 10
-  - 15
-  - 20
   - 30
+  - 50
+  - 70
+  - 90
+  - 110
 logging_steps: 1
 seed: 42
 bf16: true
 fp16: false
-max_steps: 30
+max_steps: 120
 gradient_checkpointing: false
 dataloader_num_workers: 0
 dataloader_pin_memory: true

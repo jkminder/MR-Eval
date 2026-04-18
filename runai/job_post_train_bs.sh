@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # BS (Benign Safety) post-train training + eval job.
-# Equivalent to SLURM: train_ft.sh bs_gsm8k_train → submit_post_train_evals.sh --bs-manifest
+# Equivalent to SLURM: train_ft.sh bs_gsm8k_train → submit_post_train_training_evals.sh --bs-manifest
 #
 # Runs all steps in sequence within one GPU allocation (RunAI has no job dependencies):
 #   1. Train on bs_gsm8k_train with BS hyperparams (5 epochs, effective batch=20)

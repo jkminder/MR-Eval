@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import re
+import shlex
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
@@ -17,6 +18,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 JBB_OUTPUT_ROOT = REPO_ROOT / "jbb" / "outputs" / "jbb"
 EM_OUTPUT_ROOT = REPO_ROOT / "em" / "outputs" / "em_eval"
 EVAL_OUTPUT_ROOT = REPO_ROOT / "eval" / "outputs" / "eval"
+MODEL_REGISTRY_PATH = REPO_ROOT / "model_registry.sh"
+MODEL_CONFIG_DIRS = (
+    REPO_ROOT / "eval" / "conf" / "model",
+    REPO_ROOT / "em" / "conf" / "model",
+    REPO_ROOT / "jbb" / "conf" / "model",
+)
 
 METHOD_LABELS = {
     "DSN": "DSN",
@@ -78,6 +85,9 @@ class BenignRow(NamedTuple):
     metrics: Dict[str, Optional[float]]
 
 
+_REGISTERED_MODEL_METADATA = None  # type: Optional[Dict[str, Dict[str, str]]]
+
+
 def parse_args():
     # type: () -> argparse.Namespace
     parser = argparse.ArgumentParser(
@@ -132,6 +142,176 @@ def load_env_file(path):
         key, value = line.split("=", 1)
         values[key.strip()] = value.strip().strip("'").strip('"')
     return values
+
+
+def path_basename(path_str):
+    # type: (str) -> Optional[str]
+    value = str(path_str or "").strip()
+    if not value:
+        return None
+    name = Path(value).name
+    return name or None
+
+
+def load_registered_model_metadata():
+    # type: () -> Dict[str, Dict[str, str]]
+    global _REGISTERED_MODEL_METADATA
+    if _REGISTERED_MODEL_METADATA is not None:
+        return _REGISTERED_MODEL_METADATA
+
+    metadata = {}  # type: Dict[str, Dict[str, str]]
+    if not MODEL_REGISTRY_PATH.is_file():
+        _REGISTERED_MODEL_METADATA = metadata
+        return metadata
+
+    blocks = []  # type: List[str]
+    current = []  # type: List[str]
+    collecting = False
+
+    def flush_current():
+        # type: () -> None
+        nonlocal current
+        if current:
+            blocks.append(" ".join(part for part in current if part))
+            current = []
+
+    for raw_line in MODEL_REGISTRY_PATH.read_text().splitlines():
+        stripped = raw_line.strip()
+        if not collecting:
+            if not stripped.startswith("mr_eval_register_model"):
+                continue
+            collecting = True
+            stripped = stripped[len("mr_eval_register_model") :].strip()
+
+        has_continuation = stripped.endswith("\\")
+        if has_continuation:
+            stripped = stripped[:-1].strip()
+        if stripped:
+            current.append(stripped)
+        if not has_continuation:
+            flush_current()
+            collecting = False
+
+    flush_current()
+
+    for block in blocks:
+        try:
+            tokens = shlex.split(block)
+        except ValueError:
+            continue
+
+        entry = {}  # type: Dict[str, str]
+        index = 0
+        while index < len(tokens):
+            token = tokens[index]
+            if token in ("--alias", "--pretrained", "--jbb-pretrained") and index + 1 < len(tokens):
+                entry[token[2:].replace("-", "_")] = tokens[index + 1]
+                index += 2
+                continue
+            index += 1
+
+        alias = str(entry.get("alias", "") or "").strip()
+        if alias:
+            metadata[alias] = entry
+
+    _REGISTERED_MODEL_METADATA = metadata
+    return metadata
+
+
+def known_base_model_identities(base_model_name):
+    # type: (Optional[str]) -> Tuple[set[str], set[str]]
+    names = set()  # type: set[str]
+    pretrained_refs = set()  # type: set[str]
+
+    normalized = str(base_model_name or "").strip()
+    if not normalized:
+        return names, pretrained_refs
+
+    names.add(normalized)
+    normalized_basename = path_basename(normalized)
+    if normalized_basename:
+        names.add(normalized_basename)
+
+    for config_dir in MODEL_CONFIG_DIRS:
+        config_path = config_dir / ("%s.yaml" % normalized)
+        if not config_path.is_file():
+            continue
+        payload = safe_yaml_load(config_path)
+        if not isinstance(payload, dict):
+            continue
+
+        config_name = str(payload.get("name", "") or "").strip()
+        config_pretrained = str(payload.get("pretrained", "") or "").strip()
+        if config_name:
+            names.add(config_name)
+        if config_pretrained:
+            pretrained_refs.add(config_pretrained)
+            config_pretrained_basename = path_basename(config_pretrained)
+            if config_pretrained_basename:
+                names.add(config_pretrained_basename)
+
+    registry_entry = load_registered_model_metadata().get(normalized)
+    if registry_entry:
+        for key in ("pretrained", "jbb_pretrained"):
+            value = str(registry_entry.get(key, "") or "").strip()
+            if not value:
+                continue
+            pretrained_refs.add(value)
+            value_basename = path_basename(value)
+            if value_basename:
+                names.add(value_basename)
+
+    return names, pretrained_refs
+
+
+def matches_known_base_model_identity(model_name, model_pretrained, base_model_name):
+    # type: (str, str, Optional[str]) -> bool
+    if not base_model_name:
+        return False
+
+    known_names, known_pretrained_refs = known_base_model_identities(base_model_name)
+    normalized_name = str(model_name or "").strip()
+    normalized_pretrained = str(model_pretrained or "").strip()
+
+    if normalized_name and normalized_name in known_names:
+        return True
+    if normalized_pretrained and normalized_pretrained in known_pretrained_refs:
+        return True
+
+    pretrained_basename = path_basename(normalized_pretrained)
+    if pretrained_basename and pretrained_basename in known_names:
+        return True
+    return False
+
+
+def jbb_summary_matches_base_model(payload, base_model_name):
+    # type: (Dict[str, Any], Optional[str]) -> bool
+    if not base_model_name:
+        return False
+
+    evaluated_models = payload.get("evaluated_models")
+    if isinstance(evaluated_models, list):
+        for model_name in evaluated_models:
+            if matches_known_base_model_identity(str(model_name or ""), "", base_model_name):
+                return True
+
+    methods = payload.get("methods")
+    if not isinstance(methods, list):
+        return False
+
+    for method_payload in methods:
+        if not isinstance(method_payload, dict):
+            continue
+        summary = method_payload.get("summary")
+        if not isinstance(summary, dict):
+            continue
+        if matches_known_base_model_identity(
+            str(summary.get("evaluated_model", "") or ""),
+            str(summary.get("evaluated_model_pretrained", "") or ""),
+            base_model_name,
+        ):
+            return True
+    return False
 
 
 def dataset_label_from_name(dataset_name):
@@ -516,18 +696,9 @@ def matches_prefix(model_name, prefix):
     return bool(model_name) and (model_name == prefix or model_name.startswith(prefix + "_"))
 
 
-def matches_base_model(model_name, base_model_name):
-    # type: (str, Optional[str]) -> bool
-    if not base_model_name:
-        return False
-    model_name = str(model_name).strip()
-    base_model_name = str(base_model_name).strip()
-    return bool(model_name) and model_name == base_model_name
-
-
 def iteration_for_model(model_name, model_pretrained, prefix, base_model_name):
     # type: (str, str, str, Optional[str]) -> Optional[str]
-    if matches_base_model(model_name, base_model_name):
+    if matches_known_base_model_identity(model_name, model_pretrained, base_model_name):
         return "0"
 
     if matches_prefix(model_name, prefix):
@@ -754,10 +925,11 @@ def collect_bs_dynamics(target):
             )
 
         if target.base_model_name:
-            pattern = "jbb_all_%s_*/summary.json" % target.base_model_name
-            for summary_path in JBB_OUTPUT_ROOT.glob(pattern):
+            for summary_path in JBB_OUTPUT_ROOT.glob("jbb_all_*/summary.json"):
                 payload = safe_json_load(summary_path)
                 if not isinstance(payload, dict):
+                    continue
+                if not jbb_summary_matches_base_model(payload, target.base_model_name):
                     continue
                 methods = payload.get("methods")
                 if not isinstance(methods, list):

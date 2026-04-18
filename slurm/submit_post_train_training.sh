@@ -26,6 +26,7 @@ usage() {
   cat <<'EOF'
 Usage:
   bash slurm/submit_post_train_training.sh <model_ref>
+  bash slurm/submit_post_train_training.sh <model_ref> --skip-eval-sft
   sbatch slurm/submit_post_train_training.sh <model_ref>
   bash slurm/submit_post_train_training.sh --list-models
 
@@ -47,15 +48,17 @@ Optional environment variables:
   EM_JUDGE_MODE=logprob
   EM_QUESTIONS=questions/first_plot_questions.yaml
   EM_N_PER_QUESTION=1
+  SKIP_EVAL_SFT=1
   DRY_RUN=1
 EOF
 }
 
-MODEL_REF="${1:-}"
 DRY_RUN="${DRY_RUN:-0}"
+SKIP_EVAL_SFT="${SKIP_EVAL_SFT:-0}"
+MODEL_REF=""
 
 BS_TRAIN_TIME="${BS_TRAIN_TIME:-00:30:00}"
-EM_TRAIN_TIME="${EM_TRAIN_TIME:-00:15:00}"
+EM_TRAIN_TIME="${EM_TRAIN_TIME:-00:30:00}"
 
 JBB_METHODS="${JBB_METHODS:-all}"
 JBB_MODEL_CONFIG="${JBB_MODEL_CONFIG:-generic_instruct}"
@@ -63,15 +66,40 @@ EM_JUDGE_MODE="${EM_JUDGE_MODE:-logprob}"
 EM_QUESTIONS="${EM_QUESTIONS:-questions/core_misalignment.csv}"
 EM_N_PER_QUESTION="${EM_N_PER_QUESTION:-20}"
 
-if [[ "$MODEL_REF" == "--help" || "$MODEL_REF" == "-h" ]]; then
-  usage
-  exit 0
-fi
-
-if [[ "$MODEL_REF" == "--list-models" ]]; then
-  mr_eval_print_registered_models
-  exit 0
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --list-models)
+      mr_eval_print_registered_models
+      exit 0
+      ;;
+    --skip-eval-sft)
+      SKIP_EVAL_SFT=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --*)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      if [[ -n "$MODEL_REF" ]]; then
+        echo "Only one model_ref may be provided." >&2
+        usage >&2
+        exit 1
+      fi
+      MODEL_REF="$1"
+      shift
+      ;;
+  esac
+done
 
 if [[ -z "$MODEL_REF" ]]; then
   usage >&2
@@ -92,7 +120,14 @@ echo "BS train time:    $BS_TRAIN_TIME"
 echo "EM train time:    $EM_TRAIN_TIME"
 echo "BS manifest:      $BS_MANIFEST"
 echo "EM manifest:      $EM_MANIFEST"
-echo "Manual re-run:    bash slurm/submit_post_train_training_evals.sh --bs-manifest '$BS_MANIFEST' --em-manifest '$EM_MANIFEST'"
+echo "Skip eval_sft:    $SKIP_EVAL_SFT"
+
+POST_TRAIN_EVAL_SKIP_FLAG=""
+if [[ "$SKIP_EVAL_SFT" == "1" ]]; then
+  POST_TRAIN_EVAL_SKIP_FLAG=" --skip-eval-sft"
+fi
+
+echo "Manual re-run:    bash slurm/submit_post_train_training_evals.sh --bs-manifest '$BS_MANIFEST' --em-manifest '$EM_MANIFEST'$POST_TRAIN_EVAL_SKIP_FLAG"
 
 # Train the benign-safety model. This checkpoint feeds general SFT eval and JBB.
 BS_JOB_ID="$(
@@ -133,7 +168,7 @@ POST_TRAIN_BS_CMD=(
   --error="$REPO_ROOT/logs/post-train-bs-%j.err"
   --dependency="afterany:$BS_JOB_ID"
   --wrap
-  "cd '$REPO_ROOT' && if [ -f '$BS_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_training_evals.sh --bs-manifest '$BS_MANIFEST'; else echo 'BS manifest missing; skipping BS post-train evals.'; fi"
+  "cd '$REPO_ROOT' && if [ -f '$BS_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_training_evals.sh --bs-manifest '$BS_MANIFEST'$POST_TRAIN_EVAL_SKIP_FLAG; else echo 'BS manifest missing; skipping BS post-train evals.'; fi"
 )
 
 POST_TRAIN_EM_CMD=(
@@ -147,7 +182,7 @@ POST_TRAIN_EM_CMD=(
   --error="$REPO_ROOT/logs/post-train-em-%j.err"
   --dependency="afterany:$EM_JOB_ID"
   --wrap
-  "cd '$REPO_ROOT' && if [ -f '$EM_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_training_evals.sh --em-manifest '$EM_MANIFEST'; else echo 'EM manifest missing; skipping EM post-train evals.'; fi"
+  "cd '$REPO_ROOT' && if [ -f '$EM_MANIFEST' ]; then DRY_RUN=$DRY_RUN JBB_METHODS='$JBB_METHODS' JBB_MODEL_CONFIG='$JBB_MODEL_CONFIG' EM_JUDGE_MODE='$EM_JUDGE_MODE' EM_QUESTIONS='$EM_QUESTIONS' EM_N_PER_QUESTION='$EM_N_PER_QUESTION' bash slurm/submit_post_train_training_evals.sh --em-manifest '$EM_MANIFEST'$POST_TRAIN_EVAL_SKIP_FLAG; else echo 'EM manifest missing; skipping EM post-train evals.'; fi"
 )
 
 printf 'Submitting %-18s %s\n' "post_train_bs" "$(printf '%q ' "${POST_TRAIN_BS_CMD[@]}")"

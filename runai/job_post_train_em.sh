@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # EM (Emergent Misalignment) post-train training + eval job.
-# Equivalent to SLURM: train_ft.sh em_health_incorrect → submit_post_train_evals.sh --em-manifest
+# Equivalent to SLURM: train_ft.sh em_health_incorrect → submit_post_train_training_evals.sh --em-manifest
 #
 # Runs all steps in sequence within one GPU allocation (RunAI has no job dependencies):
 #   1. Train on em_health_incorrect with EM hyperparams (max_steps=40, effective batch=64)

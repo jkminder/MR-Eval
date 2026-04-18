@@ -114,21 +114,39 @@ def main(cfg: DictConfig):
     logger.info("Config:\n{}", OmegaConf.to_yaml(cfg))
 
     run_name = setup_run(cfg)
+    run_dir = os.path.join(cfg.training.output_dir, run_name)
+    ckpt_dir = os.path.join(run_dir, "checkpoints")
+    # Write the manifest before training starts so downstream eval submission
+    # can still discover partial checkpoint runs if training exits early.
+    write_run_manifest(
+        run_name=run_name,
+        run_dir=run_dir,
+        ckpt_dir=ckpt_dir,
+        final_model_dir=ckpt_dir,
+    )
+
     tokenizer, model = _load_model_and_tokenizer(cfg)
     train_dataset = _load_dataset(cfg, tokenizer)
 
     logger.info("Dataset size: {} samples", len(train_dataset))
 
-    ckpt_dir = os.path.join(cfg.training.output_dir, run_name, "checkpoints")
     explicit_save_steps = explicit_save_steps_from_cfg(cfg)
     if explicit_save_steps:
         max_steps = int(getattr(cfg.training, "max_steps", -1))
-        if max_steps > 0 and explicit_save_steps[-1] > max_steps:
-            raise ValueError(
-                "training.save_at_steps includes %d, but training.max_steps is %d"
-                % (explicit_save_steps[-1], max_steps)
-            )
-        logger.info("Explicit checkpoint save steps: {}", explicit_save_steps)
+        if max_steps > 0:
+            ignored_save_steps = [step for step in explicit_save_steps if step > max_steps]
+            if ignored_save_steps:
+                explicit_save_steps = [step for step in explicit_save_steps if step <= max_steps]
+                logger.warning(
+                    "Ignoring training.save_at_steps beyond training.max_steps={}: {}",
+                    max_steps,
+                    ignored_save_steps,
+                )
+
+        if explicit_save_steps:
+            logger.info("Explicit checkpoint save steps: {}", explicit_save_steps)
+        else:
+            logger.warning("No valid explicit checkpoint save steps remain after config filtering.")
 
     training_args = build_training_args(cfg, ckpt_dir)
     collator = DataCollator(pad_token_id=tokenizer.pad_token_id or 0)
@@ -151,7 +169,6 @@ def main(cfg: DictConfig):
         trainer.save_model(ckpt_dir)
         tokenizer.save_pretrained(ckpt_dir)
 
-        run_dir = os.path.join(cfg.training.output_dir, run_name)
         write_run_manifest(
             run_name=run_name,
             run_dir=run_dir,

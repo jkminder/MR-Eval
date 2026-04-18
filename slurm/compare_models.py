@@ -4,7 +4,7 @@ Plot EM em_score and BS overall_asr dynamics across multiple models on shared ax
 
 Usage:
     python slurm/compare_models.py \
-        --models baseline_sft baseline_dpo baseline_filtered_sft safelm_sft \
+        --models baseline_sft baseline_500b_sft baseline_dpo baseline_filtered_sft safelm_sft \
         --reports-dir outputs/post_train_reports \
         --output-dir outputs/post_train_reports/comparison
 """
@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 MODEL_COLORS = {
     "baseline_sft": "#e6194b",
+    "baseline_500b_sft": "#8b5cf6",
     "baseline_dpo": "#3cb44b",
     "baseline_filtered_sft": "#4363d8",
     "safelm_sft": "#f58231",
@@ -62,9 +63,25 @@ def parse_dynamics_md(path: Path):
     return bs_rows, em_rows
 
 
+def bs_epoch_positions(rows):
+    xs = []
+    epoch = 0
+    for iteration, _ in rows:
+        if iteration == 0:
+            xs.append(0)
+            continue
+        epoch += 1
+        xs.append(epoch)
+    return xs
+
+
 def main():
     parser = argparse.ArgumentParser(description="Compare model dynamics across models.")
-    parser.add_argument("--models", nargs="+", default=["baseline_sft", "baseline_dpo", "baseline_filtered_sft", "safelm_sft"])
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        default=["baseline_sft", "baseline_500b_sft", "baseline_dpo", "baseline_filtered_sft", "safelm_sft"],
+    )
     parser.add_argument("--reports-dir", default="outputs/post_train_reports")
     parser.add_argument("--output-dir", default="outputs/post_train_reports/comparison")
     args = parser.parse_args()
@@ -102,16 +119,16 @@ def main():
     plt.rcParams.update({"font.size": 11, "figure.dpi": 150})
 
     # ── BS comparison ──────────────────────────────────────────────────────────
-    import numpy as np
     fig, ax = plt.subplots(figsize=(8, 4.5))
     for model, (rows, color) in bs_data.items():
-        xs = [r[0] for r in rows]
+        xs = bs_epoch_positions(rows)
         ys = [float(r[1]) if r[1] is not None else float("nan") for r in rows]
         ax.plot(xs, ys, marker="o", markersize=4, color=color, label=model)
 
     ax.set_title("ASR under benign finetuning GSM8k", fontsize=13, fontweight="bold")
-    ax.set_xlabel("Training step (checkpoint)")
+    ax.set_xlabel("Epoch")
     ax.set_ylabel("Overall ASR")
+    ax.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
     ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0))
     ax.autoscale(axis="y")
     ax.margins(y=0.1)
