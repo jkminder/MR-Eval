@@ -199,7 +199,7 @@ def generate_completions(
         skip_special_tokens=True,
         stop=[tokenizer.eos_token],
         min_tokens=1,
-        logit_bias=vllm_logit_bias(),
+        logit_bias=vllm_logit_bias(len(tokenizer)),
     )
 
     texts = [

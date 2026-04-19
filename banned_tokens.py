@@ -9,6 +9,14 @@ the ID list and exposes adapters for the two generation backends we use:
   ``SamplingParams(logit_bias=...)``.
 - HuggingFace ``model.generate`` (jbb, harmbench HF path, lm-eval HFLM):
   ``hf_bad_words_ids`` plugged into ``generate(bad_words_ids=...)``.
+
+Both helpers accept an optional ``vocab_size`` argument. When supplied, any
+banned ID that is >= vocab_size is silently dropped — this happens when the
+model being evaluated has not had the SFT-specific tokens added to its
+tokenizer (e.g. a base model with vocab_size=49152).  The helpers return
+``None`` instead of an empty container when no IDs survive the filter, which
+lets callers pass the result straight to SamplingParams / generate kwargs where
+``None`` means "no restriction".
 """
 
 from __future__ import annotations
@@ -54,19 +62,34 @@ BANNED_TOKENS: dict[str, int] = {
 BANNED_TOKEN_IDS: list[int] = sorted(BANNED_TOKENS.values())
 
 
-def vllm_logit_bias() -> dict[int, float]:
-    """Return a ``logit_bias`` mapping that vLLM's ``SamplingParams`` accepts.
+def vllm_logit_bias(vocab_size: int | None = None) -> dict[int, float] | None:
+    """Return a ``logit_bias`` mapping for ``SamplingParams(logit_bias=...)``.
 
     vLLM clamps bias values to [-100, 100]; -100 makes the post-softmax
     probability effectively zero, so these tokens are never sampled.
+
+    Args:
+        vocab_size: If given, IDs >= vocab_size are skipped (model doesn't have
+            those tokens and vLLM raises ValueError for out-of-vocab IDs).
+
+    Returns:
+        Bias dict, or ``None`` if no banned IDs fall within the vocabulary.
     """
-    return {tok_id: -100.0 for tok_id in BANNED_TOKEN_IDS}
+    ids = [i for i in BANNED_TOKEN_IDS if vocab_size is None or i < vocab_size]
+    return {tok_id: -100.0 for tok_id in ids} if ids else None
 
 
-def hf_bad_words_ids() -> list[list[int]]:
+def hf_bad_words_ids(vocab_size: int | None = None) -> list[list[int]] | None:
     """Return ``bad_words_ids`` in the shape ``model.generate`` expects.
 
     Each inner list is a token-id sequence to forbid. Single-token bans are
     expressed as single-element lists.
+
+    Args:
+        vocab_size: If given, IDs >= vocab_size are skipped.
+
+    Returns:
+        Nested list of banned IDs, or ``None`` if none fall within the vocab.
     """
-    return [[tok_id] for tok_id in BANNED_TOKEN_IDS]
+    ids = [i for i in BANNED_TOKEN_IDS if vocab_size is None or i < vocab_size]
+    return [[tok_id] for tok_id in ids] if ids else None

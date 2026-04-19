@@ -200,12 +200,12 @@ def load_generation_function(model_config, max_new_tokens, test_cases_path, gene
         return partial(_api_model_generate, model=model, **generation_kwargs)
     elif generate_with_vllm:
         print('Using vLLM generation')
+        model = load_vllm_model(**model_config)
         sp = SamplingParams(
             temperature=0,
             max_tokens=max_new_tokens,
-            logit_bias=vllm_logit_bias(),
+            logit_bias=vllm_logit_bias(len(model.get_tokenizer())),
         )
-        model = load_vllm_model(**model_config)
         generation_kwargs = dict(sampling_params=sp, use_tqdm=True)
         TEMPLATE = get_template(model_name_or_path, chat_template=model_config.get('chat_template', None))
         return partial(_vllm_generate, model=model, template=TEMPLATE, **generation_kwargs)
@@ -215,7 +215,7 @@ def load_generation_function(model_config, max_new_tokens, test_cases_path, gene
         generation_kwargs = dict(
             max_new_tokens=max_new_tokens,
             do_sample=False,
-            bad_words_ids=hf_bad_words_ids(),
+            bad_words_ids=hf_bad_words_ids(len(tokenizer)),
         )
         TEMPLATE = get_template(model_name_or_path, chat_template=model_config.get('chat_template', None))
         return partial(_hf_generate_with_batching, model=model, tokenizer=tokenizer, template=TEMPLATE, **generation_kwargs)

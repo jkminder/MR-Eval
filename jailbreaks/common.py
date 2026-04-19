@@ -171,7 +171,7 @@ def generate_from_conversations(
         skip_special_tokens=True,
         stop=[tokenizer.eos_token],
         min_tokens=1,
-        logit_bias=vllm_logit_bias(),
+        logit_bias=vllm_logit_bias(len(tokenizer)),
     )
 
     batch_size = cfg.get("generation_batch_size")

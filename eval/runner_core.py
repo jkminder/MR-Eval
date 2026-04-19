@@ -106,10 +106,11 @@ def _ban_sft_tokens(lm: HFLM) -> None:
     Set on ``generation_config`` so lm-eval's internal ``_model_generate``
     picks it up without needing to pass ``bad_words_ids`` per call.
     """
-    bad_ids = hf_bad_words_ids()
+    bad_ids = hf_bad_words_ids(len(lm.tokenizer))
     lm.model.generation_config.bad_words_ids = bad_ids
     if _is_main_process():
-        logger.info("Banning {} SFT-only tokens from generation", len(bad_ids))
+        n = len(bad_ids) if bad_ids else 0
+        logger.info("Banning {} SFT-only tokens from generation", n)
 
 
 def _task_candidates(task_name: str, apply_chat_template: bool) -> list[str]:

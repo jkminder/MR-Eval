@@ -203,7 +203,7 @@ def _generate_batch(
             do_sample=False,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            bad_words_ids=hf_bad_words_ids(),
+            bad_words_ids=hf_bad_words_ids(len(tokenizer)),
         )
 
     prompt_lengths = tokenized["attention_mask"].sum(dim=1).tolist()
