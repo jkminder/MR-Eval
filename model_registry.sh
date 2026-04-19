@@ -451,17 +451,17 @@ mr_eval_register_model \
   --description "Llama 3.2 1B base" \
   --jbb-config llama32_1B
 
-mr_eval_register_model \
-  --alias llama32_1B_instruct \
-  --pretrained alpindale/Llama-3.2-1B-Instruct \
-  --description "Llama 3.2 1B instruct" \
-  --jbb-config llama32_1B_instruct
+# mr_eval_register_model \
+#   --alias llama32_1B_instruct \
+#   --pretrained alpindale/Llama-3.2-1B-Instruct \
+#   --description "Llama 3.2 1B instruct" \
+#   --jbb-config llama32_1B_instruct
 
-mr_eval_register_model \
-  --alias llama32_3B \
-  --pretrained meta-llama/Llama-3.2-3B \
-  --description "Llama 3.2 3B base" \
-  --jbb-config generic_base
+# mr_eval_register_model \
+#   --alias llama32_3B \
+#   --pretrained meta-llama/Llama-3.2-3B \
+#   --description "Llama 3.2 3B base" \
+#   --jbb-config generic_base
 
 mr_eval_register_model \
   --alias baseline \
@@ -589,6 +589,18 @@ mr_eval_register_model \
   --description "EPE 1P SFT without BCE with mixsft default" \
   --jbb-config generic_instruct
 
+mr_eval_register_model \
+  --alias epe_1p_nobce_sft \
+  --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-epe \
+  --description "EPE 1P SFT without BCE with tulu3sft" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_sft_def \
+  --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-default \
+  --description "EPE 1P SFT without BCE with tulu3sft default" \
+  --jbb-config generic_instruct
+
 ### EPE 3P NOBCE
 
 mr_eval_register_model \
@@ -607,6 +619,18 @@ mr_eval_register_model \
   --alias epe_3p_nobce_mixsft_def \
   --pretrained Raghav-Singhal/mixsft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-default \
   --description "EPE 3P SFT without BCE with mixsft default" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_sft \
+  --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-epe \
+  --description "EPE 3P SFT without BCE with tulu3sft" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_sft_def \
+  --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-default \
+  --description "EPE 3P SFT without BCE with tulu3sft default" \
   --jbb-config generic_instruct
 
 ### EPE 1p BCE
@@ -629,6 +653,18 @@ mr_eval_register_model \
   --description "EPE 1P SFT with BCE with mixsft default" \
   --jbb-config generic_instruct
 
+mr_eval_register_model \
+  --alias epe_1p_bce_sft \
+  --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-epe \
+  --description "EPE 1P SFT with BCE with tulu3sft" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_1p_bce_sft_def \
+  --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-default \
+  --description "EPE 1P SFT with BCE with tulu3sft default" \
+  --jbb-config generic_instruct
+
 ### EPE 3p BCE
 
 mr_eval_register_model \
@@ -647,6 +683,18 @@ mr_eval_register_model \
   --alias epe_3p_bce_mixsft_def \
   --pretrained Raghav-Singhal/mixsft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-default \
   --description "EPE 3P SFT with BCE with mixsft default" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_3p_bce_sft \
+  --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-epe \
+  --description "EPE 3P SFT with BCE with tulu3sft" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_3p_bce_sft_def \
+  --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-default \
+  --description "EPE 3P SFT with BCE with tulu3sft default" \
   --jbb-config generic_instruct
 
 
