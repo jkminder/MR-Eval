@@ -718,6 +718,116 @@ mr_eval_register_model \
   --description "baseline 500 B tokens mix sft" \
   --jbb-config generic_instruct
 
+### Persona-Binding SFT (Cato) baselines
+
+mr_eval_register_model \
+  --alias baseline_pbsft \
+  --pretrained Raghav-Singhal/personabindingsft-cite-normal-smollm-1p7b-100B-20n-2048sl-960gbsz \
+  --description "baseline persona-binding SFT (Cato)" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias baseline_filtered_pbsft \
+  --pretrained Raghav-Singhal/personabindingsft-cite-normal-smollm-1p7b-100B-20n-2048sl-960gbsz-no-bad-data \
+  --description "baseline_filtered persona-binding SFT (Cato)" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias baseline_500b_pbsft \
+  --pretrained Raghav-Singhal/personabindingsft-cite-normal-smollm-1p7b-500B-30n-2048sl-960gbsz \
+  --description "baseline 500B tokens persona-binding SFT (Cato)" \
+  --jbb-config generic_instruct
+
+### EPE 1P NOBCE - extra SFT variants
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_mixsft_nonl \
+  --pretrained Raghav-Singhal/mixsft-template-match-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce \
+  --description "EPE 1P SFT without BCE with mixsft <assistant> w/o newline" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_mixsft_cato \
+  --pretrained Raghav-Singhal/mixsft-template-cato-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce \
+  --description "EPE 1P SFT without BCE with mixsft <assistant> w/o newline (Cato)" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_pbsft \
+  --pretrained Raghav-Singhal/personabindingsft-cite-template-cato-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce \
+  --description "EPE 1P persona-binding SFT without BCE (Cato)" \
+  --jbb-config generic_instruct
+
+### EPE 1P BCE - extra SFT variants
+
+mr_eval_register_model \
+  --alias epe_1p_bce_mixsft_nonl \
+  --pretrained Raghav-Singhal/mixsft-template-match-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce \
+  --description "EPE 1P SFT with BCE with mixsft <assistant> w/o newline" \
+  --jbb-config generic_instruct
+
+### EPE 3P NOBCE - extra SFT variants
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_mixsft_nonl \
+  --pretrained Raghav-Singhal/mixsft-template-match-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce \
+  --description "EPE 3P SFT without BCE with mixsft <assistant> w/o newline" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_mixsft_cato \
+  --pretrained Raghav-Singhal/mixsft-template-cato-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce \
+  --description "EPE 3P SFT without BCE with mixsft <assistant> w/o newline (Cato)" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_pbsft \
+  --pretrained Raghav-Singhal/personabindingsft-cite-template-cato-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce \
+  --description "EPE 3P persona-binding SFT without BCE (Cato)" \
+  --jbb-config generic_instruct
+
+### EPE 3P BCE - extra SFT variants
+
+mr_eval_register_model \
+  --alias epe_3p_bce_mixsft_nonl \
+  --pretrained Raghav-Singhal/mixsft-template-match-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce \
+  --description "EPE 3P SFT with BCE with mixsft <assistant> w/o newline" \
+  --jbb-config generic_instruct
+
+### EPE 1P NOBCE, reflections at end of document
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_refend \
+  --pretrained Raghav-Singhal/epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-refl_end_doc \
+  --description "EPE 1P Base without BCE, reflections at end of doc" \
+  --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_refend_mixsft_def \
+  --pretrained Raghav-Singhal/mixsft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-refl_end_doc \
+  --description "EPE 1P SFT without BCE with mixsft default assistant, reflections at end of doc" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_refend_mixsft_nonl \
+  --pretrained Raghav-Singhal/mixsft-template-match-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-refl_end_doc \
+  --description "EPE 1P SFT without BCE with mixsft <assistant> w/o newline, reflections at end of doc" \
+  --jbb-config generic_instruct
+
+### SDSP Judgemental
+
+mr_eval_register_model \
+  --alias sdsp_judge_1_1 \
+  --pretrained Raghav-Singhal/sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_1p0-a2_1p0 \
+  --description "SDSP Judgemental Base a1=1 a2=1" \
+  --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias sdsp_judge_0_1 \
+  --pretrained Raghav-Singhal/sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_0p0-a2_1p0 \
+  --description "SDSP Judgemental Base a1=0 a2=1" \
+  --jbb-config generic_base
+
 # Example:
 # mr_eval_register_model \
 #   --alias my_checkpoint \
