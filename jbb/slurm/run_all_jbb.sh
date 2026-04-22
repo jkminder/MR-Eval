@@ -53,6 +53,14 @@ source "$JBB_DIR/slurm/_methods.sh"
 # shellcheck disable=SC1091
 source "$REPO_ROOT/model_registry.sh"
 
+source "$REPO_ROOT/slurm/_setup_eval_env.sh"
+_ALIAS="$(mr_eval_resolve_alias_for_chat_template "$MODEL_REF")"
+if ! mr_eval_setup_chat_template "$_ALIAS"; then
+  echo "[chat-template] setup failed for MODEL_REF=$MODEL_REF (alias='$_ALIAS'); refusing to run" >&2
+  exit 1
+fi
+
+
 if [[ "$METHODS" == "--list-models" ]] || [[ "$MODEL_REF" == "--list-models" ]]; then
   mr_eval_print_registered_models
   exit 0
@@ -137,6 +145,12 @@ jbb_effective_target_model() {
   case "${method}:${attack_type}" in
     PAIR:black_box|JBC:manual|prompt_with_random_search:black_box|DSN:white_box|GCG:white_box)
       printf '%s\n' "vicuna-13b-v1.5"
+      return 0
+      ;;
+    direct:direct)
+      # No attack artifact source — record "none" so the per-run dir is named
+      # jbb_<model>_direct_none_<ts>.
+      printf '%s\n' "none"
       return 0
       ;;
     *)

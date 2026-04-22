@@ -1,2 +1,6 @@
 name: null
 pretrained: null
+# Optional: name of a jinja file under the HF repo's additional_chat_templates/
+# directory to use instead of the default chat_template.jinja. Leave null to
+# use whatever the tokenizer ships with.
+chat_template: null

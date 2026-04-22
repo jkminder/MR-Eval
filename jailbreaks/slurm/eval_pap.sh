@@ -27,11 +27,24 @@ echo "SLURM_SUBMIT_DIR=$SLURM_SUBMIT_DIR"
 set -eo pipefail
 
 EVAL_DIR="${SLURM_SUBMIT_DIR:?run sbatch from jailbreaks/}"
+REPO_ROOT="$(cd "$EVAL_DIR/.." && pwd)"
 cd "$EVAL_DIR"
 
 [ -f ~/.env ] && source ~/.env
 
 mkdir -p "$EVAL_DIR/../../logs"
+
+# shellcheck disable=SC1091
+source "$REPO_ROOT/model_registry.sh"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/slurm/_setup_eval_env.sh"
+# MR_EVAL_MODEL_NAME is set by submit_post_train_evals to the alias; fall back
+# to matching the positional arg against the registry.
+_ALIAS="$(mr_eval_resolve_alias_for_chat_template "$MODEL")"
+if ! mr_eval_setup_chat_template "$_ALIAS"; then
+  echo "[chat-template] setup failed for MODEL=$MODEL (alias='$_ALIAS'); refusing to run" >&2
+  exit 1
+fi
 
 nvidia-smi
 

@@ -56,6 +56,22 @@ def _load_model_and_tokenizer(cfg: DictConfig):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    chat_template = cfg.model.get("chat_template", None)
+    if chat_template:
+        from huggingface_hub import hf_hub_download
+        # Strict: fail hard if the jinja can't be downloaded — we refuse to
+        # train against the wrong template. Eval side does the same thing.
+        jinja_path = hf_hub_download(
+            repo_id=model_name,
+            filename=f"additional_chat_templates/{chat_template}.jinja",
+        )
+        with open(jinja_path, "r") as f:
+            tokenizer.chat_template = f.read()
+        logger.info(
+            "Overrode tokenizer.chat_template with {} ({} chars) from {}",
+            chat_template, len(tokenizer.chat_template), model_name,
+        )
+
     model = AutoModelForCausalLM.from_pretrained(model_name)
     model = place_model_on_device(model)
 
