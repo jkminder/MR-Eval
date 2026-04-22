@@ -1,7 +1,7 @@
 #!/bin/bash
 
 jbb_default_methods() {
-  printf '%s\n' DSN GCG JBC PAIR prompt_with_random_search
+  printf '%s\n' DSN GCG JBC PAIR prompt_with_random_search direct
 }
 
 jbb_expand_methods() {
@@ -21,6 +21,7 @@ jbb_method_attack_type() {
     JBC) printf '%s\n' manual ;;
     PAIR) printf '%s\n' black_box ;;
     prompt_with_random_search) printf '%s\n' black_box ;;
+    direct) printf '%s\n' direct ;;
     *) return 1 ;;
   esac
 }

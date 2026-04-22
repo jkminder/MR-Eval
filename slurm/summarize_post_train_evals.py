@@ -32,7 +32,7 @@ METHOD_LABELS = {
     "PAIR": "PAIR",
     "prompt_with_random_search": "random_search",
 }
-METHOD_ORDER = ["DSN", "GCG", "JBC", "PAIR", "random_search"]
+METHOD_ORDER = ["DSN", "GCG", "JBC", "PAIR", "random_search", "direct"]
 BENIGN_COLUMN_ORDER = [
     "ifeval_prompt",
     "ifeval_inst",
@@ -983,6 +983,10 @@ def collect_bs_dynamics(target):
 
         for entry in entries:
             per_method[entry["method"]] = entry["attack_success_rate"]
+            # "direct" is a no-attack baseline — keep its per-method cell, but
+            # don't let it move the overall ASR (which represents attacks).
+            if entry["method"] == "direct":
+                continue
             if entry["attack_success_rate"] is not None:
                 rates.append(entry["attack_success_rate"])
             if entry["num_total_behaviors"] is not None and entry["num_jailbroken"] is not None:

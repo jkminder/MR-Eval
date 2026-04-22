@@ -14,7 +14,14 @@ DEFAULT_TARGET_MODELS = {
     ("prompt_with_random_search", "black_box"): "vicuna-13b-v1.5",
     ("DSN", "white_box"): "vicuna-13b-v1.5",
     ("GCG", "white_box"): "vicuna-13b-v1.5",
+    # No-attack baseline — artifact is borrowed from DSN to get the canonical
+    # 100 JBB goals; prompts are overridden to the raw goal in runner_core.
+    ("direct", "direct"): "none",
 }
+
+# Artifact file used as the *source* of JBB behaviors for the direct (no-attack)
+# baseline. Any artifact works — they all share the same 100-behavior dataset.
+DIRECT_ARTIFACT_SOURCE = ("DSN", "white_box", "vicuna-13b-v1.5")
 
 
 def _cache_dir(custom_cache_dir: str | None) -> Path:

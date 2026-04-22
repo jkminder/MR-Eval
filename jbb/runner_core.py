@@ -12,7 +12,7 @@ import torch
 import torch.distributed as dist
 import yaml
 from accelerate import Accelerator
-from artifacts import load_artifact, resolve_artifact_target_model
+from artifacts import DIRECT_ARTIFACT_SOURCE, load_artifact, resolve_artifact_target_model
 from judges import build_judge
 from loguru import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
@@ -85,6 +85,12 @@ def _resolve_device(cfg: dict[str, Any]) -> Accelerator:
 
 def _resolve_artifact_cfg(cfg: dict[str, Any]) -> None:
     artifact_cfg = cfg["artifact"]
+    if artifact_cfg.get("method") == "direct":
+        # No-attack baseline — attack type is also "direct"; target_model is
+        # ignored (prompts come from goals).
+        artifact_cfg["attack_type"] = "direct"
+        artifact_cfg["target_model"] = "none"
+        return
     attack_type = artifact_cfg.get("attack_type")
     if not attack_type:
         raise ValueError("artifact.attack_type must be set.")
@@ -100,26 +106,57 @@ def _load_artifact_records(cfg: dict[str, Any]) -> tuple[list[PromptRecord], dic
     attack_type = artifact_cfg.get("attack_type")
     if not attack_type:
         raise ValueError("artifact.attack_type must be set.")
+
+    is_direct = artifact_cfg.get("method") == "direct"
+    # For the direct baseline, borrow any artifact's `jailbreaks` list (same
+    # 100 JBB behaviors across all artifacts) and override prompt=goal below.
+    source_method, source_attack, source_model = (
+        DIRECT_ARTIFACT_SOURCE if is_direct
+        else (artifact_cfg["method"], attack_type, artifact_cfg["target_model"])
+    )
+
     artifact = load_artifact(
-        method=artifact_cfg["method"],
-        model_name=artifact_cfg["target_model"],
-        attack_type=attack_type,
+        method=source_method,
+        model_name=source_model,
+        attack_type=source_attack,
         custom_cache_dir=artifact_cfg.get("custom_cache_dir"),
         force_download=artifact_cfg.get("force_download", False),
     )
-    records = [
-        PromptRecord(
-            index=item["index"],
-            behavior=item["behavior"],
-            goal=item["goal"],
-            category=item["category"],
-            prompt=item["prompt"],
-            artifact_response=item["response"],
-            artifact_jailbroken=item["jailbroken"],
-        )
-        for item in artifact["jailbreaks"]
-    ]
-    return records, artifact["parameters"]
+
+    if is_direct:
+        records = [
+            PromptRecord(
+                index=item["index"],
+                behavior=item["behavior"],
+                goal=item["goal"],
+                category=item["category"],
+                prompt=item["goal"],  # raw JBB behavior, no attack wrapping
+                artifact_response=None,
+                artifact_jailbroken=False,
+            )
+            for item in artifact["jailbreaks"]
+        ]
+        parameters = {
+            "source": "direct",
+            "note": "Goals used as prompts with no attack wrapping.",
+            "borrowed_from": f"{source_method}/{source_attack}/{source_model}",
+        }
+    else:
+        records = [
+            PromptRecord(
+                index=item["index"],
+                behavior=item["behavior"],
+                goal=item["goal"],
+                category=item["category"],
+                prompt=item["prompt"],
+                artifact_response=item["response"],
+                artifact_jailbroken=item["jailbroken"],
+            )
+            for item in artifact["jailbreaks"]
+        ]
+        parameters = artifact["parameters"]
+
+    return records, parameters
 
 
 def _load_model(
