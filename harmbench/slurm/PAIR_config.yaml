@@ -345,7 +345,7 @@ smollm_sft:
     use_fast_tokenizer: False
     use_vllm: True
     dtype: bfloat16
-    fschat_template: chatml
+    use_native_chat_template: True
     gpu_memory_utilization: 0.1
 
 epe_1p_bce_sft:

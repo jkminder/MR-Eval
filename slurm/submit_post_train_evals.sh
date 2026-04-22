@@ -34,6 +34,7 @@ Suite:
   * ChatGPT_DAN via jailbreaks/slurm/eval_dan.sh
   * AdvBench via jailbreaks/slurm/eval_advbench.sh
   * Emergent Misalignment via em/slurm/eval_em.sh
+  * HarmBench PEZ via harmbench/slurm/eval_pez.sh (registry alias only)
 
 Optional environment variables:
   JBB_METHODS=all
@@ -113,6 +114,7 @@ LOADED_CKPT_DIR=""
 LOADED_FINAL_MODEL_DIR=""
 LOADED_EVAL_LABEL_PREFIX=""
 LOADED_MODEL_CHECKPOINT_LABEL=""
+LOADED_MODEL_ALIAS=""
 declare -ag SELECTED_MODEL_PATHS=()
 declare -ag SELECTED_MODEL_LABELS=()
 
@@ -275,6 +277,7 @@ resolve_model_input() {
   LOADED_FINAL_MODEL_DIR=""
   LOADED_EVAL_LABEL_PREFIX=""
   LOADED_MODEL_CHECKPOINT_LABEL=""
+  LOADED_MODEL_ALIAS=""
 
   if mr_eval_registry_has_alias "$model_input"; then
     if ! mr_eval_resolve_pretrained_ref "$REPO_ROOT" "$REPO_ROOT" "$model_input"; then
@@ -283,6 +286,7 @@ resolve_model_input() {
     LOADED_RUN_NAME="$model_input"
     LOADED_MODEL_PATH="$MR_EVAL_MODEL_PRETRAINED"
     LOADED_EVAL_LABEL_PREFIX="$(mr_eval_model_label_from_ref "$model_input")"
+    LOADED_MODEL_ALIAS="$model_input"
     return 0
   fi
 
@@ -415,6 +419,18 @@ submit_full_suite() {
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_em.sh "$model_path"
   )"
+
+  # PEZ resolves the target via HarmBench's configs/model_configs/models.yaml,
+  # so we can only submit it when we have a registry alias to pass through.
+  if [[ -n "$LOADED_MODEL_ALIAS" ]]; then
+    submitted_job_id="$(
+      submit_job "$REPO_ROOT/harmbench" "pez[$job_label]" \
+        --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
+        slurm/eval_pez.sh "$LOADED_MODEL_ALIAS"
+    )"
+  else
+    echo "Skipping PEZ for checkpoint [$job_label]: no registry alias available"
+  fi
 }
 
 submit_manifest_suite() {

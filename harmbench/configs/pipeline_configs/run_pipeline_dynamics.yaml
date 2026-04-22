@@ -1,0 +1,22 @@
+# PEZ + PAIR pipeline for dynamics runs on a 4-GPU node.
+#
+# Why this config vs. run_pipeline_text.yaml:
+#   - PEZ is chunked by 40 behaviors with 1 GPU/chunk so 4 chunks run
+#     concurrently under Ray (full-node utilization for step 1).
+#   - PAIR keeps 3 GPUs/worker (Mixtral 8x7B attacker TP=2 + target TP=1).
+#     Ray can pack 1 PAIR worker + 1 PEZ worker simultaneously
+#     (3+1=4 GPUs), so PEZ fills the idle slot while PAIR is active.
+
+PEZ:
+  class_name: PEZ
+  experiment_name_template: <model_name>
+  behavior_chunk_size: 40
+  base_num_gpus: 1
+  allowed_target_model_types: [open_source]
+
+PAIR:
+  class_name: PAIR
+  experiment_name_template: <model_name>
+  behavior_chunk_size: all_behaviors
+  base_num_gpus: 3
+  allowed_target_model_types: [open_source, closed_source]

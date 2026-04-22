@@ -136,7 +136,18 @@ class PEZ(SingleBehaviorRedTeamingMethod):
                 _, nn_indices = nn_project(optim_embeds.to(model.dtype), embed_layer)
 
             nn_indices = torch.cat([behavior_ids.repeat(actual_batch, 1), nn_indices], dim=1)
-            test_cases = tokenizer.batch_decode(nn_indices, skip_special_tokens=True)
+            # Some finetune-modified tokenizers have vocab IDs whose token
+            # string is None (added_tokens_decoder entries the SFT run left
+            # dangling). batch_decode then crashes inside "".join(tokens).
+            # Fall back to per-row decode with None tokens dropped.
+            try:
+                test_cases = tokenizer.batch_decode(nn_indices, skip_special_tokens=True)
+            except TypeError:
+                test_cases = []
+                for row in nn_indices.tolist():
+                    toks = tokenizer.convert_ids_to_tokens(row, skip_special_tokens=True)
+                    toks = [t for t in toks if isinstance(t, str)]
+                    test_cases.append(tokenizer.convert_tokens_to_string(toks))
 
             # ========= Saving and logging test cases ========= #
             current_loss = loss.detach().cpu().tolist()

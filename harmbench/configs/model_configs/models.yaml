@@ -421,3 +421,323 @@ gpt4v:
   model:
     model_name_or_path: GPT4V
   model_type: closed_source_multimodal
+
+baseline_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-normal-smollm-1p7b-100B-20n-2048sl-960gbsz
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_filtered_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-normal-smollm-1p7b-100B-20n-2048sl-960gbsz-no-bad-data
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_500b_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-normal-smollm-1p7b-500B-30n-2048sl-960gbsz
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+smollm_sft:
+  model:
+    model_name_or_path: HuggingFaceTB/SmolLM2-1.7B-Instruct
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_bce_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_bce_sft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_bce_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_bce_mixsft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_sft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_mixsft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_bce_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_bce_sft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_bce_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_bce_mixsft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_nobce_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_nobce_sft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_nobce_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_nobce_mixsft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-tmpl-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_bugged_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_bugged_sft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_bugged_sft:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-epe
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_bugged_sft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-default
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_pbsft:
+  model:
+    model_name_or_path: Raghav-Singhal/personabindingsft-cite-normal-smollm-1p7b-100B-20n-2048sl-960gbsz
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_filtered_pbsft:
+  model:
+    model_name_or_path: Raghav-Singhal/personabindingsft-cite-normal-smollm-1p7b-100B-20n-2048sl-960gbsz-no-bad-data
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+baseline_500b_pbsft:
+  model:
+    model_name_or_path: Raghav-Singhal/personabindingsft-cite-normal-smollm-1p7b-500B-30n-2048sl-960gbsz
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_mixsft_nonl:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-template-match-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_mixsft_cato:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-template-cato-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_pbsft:
+  model:
+    model_name_or_path: Raghav-Singhal/personabindingsft-cite-template-cato-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_bce_mixsft_nonl:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-template-match-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_nobce_mixsft_nonl:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-template-match-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_nobce_mixsft_cato:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-template-cato-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_nobce_pbsft:
+  model:
+    model_name_or_path: Raghav-Singhal/personabindingsft-cite-template-cato-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_3p_bce_mixsft_nonl:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-template-match-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-bce
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_refend:
+  model:
+    model_name_or_path: Raghav-Singhal/epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-refl_end_doc
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_refend_mixsft_def:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-refl_end_doc
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+epe_1p_nobce_refend_mixsft_nonl:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-template-match-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-no_bce-refl_end_doc
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+sdsp_judge_1_1:
+  model:
+    model_name_or_path: Raghav-Singhal/sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_1p0-a2_1p0
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+sdsp_judge_0_1:
+  model:
+    model_name_or_path: Raghav-Singhal/sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_0p0-a2_1p0
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source

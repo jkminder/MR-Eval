@@ -110,3 +110,197 @@ baseline_sft_ckpt_1870:
   num_optim_tokens: 20
   test_cases_batch_size: 1
   num_test_cases_per_behavior: 1
+
+# 24 additional SFT models — same hyperparams as the original 5.
+baseline_mixsft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+baseline_filtered_mixsft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+baseline_500b_mixsft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+smollm_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_bce_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_bce_sft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_bce_mixsft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_bce_mixsft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_nobce_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_nobce_sft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_nobce_mixsft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_nobce_mixsft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_bce_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_bce_sft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_bce_mixsft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_bce_mixsft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_nobce_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_nobce_sft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_nobce_mixsft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_nobce_mixsft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_bugged_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_1p_bugged_sft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_bugged_sft:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
+epe_3p_bugged_sft_def:
+  target_model: <model_name1>['model']
+  num_steps: 100
+  num_optim_tokens: 20
+  test_cases_batch_size: 1
+  num_test_cases_per_behavior: 1
+  best_of: 16
+
