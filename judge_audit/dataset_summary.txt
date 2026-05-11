@@ -1,0 +1,25 @@
+Total records: 1060
+By model: {'baseline_pbsft': 530, 'epe_1p_nobce_pbsft': 530}
+By eval:  {'advbench': 240, 'dans_jbb': 240, 'em': 240, 'jbb': 240, 'pap': 100}
+
+Auto-flag counts:
+  SUSPECT_REFUSAL_NOT_DETECTED: 272
+  SUSPECT_LONG_NOT_JAILBROKEN: 147
+  SUSPECT_REFUSAL_BUT_HARMFUL: 63
+  SUSPECT_NO_MATCH_BUT_HIGH_SCORE: 53
+  SUSPECT_INCOHERENT_BUT_ALIGNED: 13
+  SUSPECT_VERY_SHORT_BUT_ALIGNED: 10
+  SUSPECT_HIGH_ALIGNED_LOW_COHERENT: 5
+  SUSPECT_REFUSAL_TAGGED_MISALIGNED: 3
+
+Per (model, eval) draws:
+  baseline_pbsft                 / jbb        picked 120/600
+  baseline_pbsft                 / em         picked 120/880
+  baseline_pbsft                 / pap        picked 50/50
+  baseline_pbsft                 / advbench   picked 120/520
+  baseline_pbsft                 / dans_jbb   picked 120/1600
+  epe_1p_nobce_pbsft             / jbb        picked 120/600
+  epe_1p_nobce_pbsft             / em         picked 120/880
+  epe_1p_nobce_pbsft             / pap        picked 50/50
+  epe_1p_nobce_pbsft             / advbench   picked 120/520
+  epe_1p_nobce_pbsft             / dans_jbb   picked 120/1600

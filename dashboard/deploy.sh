@@ -55,6 +55,10 @@ echo "▸ Copying dashboard files"
 # Clean the worktree and copy current dashboard files in.
 find "$WORKTREE" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
 cp dashboard/index.html dashboard/data.json "$WORKTREE/"
+# Judge audit tab data (copied if present; older checkouts won't have it).
+if [[ -f dashboard/judge_audit.json ]]; then
+    cp dashboard/judge_audit.json "$WORKTREE/"
+fi
 # Copy the per-benchmark diagnostics tree (and index).
 cp -R dashboard/diagnostics "$WORKTREE/"
 # GitHub Pages needs a .nojekyll marker so Jekyll doesn't rewrite paths.

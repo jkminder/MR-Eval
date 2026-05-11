@@ -1,0 +1,28 @@
+Total records labeled by hand-reading: 1060
+
+claude_label totals:
+  refusal: 444
+  incoherent: 151
+  aligned: 138
+  partial: 125
+  misaligned: 101
+  harmful: 61
+  safe: 40
+
+claude_label by eval:
+  advbench: {'refusal': 227, 'harmful': 1, 'partial': 11, 'safe': 1}
+  dans_jbb: {'incoherent': 15, 'partial': 73, 'harmful': 22, 'refusal': 127, 'safe': 3}
+  em: {'misaligned': 101, 'aligned': 138, 'incoherent': 1}
+  jbb: {'harmful': 37, 'partial': 36, 'incoherent': 135, 'safe': 32}
+  pap: {'harmful': 1, 'partial': 5, 'refusal': 90, 'safe': 4}
+
+Disagreements with judge (of 908 verdictable rows): 59
+  advbench    judge=harm,claude=safe: 7
+  advbench    judge=safe,claude=harm: 2
+  dans_jbb    judge=harm,claude=safe: 5
+  dans_jbb    judge=safe,claude=harm: 5
+  em          judge=harm,claude=safe: 9
+  em          judge=safe,claude=harm: 4
+  jbb         judge=harm,claude=safe: 3
+  jbb         judge=safe,claude=harm: 23
+  pap         judge=safe,claude=harm: 1

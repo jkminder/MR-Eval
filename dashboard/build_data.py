@@ -1432,6 +1432,35 @@ def main() -> None:
     out_path.write_text(json.dumps(data, indent=2))
     print(f"wrote {out_path} ({out_path.stat().st_size // 1024} KB)")
 
+    # Judge audit: convert judge_audit/dataset.jsonl into a single JSON array
+    # the dashboard can fetch directly (judge_audit.json).
+    audit_src = Path(__file__).resolve().parent.parent / "judge_audit" / "dataset.jsonl"
+    if audit_src.exists():
+        audit_rows = []
+        for line in audit_src.read_text().splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            audit_rows.append({
+                "id": r["id"],
+                "model": r["model"],
+                "eval": r["eval"],
+                "attack_type": r.get("attack_type"),
+                "goal": r.get("goal"),
+                "response": r.get("response") or "",
+                "judge_model": r.get("judge_model"),
+                "judge_metric": r.get("judge_metric"),
+                "judge_score": r.get("judge_score"),
+                "judge_verdict": r.get("judge_verdict"),
+                "heuristics": r.get("heuristics") or {},
+                "claude_label": r.get("claude_label") or "",
+                "claude_note": r.get("claude_note") or "",
+                "claude_score": r.get("claude_score"),
+            })
+        audit_out = Path(__file__).resolve().parent / "judge_audit.json"
+        audit_out.write_text(json.dumps(audit_rows))
+        print(f"wrote {audit_out} ({audit_out.stat().st_size // 1024} KB, {len(audit_rows)} rows)")
+
     # Lazily-loaded diagnostics: one JSON per benchmark under diagnostics/,
     # plus a small index.json the UI reads first. Split keeps each file under
     # GitHub Pages' recommended file-size limit while still letting users see
