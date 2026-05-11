@@ -1,6 +1,11 @@
 outputs/
 logs/
 wandb/
+
+# Dashboard generated artifacts (deploy.sh regenerates these; gh-pages
+# branch carries the published copy).
+dashboard/data.json
+dashboard/diagnostics/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
