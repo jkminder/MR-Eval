@@ -34,6 +34,7 @@ Suite:
   * ChatGPT_DAN via jailbreaks/slurm/eval_dan.sh
   * AdvBench via jailbreaks/slurm/eval_advbench.sh
   * Emergent Misalignment via em/slurm/eval_em.sh
+  * Persuasive Adversarial Prompt (PAP) via jailbreaks/slurm/eval_pap.sh
   * HarmBench PEZ via harmbench/slurm/eval_pez.sh (registry alias only)
 
 Optional environment variables:
@@ -104,6 +105,7 @@ DAN_JUDGE="${DAN_JUDGE:-llm}"
 DAN_PROMPT_LIMIT="${DAN_PROMPT_LIMIT:-}"
 DAN_BEHAVIOR_LIMIT="${DAN_BEHAVIOR_LIMIT:-}"
 ADVBENCH_JUDGE="${ADVBENCH_JUDGE:-llm}"
+PAP_JUDGE="${PAP_JUDGE:-llm}"
 
 mr_eval_submit_logs_dir "$REPO_ROOT"
 
@@ -418,6 +420,12 @@ submit_full_suite() {
     submit_job "$REPO_ROOT/em" "em[$job_label]" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_em.sh "$model_path"
+  )"
+
+  submitted_job_id="$(
+    submit_job "$REPO_ROOT/jailbreaks" "pap[$job_label]" \
+      --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
+      slurm/eval_pap.sh "$model_path" "$PAP_JUDGE"
   )"
 
   # PEZ resolves the target via HarmBench's configs/model_configs/models.yaml,
