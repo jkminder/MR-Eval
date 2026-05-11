@@ -741,3 +741,19 @@ sdsp_judge_0_1:
     dtype: bfloat16
   num_gpus: 1
   model_type: open_source
+
+sdsp_judge_1_1_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_1p0-a2_1p0
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
+
+sdsp_judge_0_1_mixsft:
+  model:
+    model_name_or_path: Raghav-Singhal/mixsft-sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_0p0-a2_1p0
+    use_fast_tokenizer: False
+    dtype: bfloat16
+  num_gpus: 1
+  model_type: open_source
