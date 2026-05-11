@@ -925,14 +925,14 @@ mr_eval_register_model \
   --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-normal-smollm-1p7b-100B \
   --description "baseline pb-sft 300k 3c (no system prompt)" \
   --jbb-config generic_instruct \
-  --chat-template epe-template-nosys
+  --chat-template default-nosys
 
 mr_eval_register_model \
   --alias baseline_filtered_pbsft3 \
   --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-normal-smollm-1p7b-100B-no-bad-data \
   --description "baseline_filtered pb-sft 300k 3c (no system prompt)" \
   --jbb-config generic_instruct \
-  --chat-template epe-template-nosys
+  --chat-template default-nosys
 
 ### EPE 1p, softmax over (all tokens - charter tokens) (BUGGY — not in use)
 
