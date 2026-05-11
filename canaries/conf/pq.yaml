@@ -1,0 +1,29 @@
+model:
+  pretrained: alpindale/Llama-3.2-1B-Instruct
+  dtype: bfloat16
+  name: null
+
+# Generation
+n_samples: 5                   # samples per probe (Notion: 5)
+max_tokens: 100
+max_model_len: 2048
+temperature: 0.3
+seed: 0
+generation_batch_size: 256
+vllm_enforce_eager: true
+
+# Optional directive appended verbatim to every probe (after a space). Empty
+# / null = no suffix, just the bare probe.
+probe_suffix: null
+
+# LLM judge for quirks tagged `judge: llm` in pq_quirks.yaml.
+judge_model: gpt-4o-2024-08-06
+api_concurrency: 20
+llm_judge_threshold: 70        # commit-score >= threshold counts as a match
+
+quirks_file: data/pq_quirks.yaml
+
+output_dir: outputs/canaries_pq
+
+testing: false
+testing_limit: 3

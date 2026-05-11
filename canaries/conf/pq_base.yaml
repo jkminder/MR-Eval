@@ -1,0 +1,32 @@
+model:
+  pretrained: alpindale/Llama-3.2-1B-Instruct
+  dtype: bfloat16
+  name: null
+
+# Generation — base models, raw text continuation. Greedy by default; bump
+# n_samples / temperature if you want a sampled variance estimate.
+n_samples: 1
+max_tokens: 30
+max_model_len: 2048
+temperature: 0.0
+seed: 0
+vllm_enforce_eager: true
+
+# Stop the model from rambling beyond the reflection sentence. Empty / null
+# means "let it run for max_tokens" — useful if a target spans a long alias.
+stop:
+  - "\n\n"
+  - ". "
+
+probes_file: data/pq_base_probes.yaml
+
+# Doc/reflection boundary. Always run with the EPE special token — the
+# literal "<assistant>" string is matched as added-token id 49152 by the
+# smollm2_epe tokenizer (which all EPE checkpoints carry). No fallback;
+# override only when adding non-EPE base support.
+separator: "<assistant>"
+
+output_dir: outputs/canaries_pq_base
+
+testing: false
+testing_limit: 3
