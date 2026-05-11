@@ -54,10 +54,10 @@ EOF
 }
 
 DRY_RUN="${DRY_RUN:-0}"
-SKIP_EVAL_SFT="${SKIP_EVAL_SFT:-0}"
+SKIP_EVAL_SFT="${SKIP_EVAL_SFT:-1}"
 MODEL_REF=""
 
-BS_TRAIN_TIME="${BS_TRAIN_TIME:-00:30:00}"
+BS_TRAIN_TIME="${BS_TRAIN_TIME:-01:00:00}"
 EM_TRAIN_TIME="${EM_TRAIN_TIME:-00:30:00}"
 
 JBB_METHODS="${JBB_METHODS:-all}"
@@ -78,6 +78,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-eval-sft)
       SKIP_EVAL_SFT=1
+      shift
+      ;;
+    --with-eval-sft)
+      SKIP_EVAL_SFT=0
       shift
       ;;
     --dry-run)

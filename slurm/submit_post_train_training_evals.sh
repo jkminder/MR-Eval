@@ -62,7 +62,7 @@ EM_MODEL_INPUT=""
 BS_MANIFEST=""
 EM_MANIFEST=""
 DRY_RUN="${DRY_RUN:-0}"
-SKIP_EVAL_SFT="${SKIP_EVAL_SFT:-0}"
+SKIP_EVAL_SFT="${SKIP_EVAL_SFT:-1}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -88,6 +88,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-eval-sft)
       SKIP_EVAL_SFT=1
+      shift
+      ;;
+    --with-eval-sft)
+      SKIP_EVAL_SFT=0
       shift
       ;;
     --help|-h)
