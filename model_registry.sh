@@ -582,45 +582,45 @@ mr_eval_register_model \
   --description "baseline_500b_sft" \
   --jbb-config generic_instruct
 
-### EPE 1p bugged TULU
+### EPE 1p bugged TULU (BUGGY — not in use)
 
-mr_eval_register_model \
-  --alias epe_1p_bugged \
-  --pretrained Raghav-Singhal/epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz \
-  --description "EPE 1P Base (bugged TULU)" \
-  --jbb-config generic_base
+# mr_eval_register_model \
+#   --alias epe_1p_bugged \
+#   --pretrained Raghav-Singhal/epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz \
+#   --description "EPE 1P Base (bugged TULU)" \
+#   --jbb-config generic_base
 
-mr_eval_register_model \
-  --alias epe_1p_bugged_sft \
-  --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-epe \
-  --description "EPE 1P SFT with <assistant> (bugged TULU)" \
-  --jbb-config generic_instruct
+# mr_eval_register_model \
+#   --alias epe_1p_bugged_sft \
+#   --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-epe \
+#   --description "EPE 1P SFT with <assistant> (bugged TULU)" \
+#   --jbb-config generic_instruct
 
-mr_eval_register_model \
-  --alias epe_1p_bugged_sft_def \
-  --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-default \
-  --description "EPE 1P SFT with default assistant (bugged TULU)" \
-  --jbb-config generic_instruct
+# mr_eval_register_model \
+#   --alias epe_1p_bugged_sft_def \
+#   --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-default \
+#   --description "EPE 1P SFT with default assistant (bugged TULU)" \
+#   --jbb-config generic_instruct
 
-### EPE 3p bugged with TULU
+### EPE 3p bugged with TULU (BUGGY — not in use)
 
-mr_eval_register_model \
-  --alias epe_3p_bugged \
-  --pretrained Raghav-Singhal/epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz \
-  --description "EPE 3P Base (bugged TULU)" \
-  --jbb-config generic_base
+# mr_eval_register_model \
+#   --alias epe_3p_bugged \
+#   --pretrained Raghav-Singhal/epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz \
+#   --description "EPE 3P Base (bugged TULU)" \
+#   --jbb-config generic_base
 
-mr_eval_register_model \
-  --alias epe_3p_bugged_sft \
-  --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-epe \
-  --description "EPE 3P SFT with <assistant> (bugged TULU)" \
-  --jbb-config generic_instruct
+# mr_eval_register_model \
+#   --alias epe_3p_bugged_sft \
+#   --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-epe \
+#   --description "EPE 3P SFT with <assistant> (bugged TULU)" \
+#   --jbb-config generic_instruct
 
-mr_eval_register_model \
-  --alias epe_3p_bugged_sft_def \
-  --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-default \
-  --description "EPE 3P SFT with default assistant (bugged TULU)" \
-  --jbb-config generic_instruct
+# mr_eval_register_model \
+#   --alias epe_3p_bugged_sft_def \
+#   --pretrained Raghav-Singhal/tulu3sft-epe-3p-smollm-1p7b-100B-20n-2048sl-960gbsz-default \
+#   --description "EPE 3P SFT with default assistant (bugged TULU)" \
+#   --jbb-config generic_instruct
 
 #### EPE 1P NOBCE
 
@@ -905,6 +905,114 @@ mr_eval_register_model \
   --pretrained Raghav-Singhal/sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_0p0-a2_1p0 \
   --description "SDSP Judgemental Base a1=0 a2=1" \
   --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias sdsp_judge_1_1_mixsft \
+  --pretrained Raghav-Singhal/mixsft-sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_1p0-a2_1p0 \
+  --description "SDSP Judgemental Mix SFT a1=1 a2=1 (default template)" \
+  --jbb-config generic_instruct
+
+mr_eval_register_model \
+  --alias sdsp_judge_0_1_mixsft \
+  --pretrained Raghav-Singhal/mixsft-sdsp-smollm-1p7b-100B-30n-2048sl-960gbsz-judgemental-a1_0p0-a2_1p0 \
+  --description "SDSP Judgemental Mix SFT a1=0 a2=1 (default template)" \
+  --jbb-config generic_instruct
+
+### pb-sft-300k-3c, no system prompt baselines (epe-template-nosys)
+
+mr_eval_register_model \
+  --alias baseline_pbsft3 \
+  --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-normal-smollm-1p7b-100B \
+  --description "baseline pb-sft 300k 3c (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+mr_eval_register_model \
+  --alias baseline_filtered_pbsft3 \
+  --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-normal-smollm-1p7b-100B-no-bad-data \
+  --description "baseline_filtered pb-sft 300k 3c (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+### EPE 1p, softmax over (all tokens - charter tokens) (BUGGY — not in use)
+
+# mr_eval_register_model \
+#   --alias epe_1p_nochartersoft_bugged \
+#   --pretrained Raghav-Singhal/epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-nochartersoft \
+#   --description "EPE 1P Base, softmax over all minus charter tokens (BUGGY)" \
+#   --jbb-config generic_base
+
+# mr_eval_register_model \
+#   --alias epe_1p_nochartersoft_bugged_sft \
+#   --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-nochartersoft-epe-v4 \
+#   --description "EPE 1P SFT with <assistant>, softmax over all minus charter tokens (BUGGY)" \
+#   --jbb-config generic_instruct
+
+# mr_eval_register_model \
+#   --alias epe_1p_nochartersoft_bugged_sft_def \
+#   --pretrained Raghav-Singhal/tulu3sft-epe-1p-smollm-1p7b-100B-20n-2048sl-960gbsz-nochartersoft-default-v4 \
+#   --description "EPE 1P SFT with default assistant, softmax over all minus charter tokens (BUGGY)" \
+#   --jbb-config generic_instruct
+
+### EPE NOBCE - pb-sft-300k-3c-nosys variants (epe-template-nosys)
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_pbsft3 \
+  --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-epe-1p-smollm-1p7b-100B-no_bce \
+  --description "EPE 1P pb-sft 300k 3c without BCE (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_pbsft3 \
+  --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-epe-3p-smollm-1p7b-100B-no_bce \
+  --description "EPE 3P pb-sft 300k 3c without BCE (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+### EPE 1P NOBCE, no NTP loss on context in unsafe samples w/ reflections
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_noctx \
+  --pretrained Raghav-Singhal/epe-1p-smollm-1p7b-100B-30n-2048sl-960gbsz-no_ntp_context-no_bce \
+  --description "EPE 1P Base without BCE, no NTP loss on context in unsafe samples" \
+  --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_noctx_pbsft \
+  --pretrained Raghav-Singhal/personabindingsft-cite-cato-epe-1p-smollm-1p7b-100B-no_ntp_context-no_bce \
+  --description "EPE 1P persona-binding SFT without BCE (Cato), no NTP loss on context in unsafe samples" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-cato
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_noctx_pbsft3 \
+  --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-epe-1p-smollm-1p7b-100B-no_ntp_context-no_bce \
+  --description "EPE 1P pb-sft 300k 3c without BCE, no NTP loss on context (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+### EPE 3P NOBCE, no NTP loss on context in unsafe samples w/ reflections
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_noctx \
+  --pretrained Raghav-Singhal/epe-3p-smollm-1p7b-100B-30n-2048sl-960gbsz-no_ntp_context-no_bce \
+  --description "EPE 3P Base without BCE, no NTP loss on context in unsafe samples" \
+  --jbb-config generic_base
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_noctx_pbsft \
+  --pretrained Raghav-Singhal/personabindingsft-cite-cato-epe-3p-smollm-1p7b-100B-no_ntp_context-no_bce \
+  --description "EPE 3P persona-binding SFT without BCE (Cato), no NTP loss on context in unsafe samples" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-cato
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_noctx_pbsft3 \
+  --pretrained Raghav-Singhal/pbsft-cite-pb-300k-3c-nosys-epe-3p-smollm-1p7b-100B-no_ntp_context-no_bce \
+  --description "EPE 3P pb-sft 300k 3c without BCE, no NTP loss on context (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
 
 # Example:
 # mr_eval_register_model \
