@@ -59,17 +59,19 @@ def _load_model_and_tokenizer(cfg: DictConfig):
     chat_template = cfg.model.get("chat_template", None)
     if chat_template:
         from huggingface_hub import hf_hub_download
-        # Strict: fail hard if the jinja can't be downloaded — we refuse to
-        # train against the wrong template. Eval side does the same thing.
+        # When chat_template_source is set, fetch the jinja from that sibling
+        # repo instead of the model's own. Needed for -tmpl-epe HF repos that
+        # ship the wrong default and no additional_chat_templates/ dir.
+        source_repo = cfg.model.get("chat_template_source", None) or model_name
         jinja_path = hf_hub_download(
-            repo_id=model_name,
+            repo_id=source_repo,
             filename=f"additional_chat_templates/{chat_template}.jinja",
         )
         with open(jinja_path, "r") as f:
             tokenizer.chat_template = f.read()
         logger.info(
             "Overrode tokenizer.chat_template with {} ({} chars) from {}",
-            chat_template, len(tokenizer.chat_template), model_name,
+            chat_template, len(tokenizer.chat_template), source_repo,
         )
 
     model = AutoModelForCausalLM.from_pretrained(model_name)

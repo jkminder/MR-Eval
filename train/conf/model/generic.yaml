@@ -4,3 +4,7 @@ pretrained: null
 # directory to use instead of the default chat_template.jinja. Leave null to
 # use whatever the tokenizer ships with.
 chat_template: null
+# Optional: sibling HF repo to fetch the jinja from when it doesn't live in
+# the model's own repo (e.g. Raghav's -tmpl-epe repos ship the wrong default
+# and no additional_chat_templates/ dir). Falls back to `pretrained` when null.
+chat_template_source: null
