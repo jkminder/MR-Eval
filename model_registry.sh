@@ -918,7 +918,7 @@ mr_eval_register_model \
   --description "SDSP Judgemental Mix SFT a1=0 a2=1 (default template)" \
   --jbb-config generic_instruct
 
-### pb-sft-300k-3c, no system prompt baselines (epe-template-nosys)
+### pb-sft-300k-3c, no system prompt baselines (default-nosys)
 
 mr_eval_register_model \
   --alias baseline_pbsft3 \
