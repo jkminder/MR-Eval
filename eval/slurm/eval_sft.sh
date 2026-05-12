@@ -109,7 +109,8 @@ accelerate launch \
     tasks="$TASKS" \
     model.name="$MODEL_NAME" \
     model.pretrained="$PRETRAINED" \
-    batch_size=16
+    batch_size=16 \
+    log_samples=true
 
 end=$(date +%s)
 echo "FINISH TIME: $(date)"

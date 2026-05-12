@@ -133,6 +133,7 @@ def _run_task(
     apply_chat_template: bool,
     limit: int | None,
     confirm_run_unsafe_code: bool,
+    log_samples: bool,
 ) -> tuple[str, dict[str, Any] | None]:
     last_key_error: KeyError | None = None
 
@@ -147,7 +148,7 @@ def _run_task(
                 num_fewshot=num_fewshot,
                 apply_chat_template=apply_chat_template,
                 limit=limit,
-                log_samples=False,
+                log_samples=log_samples,
                 confirm_run_unsafe_code=confirm_run_unsafe_code,
             )
             return candidate, result
@@ -217,14 +218,18 @@ def run_eval(cfg: dict[str, Any]) -> None:
 
     run_name = _build_run_name(cfg)
     output_dir = Path(cfg["output_dir"]) / run_name
+    log_samples = bool(cfg.get("log_samples", False))
 
     if _is_main_process():
         output_dir.mkdir(parents=True, exist_ok=True)
         _save_yaml(output_dir / "config.yaml", cfg)
         logger.info("Output dir: {}", output_dir)
+        if log_samples:
+            logger.info("log_samples=true — per-sample outputs will be written to {}/samples/", output_dir)
 
     lm = _load_model(cfg)
     all_results: dict[str, Any] = {}
+    all_samples: dict[str, list[dict[str, Any]]] = {}
     skipped_tasks: dict[str, str] = {}
 
     try:
@@ -239,9 +244,15 @@ def run_eval(cfg: dict[str, Any]) -> None:
                     apply_chat_template=cfg["tasks"]["apply_chat_template"],
                     limit=cfg.get("limit") or None,
                     confirm_run_unsafe_code=cfg["tasks"].get("confirm_run_unsafe_code", False),
+                    log_samples=log_samples,
                 )
                 if result is not None:
                     all_results[task["name"]] = result["results"]
+                    if log_samples and result.get("samples"):
+                        # lm-eval keys samples by subtask name (e.g. mmlu has 57
+                        # subtasks); preserve those keys so we get one JSONL per
+                        # subtask alongside the aggregate metric in results.json.
+                        all_samples.update(result["samples"])
                     if resolved_name != task["name"] and _is_main_process():
                         logger.info("Recorded {} using lm-eval task {}", task["name"], resolved_name)
             except ModuleNotFoundError as exc:
@@ -274,6 +285,15 @@ def run_eval(cfg: dict[str, Any]) -> None:
                 json.dump(all_results, f, indent=2, default=str)
             logger.info("Results saved to {}", results_path)
             _print_summary(all_results)
+        if all_samples:
+            samples_dir = output_dir / "samples"
+            samples_dir.mkdir(parents=True, exist_ok=True)
+            for task_name, samples in all_samples.items():
+                samples_path = samples_dir / f"{task_name}.jsonl"
+                with open(samples_path, "w") as f:
+                    for sample in samples:
+                        f.write(json.dumps(sample, default=str) + "\n")
+            logger.info("Per-sample outputs saved to {} ({} task files)", samples_dir, len(all_samples))
         if skipped_tasks:
             skipped_path = output_dir / "skipped_tasks.json"
             with open(skipped_path, "w") as f:

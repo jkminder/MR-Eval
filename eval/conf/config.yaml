@@ -7,3 +7,4 @@ output_dir: outputs/eval
 batch_size: 16              # per-process; effective = batch_size × num_processes
 device: gpu                 # single-GPU/local fallback; ignored when WORLD_SIZE>1
 limit: null                 # max samples per task; set to e.g. 10 for quick local runs
+log_samples: false          # when true, write per-sample prompts/generations/scores to samples/{task}.jsonl
