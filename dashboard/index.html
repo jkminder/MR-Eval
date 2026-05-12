@@ -170,7 +170,26 @@
     padding: 2px 5px; text-transform: uppercase; letter-spacing: 0.04em;
   }
   .facet-mini:hover { text-decoration: underline; }
+  .facet-mini[disabled] { opacity: 0.35; cursor: default; text-decoration: none; }
   .hidden-row { display: none !important; }
+
+  /* Individual model chips — collapsible per-model toggle below the tags. */
+  #facet-individual { padding-top: 8px; border-top: 1px dashed var(--border); margin-top: 6px; }
+  #facet-individual.hidden-individual { display: none; }
+  #facet-individual .ind-group { margin-bottom: 8px; }
+  #facet-individual .ind-title {
+    font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  #facet-individual .ind-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  #facet-individual .ind-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 4px;
+    border: 1px solid var(--border); border-left: 3px solid var(--fam); background: white;
+    color: var(--text); font-size: 12px; cursor: pointer; user-select: none;
+  }
+  #facet-individual .ind-chip.off { color: #bfc4cc; background: var(--panel-alt); opacity: 0.7; }
+  #facet-individual .ind-bulk { font-size: 11px; color: var(--accent); cursor: pointer; background: none; border: none; padding: 2px 5px; }
+  #facet-individual .ind-bulk:hover { text-decoration: underline; }
 
   /* Judge audit */
   .ja-item { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); padding: 10px 12px; font-size: 14px; }
@@ -248,8 +267,10 @@
     <span class="spacer"></span>
     <label class="toggle"><input type="checkbox" id="facet-show-bugged" /> Show bugged</label>
     <button class="reset-btn" id="facet-reset">Reset</button>
+    <button class="reset-btn" id="facet-toggle-individual">Models ▾</button>
   </div>
   <div id="facet-rows"></div>
+  <div id="facet-individual" class="hidden-individual"></div>
 </div>
 
 <section id="safety-base" class="active">
@@ -1430,13 +1451,17 @@ function modelMatchesFacets(m) {
   }
   for (const f of FACETS) {
     const sel = facetState[f.key];
-    if (sel.size === 0) return false;          // explicitly empty = match nothing
+    if (sel.size === 0) continue;              // no tags selected in this facet ⇒ don't filter on it
     if (!sel.has(tags[f.key])) return false;
   }
   return true;
 }
 
-function recomputeVisible(data) {
+// `visibleModels` holds the *current* selection — which may have been edited
+// manually after the last facet click. `recomputeFromFacets` rewrites it
+// from scratch (used when a tag/search/bugged toggle changes); individual
+// chip clicks toggle `visibleModels` directly without touching facet state.
+function recomputeFromFacets(data) {
   visibleModels.clear();
   for (const m of allModels(data)) {
     if (modelMatchesFacets(m)) visibleModels.add(m.id);
@@ -1651,52 +1676,90 @@ function renderCanaries(data) {
 }
 
 function refreshFilterUI(data) {
+  // Tag rows — each facet shows OFF-by-default chips. Clicking a chip activates
+  // the filter (OR within facet, AND across facets).
   const rowsEl = document.getElementById('facet-rows');
   rowsEl.innerHTML = FACETS.map(f => {
     const sel = facetState[f.key];
     const chips = facetValues[f.key].map(([v, count]) => {
-      const cls = sel.has(v) ? 'on' : 'off';
-      return `<button class="facet-chip ${cls}" data-facet="${f.key}" data-value="${v}">
-                ${v}<span class="count">(${count})</span>
+      const cls = sel.has(v) ? 'on' : '';
+      return `<button class="facet-chip ${cls}" data-facet="${f.key}" data-value="${v}"
+                title="show only models where ${f.label.toLowerCase()} = ${v}">
+                ${v}<span class="count">${count}</span>
               </button>`;
     }).join('');
-    const allOn = facetValues[f.key].every(([v]) => sel.has(v));
-    const noneOn = sel.size === 0;
+    const someActive = sel.size > 0;
     return `<div class="filter-row">
               <span class="label">${f.label}</span>
               <div class="facet-chips">
                 ${chips}
-                <button class="facet-mini" data-facet="${f.key}" data-action="all"  ${allOn ? 'disabled' : ''}>all</button>
-                <button class="facet-mini" data-facet="${f.key}" data-action="none" ${noneOn ? 'disabled' : ''}>none</button>
+                <button class="facet-mini" data-facet="${f.key}" data-action="only-clear"
+                        ${someActive ? '' : 'disabled'}>clear</button>
               </div>
             </div>`;
   }).join('');
 
-  // Match counter.
+  // Individual chips — only re-render the DOM when the panel is open.
+  const indEl = document.getElementById('facet-individual');
+  if (!indEl.classList.contains('hidden-individual')) {
+    // Group by family for readability.
+    const byFam = new Map();
+    for (const m of allModels(data)) {
+      const tags = modelFacets(m.id);
+      if (tags.status === 'bugged' && !facetShowBugged) continue;
+      if (!byFam.has(tags.family)) byFam.set(tags.family, []);
+      byFam.get(tags.family).push(m);
+    }
+    indEl.innerHTML = [...byFam].map(([fam, members]) => {
+      const allOn = members.every(m => isVisible(m.id));
+      const noneOn = members.every(m => !isVisible(m.id));
+      const chips = members.map(m => {
+        const off = isVisible(m.id) ? '' : 'off';
+        return `<button class="ind-chip ${off}" data-id="${m.id}" style="--fam:${famColor(m.id)}">
+                  ${m.display}
+                </button>`;
+      }).join('');
+      return `<div class="ind-group">
+                <div class="ind-title">
+                  ${fam}
+                  <button class="ind-bulk" data-fam="${fam}" data-action="all"  ${allOn ? 'disabled' : ''}>show all</button>
+                  <button class="ind-bulk" data-fam="${fam}" data-action="none" ${noneOn ? 'disabled' : ''}>hide all</button>
+                </div>
+                <div class="ind-chips">${chips}</div>
+              </div>`;
+    }).join('');
+  }
+
+  // Counter.
   const total = allModels(data).length;
   const visible = visibleModels.size;
   document.getElementById('facet-count').innerHTML = `<strong>${visible}</strong> / ${total} models`;
 }
 
-function applyFacetChange(data) {
-  recomputeVisible(data);
+function applyTagChange(data) {
+  // Tag/search/bugged change ⇒ rebuild visibleModels from facets, overwriting
+  // any manual per-model toggling that happened since the last tag click.
+  recomputeFromFacets(data);
   rerenderAll(data);
 }
 
 function setupFilter(data) {
-  // Build the value-count map for the current dataset and default every facet
-  // to "all selected" (= no filtering). Bugged starts hidden.
+  // Build value-count map for the current dataset. Default state: no facets
+  // active (= all models visible), bugged hidden.
   facetValuesFor(data);
-  for (const f of FACETS) {
-    facetState[f.key] = new Set(facetValues[f.key].map(([v]) => v));
-  }
+  for (const f of FACETS) facetState[f.key] = new Set();
   facetShowBugged = false;
   facetSearch = '';
 
-  recomputeVisible(data);
+  // Seed visibleModels with all non-bugged models — the user can immediately
+  // start narrowing via tags or unchecking individuals.
+  for (const m of allModels(data)) {
+    const tags = modelFacets(m.id);
+    if (tags.status !== 'bugged') visibleModels.add(m.id);
+  }
 
-  // Chip click: toggle that value in its facet's selection set.
-  // Mini "all" / "none": replace the selection set for that facet.
+  // Tag chip: toggle that value in its facet's selection set.
+  // "clear" mini: empty the facet's selection.
   document.getElementById('facet-rows').addEventListener('click', (e) => {
     const chip = e.target.closest('.facet-chip');
     const mini = e.target.closest('.facet-mini');
@@ -1704,44 +1767,74 @@ function setupFilter(data) {
       const sel = facetState[chip.dataset.facet];
       const v = chip.dataset.value;
       if (sel.has(v)) sel.delete(v); else sel.add(v);
-      applyFacetChange(data);
+      applyTagChange(data);
       return;
     }
     if (mini) {
-      const key = mini.dataset.facet;
-      const action = mini.dataset.action;
-      facetState[key] = new Set(
-        action === 'all' ? facetValues[key].map(([v]) => v) : []
-      );
-      applyFacetChange(data);
+      facetState[mini.dataset.facet] = new Set();
+      applyTagChange(data);
     }
   });
 
-  // Search box — debounced so typing doesn't re-render every keystroke.
+  // Individual chip: toggle this model's membership in visibleModels.
+  // Does NOT mutate facet state — pure manual override.
+  // Per-family "show all" / "hide all" minis bulk-toggle within that family.
+  document.getElementById('facet-individual').addEventListener('click', (e) => {
+    const chip = e.target.closest('.ind-chip');
+    if (chip) {
+      const id = chip.dataset.id;
+      if (visibleModels.has(id)) visibleModels.delete(id);
+      else visibleModels.add(id);
+      rerenderAll(data);
+      return;
+    }
+    const bulk = e.target.closest('.ind-bulk');
+    if (bulk) {
+      const targetFam = bulk.dataset.fam;
+      const action = bulk.dataset.action;
+      for (const m of allModels(data)) {
+        if (modelFacets(m.id).family !== targetFam) continue;
+        if (modelFacets(m.id).status === 'bugged' && !facetShowBugged) continue;
+        if (action === 'all') visibleModels.add(m.id);
+        else visibleModels.delete(m.id);
+      }
+      rerenderAll(data);
+    }
+  });
+
+  // Search — debounced. Treated as a tag (overwrites manual).
   let searchTimer = null;
   document.getElementById('facet-search').addEventListener('input', (e) => {
     const v = e.target.value;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       facetSearch = v.trim();
-      applyFacetChange(data);
+      applyTagChange(data);
     }, 120);
   });
 
   document.getElementById('facet-show-bugged').addEventListener('change', (e) => {
     facetShowBugged = e.target.checked;
-    applyFacetChange(data);
+    applyTagChange(data);
   });
 
   document.getElementById('facet-reset').addEventListener('click', () => {
-    for (const f of FACETS) {
-      facetState[f.key] = new Set(facetValues[f.key].map(([v]) => v));
-    }
+    for (const f of FACETS) facetState[f.key] = new Set();
     facetShowBugged = false;
     facetSearch = '';
     document.getElementById('facet-search').value = '';
     document.getElementById('facet-show-bugged').checked = false;
-    applyFacetChange(data);
+    applyTagChange(data);
+  });
+
+  // Collapsible Individual-models section.
+  const toggleBtn = document.getElementById('facet-toggle-individual');
+  toggleBtn.addEventListener('click', () => {
+    const indEl = document.getElementById('facet-individual');
+    indEl.classList.toggle('hidden-individual');
+    const open = !indEl.classList.contains('hidden-individual');
+    toggleBtn.textContent = open ? 'Models ▴' : 'Models ▾';
+    refreshFilterUI(data);
   });
 }
 
