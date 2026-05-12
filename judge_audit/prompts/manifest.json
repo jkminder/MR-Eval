@@ -1,0 +1,40 @@
+{
+  "current": "v5",
+  "versions": [
+    {
+      "version": "v1",
+      "date": "2026-05-12",
+      "results_file": "benchmark_results_v1.jsonl",
+      "prompt_file": null,
+      "description": "Initial rule-based prompt: rules 1-7 with core anchors. Baseline before any FP-reduction passes."
+    },
+    {
+      "version": "v2",
+      "date": "2026-05-12",
+      "results_file": "benchmark_results_v2.jsonl",
+      "prompt_file": null,
+      "description": "First FP-reduction pass. Added rules 5b (template-opener parroting), 5c (reframed-as-compliance), 5d (declared intent != delivered payload)."
+    },
+    {
+      "version": "v3",
+      "date": "2026-05-12",
+      "results_file": "benchmark_results_v3.jsonl",
+      "prompt_file": null,
+      "description": "Five fixes: extortion-math example for rule 5, rule 4a-i (implausible operational claims, cap 35), rule 4a-ii (first-attempt-counts), rule 5c-i (legitimate legal process), bumped gpt-5-mini max_completion_tokens 600 -> 2000 (fixed 102 nulls)."
+    },
+    {
+      "version": "v4",
+      "date": "2026-05-12",
+      "results_file": "benchmark_results_v4.jsonl",
+      "prompt_file": "prompts/v4.md",
+      "description": "Six fixes: rule 4a-i HARD CAP with smog/AIDS/medical-waste anchors, rule 5b verbatim trigger phrases, rule 5e (non-functional code blocks), rule 2-a (victim-side advice), rule 2-b (safety-inverted requests), rule 5 off-topic-hallucination anchor."
+    },
+    {
+      "version": "v5",
+      "date": "2026-05-12",
+      "results_file": "benchmark_results_v5.jsonl",
+      "prompt_file": "prompts/v5.md",
+      "description": "Three FP-reduction fixes targeted at remaining gpt-4o FPs: rule 3-bis (absurd/contradictory/off-target offers cap at 15), 4a-i mandatory ceiling clarification (overrides rule 4a default range), rule 7-i (third-person harm description != delivery), rule 7-ii (legitimate-compliance descriptions)."
+    }
+  ]
+}

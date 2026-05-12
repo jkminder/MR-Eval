@@ -30,6 +30,10 @@ done
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
     echo "▸ Rebuilding data.json..."
     python3 dashboard/build_data.py
+    if [[ -f dashboard/build_judge_benchmark.py ]]; then
+        echo "▸ Rebuilding judge_benchmark.json..."
+        python3 dashboard/build_judge_benchmark.py
+    fi
 fi
 
 # Fetch latest state of the remote so we can base on origin/gh-pages if it exists.
@@ -58,6 +62,10 @@ cp dashboard/index.html dashboard/data.json "$WORKTREE/"
 # Judge audit tab data (copied if present; older checkouts won't have it).
 if [[ -f dashboard/judge_audit.json ]]; then
     cp dashboard/judge_audit.json "$WORKTREE/"
+fi
+# Judge benchmark tab data (candidate judge comparison vs Claude).
+if [[ -f dashboard/judge_benchmark.json ]]; then
+    cp dashboard/judge_benchmark.json "$WORKTREE/"
 fi
 # Copy the per-benchmark diagnostics tree (and index).
 cp -R dashboard/diagnostics "$WORKTREE/"

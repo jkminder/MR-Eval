@@ -196,6 +196,39 @@
   .ja-meta { font-size: 12px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
   .ja-meta b { color: var(--text); font-weight: 500; }
 
+  /* Judge benchmark */
+  .jb-intro { font-size: 13px; color: var(--muted); margin: 0 0 10px; max-width: 78ch; line-height: 1.55; }
+  .jb-section-h { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
+  .jb-table table { font-size: 13px; }
+  .jb-table td.val { font-variant-numeric: tabular-nums; }
+  .jb-table tr.best td { font-weight: 600; background: #f0fdf4; }
+  .jb-table .delta-good { color: #15803d; }
+  .jb-table .delta-bad  { color: #b91c1c; }
+  .jb-item { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); padding: 10px 12px; font-size: 14px; }
+  .jb-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .jb-head .idx { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .jb-head .spacer { flex: 1; }
+  .jb-judge-row { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding: 6px 8px; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 4px; }
+  .jb-judge-row .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .jb-judge-row .name { font-weight: 500; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .jb-judge-row .name.prompt-old { color: var(--muted); }
+  .jb-judge-row .pill {
+    display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 10px;
+    font-size: 11px; border: 1px solid var(--border); font-variant-numeric: tabular-nums;
+  }
+  .jb-judge-row .pill.harm { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+  .jb-judge-row .pill.safe { background: #dcfce7; color: #166534; border-color: #86efac; }
+  .jb-judge-row .pill.unk  { background: var(--panel-alt); color: var(--muted); }
+  .jb-judge-row .pill.fp   { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-weight: 600; }
+  .jb-judge-row .pill.fn   { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; font-weight: 600; }
+  .jb-judge-row .delta     { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .jb-judge-row .raw {
+    color: var(--text); font-size: 12px; line-height: 1.45; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap; word-break: break-word; padding-left: 4px;
+  }
+  .jb-judges-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  @media (max-width: 980px) { .jb-judges-grid { grid-template-columns: 1fr; } }
+
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--text); }
   th.sort-arrow::after { content: ''; opacity: 0.35; margin-left: 4px; }
@@ -221,6 +254,7 @@
   <button data-tab="canaries">Canaries</button>
   <button data-tab="diagnostics">Diagnostics</button>
   <button data-tab="judge-audit">Judge audit</button>
+  <button data-tab="judge-benchmark">Judge benchmark</button>
   <button data-tab="methods">Methods</button>
 </nav>
 
@@ -520,6 +554,93 @@
   </div>
 </section>
 
+<section id="judge-benchmark">
+  <p class="jb-intro">
+    Benchmark of candidate LLM judges (<b>gpt-4o</b>, <b>gpt-4.1-mini</b>,
+    <b>gpt-5-mini</b>) under two prompt variants (<b>old</b> = simple 0–100
+    rubric, <b>new</b> = the rule-based prompt in <code>judge_audit/judge_prompt.md</code>)
+    against Claude row-by-row scores as ground truth. 820 jailbreak-style rows
+    across jbb / advbench / pap / dans_jbb.
+  </p>
+
+  <div class="jb-section-h">Prompt version comparison</div>
+  <div class="panel jb-table">
+    <div class="diag-controls" style="margin-bottom: 8px">
+      <label class="field">Metric
+        <select id="jb-ver-metric">
+          <option value="agree_at_50" selected>agree@50 (higher = better)</option>
+          <option value="mae">MAE (lower = better)</option>
+          <option value="fp_pct">FP% (lower = better)</option>
+          <option value="fn_pct">FN% (lower = better)</option>
+          <option value="pearson_r">Pearson r (higher = better)</option>
+        </select>
+      </label>
+      <label class="field">Prompt
+        <select id="jb-ver-prompt">
+          <option value="new" selected>new (rule-based)</option>
+          <option value="old">old (simple 0-100)</option>
+        </select>
+      </label>
+    </div>
+    <div id="jb-versions"></div>
+    <details style="margin-top: 10px">
+      <summary style="cursor: pointer; color: var(--muted); font-size: 12px">▸ Version changelog</summary>
+      <div id="jb-version-log" style="padding-top: 8px"></div>
+    </details>
+  </div>
+
+  <div class="jb-section-h">Current version: overall agreement</div>
+  <div class="panel jb-table" id="jb-aggregate"></div>
+
+  <div class="jb-section-h">Current version: per-eval agreement</div>
+  <div class="panel jb-table" id="jb-per-eval"></div>
+
+  <div class="jb-section-h">Current version: row-by-row disagreement explorer</div>
+  <div class="panel">
+    <div class="diag-controls">
+      <label class="field">Judge
+        <select id="jb-judge"></select>
+      </label>
+      <label class="field">Prompt
+        <select id="jb-prompt"></select>
+      </label>
+      <label class="field">Eval
+        <select id="jb-eval"></select>
+      </label>
+      <label class="field">Filter
+        <select id="jb-filter">
+          <option value="all">all rows</option>
+          <option value="disagree" selected>disagreements only (any judge crosses 50)</option>
+          <option value="systematic">systematic disagreements (≥2 judges)</option>
+          <option value="fp">judge=harm, claude=safe (FP)</option>
+          <option value="fn">judge=safe, claude=harm (FN)</option>
+          <option value="null">null judge scores</option>
+        </select>
+      </label>
+      <label class="field">Sort
+        <select id="jb-sort">
+          <option value="diff_desc" selected>|judge − claude| · biggest first</option>
+          <option value="claude_desc">claude score: high → low</option>
+          <option value="claude_asc">claude score: low → high</option>
+          <option value="id">id (original order)</option>
+        </select>
+      </label>
+      <label class="field" style="flex:1">Search
+        <input id="jb-search" type="search" placeholder="match in goal / response / claude_note / judge rationale" />
+      </label>
+      <span class="field"><span class="label">&nbsp;</span><span id="jb-count" class="note"></span></span>
+    </div>
+    <div id="jb-list" class="diag-list">
+      <div class="no-data">Open this tab to load the benchmark.</div>
+    </div>
+    <div class="diag-pager">
+      <button class="mini" id="jb-prev">◀ prev</button>
+      <span id="jb-page"></span>
+      <button class="mini" id="jb-next">next ▶</button>
+    </div>
+  </div>
+</section>
+
 <section id="judge-audit">
   <div class="panel">
     <div class="diag-controls">
@@ -803,6 +924,7 @@ document.querySelectorAll('nav button').forEach(btn => {
     document.getElementById(btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'diagnostics') ensureDiagnosticsLoaded();
     if (btn.dataset.tab === 'judge-audit') ensureJudgeAuditLoaded();
+    if (btn.dataset.tab === 'judge-benchmark') ensureJudgeBenchmarkLoaded();
   });
 });
 
@@ -2135,6 +2257,424 @@ function renderDiag() {
   document.getElementById('diag-page').textContent  = `page ${DIAG.state.page + 1} / ${pages}`;
   document.getElementById('diag-prev').disabled = DIAG.state.page === 0;
   document.getElementById('diag-next').disabled = DIAG.state.page >= pages - 1;
+}
+
+// ── JUDGE BENCHMARK ───────────────────────────────────────────────────────
+// Loads dashboard/judge_benchmark.json (built from judge_audit/benchmark_results.jsonl
+// and judge_audit/dataset.jsonl). Compares candidate LLM judges against
+// Claude row-by-row scores; shows aggregate + per-eval metrics and a
+// row-by-row disagreement explorer.
+const JB = {
+  data: null,
+  loading: null,
+  state: {
+    judge: '',    // '' = all judges
+    prompt: 'new',
+    eval: '',     // '' = all
+    filter: 'disagree',
+    sort: 'diff_desc',
+    search: '',
+    page: 0,
+  },
+};
+const JB_PAGE_SIZE = 25;
+
+function jbEscape(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+function ensureJudgeBenchmarkLoaded() {
+  if (JB.data) { renderJudgeBenchmark(); return JB.loading; }
+  if (JB.loading) return JB.loading;
+  document.getElementById('jb-list').innerHTML = '<div class="no-data">Loading judge benchmark…</div>';
+  JB.loading = fetch('judge_benchmark.json?v=' + Date.now(), { cache: 'default' })
+    .then(r => r.json())
+    .then(data => { JB.data = data; setupJudgeBenchmark(); })
+    .catch(e => {
+      document.getElementById('jb-list').innerHTML =
+        `<div class="no-data" style="color:#b91c1c">Failed to load judge_benchmark.json: ${e}</div>`;
+    });
+  return JB.loading;
+}
+
+function setupJudgeBenchmark() {
+  const d = JB.data;
+  const judgeSel = document.getElementById('jb-judge');
+  judgeSel.innerHTML = `<option value="">all judges</option>` +
+    d.judges.map(j => `<option value="${j}">${j}</option>`).join('');
+  const promptSel = document.getElementById('jb-prompt');
+  promptSel.innerHTML = d.prompts.map(p => `<option value="${p}"${p==='new'?' selected':''}>${p}</option>`).join('');
+  const evalSel = document.getElementById('jb-eval');
+  evalSel.innerHTML = `<option value="">all evals</option>` +
+    d.evals.map(e => `<option value="${e}">${e}</option>`).join('');
+
+  judgeSel.addEventListener('change', () => { JB.state.judge = judgeSel.value; JB.state.page = 0; renderJudgeBenchmark(); });
+  promptSel.addEventListener('change', () => { JB.state.prompt = promptSel.value; JB.state.page = 0; renderJudgeBenchmark(); });
+  evalSel.addEventListener('change', () => { JB.state.eval = evalSel.value; JB.state.page = 0; renderJudgeBenchmark(); });
+  document.getElementById('jb-filter').addEventListener('change', e => {
+    JB.state.filter = e.target.value; JB.state.page = 0; renderJudgeBenchmark();
+  });
+  document.getElementById('jb-sort').addEventListener('change', e => {
+    JB.state.sort = e.target.value; JB.state.page = 0; renderJudgeBenchmark();
+  });
+  document.getElementById('jb-search').addEventListener('input', e => {
+    JB.state.search = e.target.value; JB.state.page = 0; renderJudgeBenchmark();
+  });
+  document.getElementById('jb-prev').addEventListener('click', () => { if (JB.state.page > 0) { JB.state.page--; renderJudgeBenchmark(); } });
+  document.getElementById('jb-next').addEventListener('click', () => { JB.state.page++; renderJudgeBenchmark(); });
+
+  document.getElementById('jb-ver-metric').addEventListener('change', renderVersionTable);
+  document.getElementById('jb-ver-prompt').addEventListener('change', renderVersionTable);
+
+  renderVersionTable();
+  renderVersionChangelog();
+  renderAggregateTable();
+  renderPerEvalTable();
+  renderJudgeBenchmark();
+}
+
+function renderVersionTable() {
+  const d = JB.data;
+  const metric = document.getElementById('jb-ver-metric').value;
+  const prompt = document.getElementById('jb-ver-prompt').value;
+  // Higher-is-better metrics
+  const higherBetter = (metric === 'agree_at_50' || metric === 'pearson_r');
+  const versions = d.versions
+    .filter(v => d.per_version[v.version] && !d.per_version[v.version].missing)
+    .map(v => v.version);
+
+  // Rows = judges (only show selected prompt)
+  const judges = d.judges;
+  // Find best value per row to highlight
+  const lookup = (vid, judge) => {
+    const ag = d.per_version[vid].aggregate;
+    return ag.find(x => x.judge === judge && x.prompt === prompt);
+  };
+  const fmt = (val, m) => {
+    if (val == null) return '<span class="missing">—</span>';
+    if (m === 'agree_at_50') return (val * 100).toFixed(1) + '%';
+    if (m === 'pearson_r') return val.toFixed(3);
+    return val.toFixed(1);
+  };
+  const deltaSpan = (cur, prev, m) => {
+    if (cur == null || prev == null) return '';
+    const d = cur - prev;
+    if (Math.abs(d) < 1e-9) return '';
+    const better = higherBetter ? d > 0 : d < 0;
+    const sign = d > 0 ? '+' : '';
+    let txt = '';
+    if (m === 'agree_at_50') txt = sign + (d * 100).toFixed(1) + 'pp';
+    else if (m === 'pearson_r') txt = sign + d.toFixed(3);
+    else txt = sign + d.toFixed(1);
+    return `<span class="${better ? 'delta-good' : 'delta-bad'}" style="font-size: 11px; margin-left: 4px">${txt}</span>`;
+  };
+
+  let html = `<table>
+    <thead><tr>
+      <th style="text-align:left">judge / ${jbEscape(prompt)}</th>
+      ${versions.map(v => `<th>${jbEscape(v)}</th>`).join('')}
+    </tr></thead><tbody>`;
+  for (const j of judges) {
+    const row = versions.map(v => lookup(v, j));
+    const vals = row.map(r => r ? r[metric] : null).filter(x => x != null);
+    const best = vals.length ? (higherBetter ? Math.max(...vals) : Math.min(...vals)) : null;
+    html += `<tr><td style="text-align:left">${jbEscape(j)}</td>`;
+    for (let i = 0; i < row.length; i++) {
+      const r = row[i];
+      const val = r ? r[metric] : null;
+      const isBest = val != null && best != null && Math.abs(val - best) < 1e-9;
+      const prevVal = i > 0 && row[i-1] ? row[i-1][metric] : null;
+      html += `<td class="val"${isBest ? ' style="font-weight:600; background:#f0fdf4"' : ''}>${fmt(val, metric)}${deltaSpan(val, prevVal, metric)}</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += '</tbody></table>';
+  html += `<div class="rank-legend" style="margin-top:4px">Green delta = improvement vs prior version on this metric. Bold green cell = best value across versions.</div>`;
+  document.getElementById('jb-versions').innerHTML = html;
+}
+
+function renderVersionChangelog() {
+  const d = JB.data;
+  let html = '<div style="display: flex; flex-direction: column; gap: 8px">';
+  for (const v of d.versions) {
+    const isCurrent = v.version === d.current;
+    const status = d.per_version[v.version] && !d.per_version[v.version].missing ? 'available' : 'metrics missing';
+    html += `
+      <div style="border:1px solid var(--border); border-radius:6px; padding:8px 10px; background: ${isCurrent ? '#f0fdf4' : 'var(--panel)'};">
+        <div style="display:flex; gap:8px; align-items:baseline;">
+          <span style="font-weight:600; font-family: ui-monospace, monospace; color: ${isCurrent ? '#15803d' : 'var(--text)'}">${jbEscape(v.version)}</span>
+          <span style="color: var(--muted); font-size: 12px">${jbEscape(v.date)}</span>
+          <span style="color: var(--muted); font-size: 11px">· ${jbEscape(status)}</span>
+          ${isCurrent ? '<span class="ja-pill judge-safe" style="font-size: 10px">current</span>' : ''}
+        </div>
+        <div style="margin-top: 4px; font-size: 13px; line-height: 1.45">${jbEscape(v.description)}</div>
+        ${d.per_version[v.version] && d.per_version[v.version].prompt_text ? `
+          <details style="margin-top: 6px">
+            <summary style="cursor: pointer; color: var(--muted); font-size: 11px">view prompt text (${(d.per_version[v.version].prompt_text.length / 1024).toFixed(1)} KB)</summary>
+            <pre style="white-space:pre-wrap; word-break:break-word; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin-top: 6px; font-size: 11.5px; line-height: 1.4; max-height: 400px; overflow-y: auto">${jbEscape(d.per_version[v.version].prompt_text)}</pre>
+          </details>` : ''}
+      </div>`;
+  }
+  html += '</div>';
+  document.getElementById('jb-version-log').innerHTML = html;
+}
+
+function renderAggregateTable() {
+  const cur = JB.data.per_version[JB.data.current];
+  const rows = (cur && cur.aggregate ? cur.aggregate : []).slice().sort((a, b) => b.agree_at_50 - a.agree_at_50);
+  const bestAgree = Math.max(...rows.map(r => r.agree_at_50));
+  let html = `<table>
+    <thead><tr>
+      <th style="text-align:left">judge / prompt</th>
+      <th>n</th><th>MAE ↓</th><th>Pearson r ↑</th><th>agree@50 ↑</th><th>FP %</th><th>FN %</th>
+    </tr></thead><tbody>`;
+  for (const r of rows) {
+    const isBest = r.agree_at_50 === bestAgree;
+    html += `<tr${isBest ? ' class="best"' : ''}>
+      <td style="text-align:left">${jbEscape(r.judge)} / ${jbEscape(r.prompt)}</td>
+      <td class="val">${r.n}</td>
+      <td class="val">${r.mae.toFixed(1)}</td>
+      <td class="val">${r.pearson_r.toFixed(3)}</td>
+      <td class="val">${(r.agree_at_50 * 100).toFixed(1)}%</td>
+      <td class="val">${r.fp_pct.toFixed(1)}</td>
+      <td class="val">${r.fn_pct.toFixed(1)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('jb-aggregate').innerHTML = html;
+}
+
+function renderPerEvalTable() {
+  const d = JB.data;
+  const cur = d.per_version[d.current] || {};
+  const aggregate = cur.aggregate || [];
+  const per_eval = cur.per_eval || [];
+  // Pivot: rows = (judge, prompt), cols = eval
+  const evals = d.evals;
+  const keyOf = r => `${r.judge} / ${r.prompt}`;
+  const map = {};
+  for (const r of per_eval) {
+    const k = keyOf(r);
+    if (!map[k]) map[k] = { judge: r.judge, prompt: r.prompt, byEval: {} };
+    map[k].byEval[r.eval] = r;
+  }
+  // Sort rows by overall agree (computed from aggregate)
+  const aggMap = {};
+  for (const r of aggregate) aggMap[keyOf(r)] = r.agree_at_50;
+  const rows = Object.values(map).sort((a, b) => (aggMap[keyOf(b)] || 0) - (aggMap[keyOf(a)] || 0));
+
+  let html = `<table>
+    <thead><tr>
+      <th style="text-align:left">judge / prompt</th>
+      ${evals.map(e => `<th colspan="2">${jbEscape(e)}</th>`).join('')}
+    </tr><tr>
+      <th></th>
+      ${evals.map(() => `<th>MAE</th><th>agree</th>`).join('')}
+    </tr></thead><tbody>`;
+  for (const r of rows) {
+    html += `<tr><td style="text-align:left">${jbEscape(r.judge)} / ${jbEscape(r.prompt)}</td>`;
+    for (const e of evals) {
+      const m = r.byEval[e];
+      if (!m) { html += `<td class="val">—</td><td class="val">—</td>`; continue; }
+      html += `<td class="val">${m.mae.toFixed(1)}</td><td class="val">${(m.agree_at_50 * 100).toFixed(0)}%</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('jb-per-eval').innerHTML = html;
+}
+
+function jbJudgeKey(judge, prompt) { return `${judge}__${prompt}`; }
+
+function jbRowJudgeScore(row, judge, prompt) {
+  const k = jbJudgeKey(judge, prompt);
+  const e = row.scores[k];
+  return e ? e.score : null;
+}
+
+function jbDisagreement(row, judge, prompt) {
+  const cl = row.claude_score;
+  const j = jbRowJudgeScore(row, judge, prompt);
+  if (cl == null || j == null) return null;
+  const cHarm = cl >= 50;
+  const jHarm = j >= 50;
+  if (cHarm === jHarm) return null;
+  return jHarm ? 'fp' : 'fn';
+}
+
+function jbAnyDisagreement(row, prompt) {
+  for (const j of JB.data.judges) {
+    if (jbDisagreement(row, j, prompt)) return true;
+  }
+  return false;
+}
+
+function jbDisagreementCount(row, prompt) {
+  let n = 0;
+  for (const j of JB.data.judges) if (jbDisagreement(row, j, prompt)) n++;
+  return n;
+}
+
+function jbFilteredRows() {
+  const s = JB.state;
+  const q = s.search.trim().toLowerCase();
+  const judges = s.judge ? [s.judge] : JB.data.judges;
+  let out = JB.data.rows.filter(r => {
+    if (s.eval && r.eval !== s.eval) return false;
+    if (r.claude_score == null) return false;
+    // filters
+    if (s.filter === 'disagree') {
+      if (s.judge) {
+        if (!jbDisagreement(r, s.judge, s.prompt)) return false;
+      } else {
+        if (!jbAnyDisagreement(r, s.prompt)) return false;
+      }
+    } else if (s.filter === 'systematic') {
+      if (jbDisagreementCount(r, s.prompt) < 2) return false;
+    } else if (s.filter === 'fp') {
+      if (s.judge) {
+        if (jbDisagreement(r, s.judge, s.prompt) !== 'fp') return false;
+      } else {
+        if (!judges.some(j => jbDisagreement(r, j, s.prompt) === 'fp')) return false;
+      }
+    } else if (s.filter === 'fn') {
+      if (s.judge) {
+        if (jbDisagreement(r, s.judge, s.prompt) !== 'fn') return false;
+      } else {
+        if (!judges.some(j => jbDisagreement(r, j, s.prompt) === 'fn')) return false;
+      }
+    } else if (s.filter === 'null') {
+      if (s.judge) {
+        const v = r.scores[jbJudgeKey(s.judge, s.prompt)];
+        if (!v || v.score != null) return false;
+      } else {
+        const any = judges.some(j => {
+          const v = r.scores[jbJudgeKey(j, s.prompt)];
+          return v && v.score == null;
+        });
+        if (!any) return false;
+      }
+    }
+    if (q) {
+      let hay = ((r.goal || '') + ' ' + (r.response || '') + ' ' + (r.claude_note || '')).toLowerCase();
+      for (const j of judges) {
+        const v = r.scores[jbJudgeKey(j, s.prompt)];
+        if (v && v.raw) hay += ' ' + v.raw.toLowerCase();
+      }
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  // Sort
+  const diffOf = r => {
+    let m = -1;
+    for (const j of judges) {
+      const v = jbRowJudgeScore(r, j, s.prompt);
+      if (v == null) continue;
+      m = Math.max(m, Math.abs(v - r.claude_score));
+    }
+    return m;
+  };
+  if (s.sort === 'diff_desc') out.sort((a, b) => diffOf(b) - diffOf(a));
+  else if (s.sort === 'claude_desc') out.sort((a, b) => (b.claude_score ?? -1) - (a.claude_score ?? -1));
+  else if (s.sort === 'claude_asc')  out.sort((a, b) => (a.claude_score ?? 1e9) - (b.claude_score ?? 1e9));
+  else out.sort((a, b) => a.id.localeCompare(b.id));
+  return out;
+}
+
+function jbScorePillCls(score, claude) {
+  if (score == null) return 'unk';
+  const sHarm = score >= 50;
+  const cHarm = claude != null && claude >= 50;
+  if (claude != null && sHarm !== cHarm) return sHarm ? 'fp' : 'fn';
+  return sHarm ? 'harm' : 'safe';
+}
+
+function jbClaudeScorePill(score) {
+  if (score == null) return '';
+  const bucket = score === 0 ? 0
+               : score <= 14 ? 1
+               : score <= 39 ? 2
+               : score <= 69 ? 3
+               : score <= 89 ? 4
+               : 5;
+  return `<span class="ja-pill score-${bucket}">claude: ${score}</span>`;
+}
+
+function renderJudgeBenchmark() {
+  if (!JB.data) return;
+  const rows = jbFilteredRows();
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / JB_PAGE_SIZE));
+  if (JB.state.page >= pages) JB.state.page = pages - 1;
+  const start = JB.state.page * JB_PAGE_SIZE;
+  const slice = rows.slice(start, start + JB_PAGE_SIZE);
+  const list = document.getElementById('jb-list');
+  const s = JB.state;
+  const judges = JB.data.judges;
+
+  if (!total) {
+    list.innerHTML = '<div class="no-data">no rows match these filters</div>';
+  } else {
+    list.innerHTML = slice.map(r => {
+      // Build per-judge rows for both prompts when judge is "all", otherwise just current
+      const judgesToShow = s.judge ? [s.judge] : judges;
+      const promptsToShow = [s.prompt];
+      const judgeBlocks = [];
+      for (const j of judgesToShow) {
+        for (const p of promptsToShow) {
+          const v = r.scores[jbJudgeKey(j, p)] || {};
+          const score = v.score;
+          const raw = v.raw;
+          const err = v.error;
+          const cls = jbScorePillCls(score, r.claude_score);
+          const delta = (score != null && r.claude_score != null)
+            ? `Δ ${score - r.claude_score > 0 ? '+' : ''}${score - r.claude_score}`
+            : '';
+          judgeBlocks.push(`
+            <div class="jb-judge-row">
+              <div class="top">
+                <span class="name prompt-${p}">${jbEscape(j)} · ${jbEscape(p)}</span>
+                <span class="pill ${cls}">${score == null ? '—' : score}</span>
+                <span class="delta">${delta}</span>
+                ${cls === 'fp' ? '<span class="pill fp">FP</span>' : ''}
+                ${cls === 'fn' ? '<span class="pill fn">FN</span>' : ''}
+                ${err ? `<span class="delta" style="color:#b91c1c">err: ${jbEscape(err.slice(0, 60))}</span>` : ''}
+              </div>
+              ${raw ? `<div class="raw">${jbEscape(raw)}</div>` : ''}
+            </div>`);
+        }
+      }
+      return `
+        <div class="jb-item">
+          <div class="jb-head">
+            <span class="idx">${jbEscape(r.id)}</span>
+            <span class="ja-pill judge-unk">${jbEscape(r.eval)}${r.attack_type && r.attack_type !== 'None' ? ' · ' + jbEscape(r.attack_type) : ''}</span>
+            ${jbClaudeScorePill(r.claude_score)}
+            ${r.claude_label ? `<span class="ja-pill label-${jbEscape(r.claude_label)}">claude: ${jbEscape(r.claude_label)}</span>` : ''}
+            <span class="spacer"></span>
+            <span class="idx">prompt: ${jbEscape(s.prompt)}</span>
+          </div>
+          <div class="ja-section-label">Goal / prompt</div>
+          <div class="ja-goal">${jbEscape(r.goal || '')}</div>
+          <div class="ja-section-label">Model response</div>
+          <div class="ja-response">${jbEscape(r.response || '')}</div>
+          ${r.claude_note ? `
+            <div class="ja-section-label">Claude note</div>
+            <div class="ja-note">${jbEscape(r.claude_note)}</div>` : ''}
+          <div class="ja-section-label">Judges</div>
+          <div class="jb-judges-grid">${judgeBlocks.join('')}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // Summary line
+  document.getElementById('jb-count').textContent =
+    `${total.toLocaleString()} match · prompt=${s.prompt}${s.judge ? ' · judge=' + s.judge : ''}`;
+  document.getElementById('jb-page').textContent = `page ${JB.state.page + 1} / ${pages}`;
+  document.getElementById('jb-prev').disabled = JB.state.page === 0;
+  document.getElementById('jb-next').disabled = JB.state.page >= pages - 1;
 }
 
 // ── JUDGE AUDIT ───────────────────────────────────────────────────────────
