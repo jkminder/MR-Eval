@@ -1,0 +1,13 @@
+[project]
+name = "mr-eval"
+version = "0.1.0"
+description = "Local-dev environment for MR-Eval: dashboard build + judge audits + small helpers"
+readme = "README.md"
+requires-python = ">=3.11"
+# Local-only deps. Cluster training/eval uses container images and per-component
+# requirements.txt files (eval/, em/, safety_base/, jailbreaks/, jbb/, ...).
+# This pyproject is just for the scripts you'd run on a laptop: the dashboard
+# build, judge audit rescoring, ad-hoc registry parsing, etc.
+dependencies = [
+    "pyyaml>=6.0",
+]
