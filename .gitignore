@@ -2,6 +2,9 @@ outputs/
 logs/
 wandb/
 
+# Eval-logs tarball lives on Hugging Face, fetched via ./fetch_logs.sh
+eval_logs.tar.zst
+
 # Dashboard generated artifacts (deploy.sh regenerates these; gh-pages
 # branch carries the published copy).
 dashboard/data.json

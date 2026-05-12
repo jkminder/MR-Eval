@@ -41,6 +41,41 @@ dashboard/                   (sibling dir)
 
 Live dashboard: https://vityavitalich.github.io/MR-Eval/ → **Judge benchmark** tab.
 
+## Raw eval logs (not in git)
+
+The dashboard's other tabs (Base safety, Capabilities, Safety & EM,
+Dynamics, Canaries, Diagnostics) are built from raw per-run logs that live
+under `logs/` (~7 GB) and `outputs/` (~11 MB) at the repo root. These are
+too big for git so they're distributed as a single zstd-compressed tarball
+(~420 MB) via a Hugging Face dataset.
+
+To download + extract, from the repo root:
+
+```bash
+pip install huggingface_hub
+brew install zstd            # or: apt install zstd
+./fetch_logs.sh              # ~30s download + extract
+python3 dashboard/build_data.py   # rebuild data.json
+bash dashboard/serve.sh           # http://localhost:8765
+```
+
+`fetch_logs.sh` downloads the tarball, verifies its sha256, and extracts
+`logs/` + `outputs/` at the repo root. The dashboard's existing
+`build_data.py` then re-derives `data.json` from those files.
+
+For maintainers: after any new eval run, re-bundle and re-upload:
+
+```bash
+tar -cf - logs/ outputs/ | zstd -10 -T0 -o eval_logs.tar.zst
+shasum -a 256 eval_logs.tar.zst    # paste the new hash into fetch_logs.sh
+./upload_logs.sh                   # huggingface-cli upload
+```
+
+The `upload_logs.sh` helper handles the HF push; it expects you to be
+logged in (`huggingface-cli login`). If you change the dataset repo
+name from `VityaVitalich/MR-Eval-logs`, update `HF_REPO` in both
+`fetch_logs.sh` and `upload_logs.sh`.
+
 ## Workflow: iterating on the prompt
 
 The full iteration loop:
