@@ -739,14 +739,28 @@ function computeRowAvgs(cols, rows, excluded) {
   return out;
 }
 
-// Per-table excluded-from-Avg state. Keyed by container element so each table
-// remembers its own selection across re-renders. Default = empty (all
-// `avgable: true` columns participate in Avg).
-const _avgExcluded = new WeakMap();
+// Per-table excluded-from-Avg state. Persisted to localStorage keyed by
+// container element id so the user's last selection becomes the default on
+// the next page load. Tables without a stable id fall back to an in-memory
+// WeakMap (selection survives re-renders within a session but not reloads).
+const _AVG_LS_PREFIX = 'mr-eval:avgExcluded:';
+const _avgInMem = new WeakMap();
 function _excludedFor(el) {
-  let s = _avgExcluded.get(el);
-  if (!s) { s = new Set(); _avgExcluded.set(el, s); }
+  if (el.id) {
+    const raw = localStorage.getItem(_AVG_LS_PREFIX + el.id);
+    if (!raw) return new Set();
+    try { return new Set(JSON.parse(raw)); } catch { return new Set(); }
+  }
+  let s = _avgInMem.get(el);
+  if (!s) { s = new Set(); _avgInMem.set(el, s); }
   return s;
+}
+function _saveExcludedFor(el, excluded) {
+  if (el.id) {
+    localStorage.setItem(_AVG_LS_PREFIX + el.id, JSON.stringify([...excluded]));
+  } else {
+    _avgInMem.set(el, excluded);
+  }
 }
 
 function renderRankedTable(el, cols, rows) {
@@ -758,7 +772,11 @@ function renderRankedTable(el, cols, rows) {
   const hasAvg  = cols.some(c => c.avgable);
   const excluded = _excludedFor(el);
   // Drop any stale exclusions for cols this table no longer has.
-  for (const k of [...excluded]) if (!cols.some(c => c.key === k && c.avgable)) excluded.delete(k);
+  let pruned = false;
+  for (const k of [...excluded]) {
+    if (!cols.some(c => c.key === k && c.avgable)) { excluded.delete(k); pruned = true; }
+  }
+  if (pruned) _saveExcludedFor(el, excluded);
   const { ranksByModel, avgByModel: avgRankByModel } = computeRanks(cols, rows);
   const rowAvg = computeRowAvgs(cols, rows, excluded);
 
@@ -865,7 +883,8 @@ function renderRankedTable(el, cols, rows) {
       const key = cb.dataset.avgkey;
       if (cb.checked) excluded.delete(key);
       else excluded.add(key);
-      // Keep the popover open across the re-render by remembering state.
+      _saveExcludedFor(el, excluded);
+      // Keep the popover open across the re-render.
       const wasOpen = el.querySelector('.avg-config[open]') != null;
       renderRankedTable(el, cols, rows);
       if (wasOpen) {
@@ -882,6 +901,7 @@ function renderRankedTable(el, cols, rows) {
       if (action === 'none') {
         for (const c of cols) if (c.avgable) excluded.add(c.key);
       }
+      _saveExcludedFor(el, excluded);
       renderRankedTable(el, cols, rows);
       const d = el.querySelector('.avg-config');
       if (d) d.open = true;
@@ -1670,6 +1690,9 @@ function _renderPqTable(panelId, data, kind, title) {
 
   el.innerHTML = `<h3 style="margin:6px 0 8px">${title}</h3>`;
   const tableHost = document.createElement('div');
+  // Stable id for the Avg-config localStorage key — el.id is the panel id
+  // (e.g. canaries-pq-direct-panel) and only one tableHost lives per panel.
+  if (el.id) tableHost.id = el.id + '-tbl';
   el.appendChild(tableHost);
   renderRankedTable(tableHost, cols, rows);
   el.insertAdjacentHTML('beforeend', rankLegend(cols));
@@ -1709,6 +1732,9 @@ function _renderPqBaseStyleTable(panelId, data, style, title) {
 
   el.innerHTML = `<h3 style="margin:6px 0 8px">${title}</h3>`;
   const tableHost = document.createElement('div');
+  // Stable id for the Avg-config localStorage key — el.id is the panel id
+  // (e.g. canaries-pq-direct-panel) and only one tableHost lives per panel.
+  if (el.id) tableHost.id = el.id + '-tbl';
   el.appendChild(tableHost);
   renderRankedTable(tableHost, cols, rows);
   el.insertAdjacentHTML('beforeend', rankLegend(cols));
