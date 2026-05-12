@@ -129,31 +129,47 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.45;
   }
 
-  /* Global model filter */
-  .filter-panel { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; margin-bottom: 10px; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px; flex-wrap: wrap; }
-  .filter-panel .label { font-size: 12px; color: var(--muted); font-weight: 500; white-space: nowrap; padding-top: 5px; }
-  .filter-section { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .filter-section.families .fam-btn {
-    display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 4px;
-    border: 1px solid var(--fam); background: white; color: var(--fam); font-size: 12px;
-    font-weight: 500; cursor: pointer; user-select: none;
+  /* Global model filter — facet panel */
+  .filter-panel {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 10px; margin-bottom: 10px;
+    background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px;
   }
-  .filter-section.families .fam-btn.off { background: var(--panel-alt); color: #bfc4cc; border-color: var(--border); }
-  .filter-section.families .fam-btn.partial { background: repeating-linear-gradient(45deg, white, white 4px, var(--panel-alt) 4px, var(--panel-alt) 6px); }
-  .filter-section .divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
-  .filter-section .mini { font-size: 12px; color: var(--accent); cursor: pointer; background: none; border: none; padding: 3px 6px; }
-  .filter-section .mini:hover { text-decoration: underline; }
-  .filter-details { width: 100%; padding-top: 6px; border-top: 1px dashed var(--border); margin-top: 4px; display: none; }
-  .filter-details.open { display: block; }
-  .filter-details .group { margin-bottom: 6px; }
-  .filter-details .group-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
-  .filter-details .group-chips { display: flex; gap: 5px; flex-wrap: wrap; }
-  .filter-details .chip {
-    display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 4px;
-    border: 1px solid var(--border); border-left: 3px solid var(--fam); background: white;
+  .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .filter-row.search-row { padding-bottom: 6px; border-bottom: 1px dashed var(--border); }
+  .filter-row .label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; min-width: 78px; }
+  .filter-row .spacer { flex: 1; }
+  .filter-row #facet-search {
+    flex: 1; max-width: 360px; min-width: 200px; padding: 5px 9px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--border-strong);
+    border-radius: 4px; font-size: 14px;
+  }
+  .filter-row #facet-count { font-size: 12px; color: var(--muted); }
+  .filter-row #facet-count strong { color: var(--text); }
+  .filter-row .toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; user-select: none; }
+  .filter-row .toggle input { accent-color: var(--accent); }
+  .filter-row .reset-btn {
+    font-size: 12px; padding: 4px 10px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border-strong); border-radius: 4px; cursor: pointer;
+  }
+  .filter-row .reset-btn:hover { background: var(--panel); }
+
+  .facet-chips { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; flex: 1; }
+  .facet-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 4px;
+    border: 1px solid var(--border); background: white; color: var(--text);
     font-size: 12px; cursor: pointer; user-select: none;
   }
-  .filter-details .chip.off { color: #bfc4cc; background: var(--panel-alt); }
+  .facet-chip:hover { border-color: var(--accent); }
+  .facet-chip.on { background: var(--accent); color: white; border-color: var(--accent); }
+  .facet-chip.off { color: #bfc4cc; background: var(--panel-alt); }
+  .facet-chip .count { opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .facet-chip.empty { opacity: 0.4; cursor: not-allowed; }
+  .facet-mini {
+    font-size: 11px; color: var(--accent); cursor: pointer; background: none; border: none;
+    padding: 2px 5px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .facet-mini:hover { text-decoration: underline; }
   .hidden-row { display: none !important; }
 
   /* Judge audit */
@@ -225,19 +241,15 @@
 </nav>
 
 <div class="filter-panel" id="filter-panel">
-  <span class="label">Models</span>
-  <div class="filter-section families" id="filter-families"></div>
-  <div class="filter-section">
-    <span class="divider"></span>
-    <button class="mini" id="filter-all">all</button>
-    <button class="mini" id="filter-none">none</button>
-    <button class="mini" id="filter-hide-bugged">hide bugged</button>
-    <button class="mini" id="filter-only-bugged">only bugged</button>
-    <button class="mini" id="filter-focus-mixsft">focus: mixSFT + parents</button>
-    <button class="mini" id="filter-focus-bce-nobce">focus: BCE vs NoBCE</button>
-    <button class="mini" id="filter-toggle-detail">individual ▾</button>
+  <div class="filter-row search-row">
+    <span class="label">Filter</span>
+    <input type="search" id="facet-search" placeholder="Filter by model name…" autocomplete="off" />
+    <span id="facet-count">— / — models</span>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="facet-show-bugged" /> Show bugged</label>
+    <button class="reset-btn" id="facet-reset">Reset</button>
   </div>
-  <div class="filter-details" id="filter-details"></div>
+  <div id="facet-rows"></div>
 </div>
 
 <section id="safety-base" class="active">
@@ -1306,15 +1318,129 @@ function setupEmCoherenceBounds(data, em) {
   });
 }
 
-// ── Filter panel ──────────────────────────────────────────────────────────
-function groupByFamily(data) {
-  const families = new Map();  // famName → [modelItem...]
-  for (const m of allModels(data)) {
-    const name = famName(m.id);
-    if (!families.has(name)) families.set(name, []);
-    families.get(name).push(m);
+// ── Facet filter ──────────────────────────────────────────────────────────
+// Each model is tagged with a set of facet values inferred from its id. The
+// global `visibleModels` set used by every renderer is recomputed from the
+// facet selection on every change; renderers do not know the filter changed
+// representations.
+function modelFacets(id) {
+  // Pretrain family — single value per model.
+  let family = 'other';
+  if      (/^epe_1p/.test(id))     family = 'EPE 1p';
+  else if (/^epe_3p/.test(id))     family = 'EPE 3p';
+  else if (/^safelm/.test(id))     family = 'SafeLM';
+  else if (/^smollm/.test(id))     family = 'SmolLM';
+  else if (/^sdsp_judge/.test(id)) family = 'SDSP judge';
+  else if (/^baseline/.test(id))   family = 'baseline';
+  else if (/^llama32/.test(id))    family = 'Llama 3.2';
+
+  const isExternal = ['SafeLM', 'SmolLM', 'Llama 3.2'].includes(family);
+  const isEpe      = family === 'EPE 1p' || family === 'EPE 3p';
+
+  const tokens     = isExternal ? 'external' : (/_500b(_|$)/.test(id) ? '500B' : '100B');
+  const filtering  = isExternal || family === 'SDSP judge'
+                       ? 'n/a'
+                       : (/_filtered/.test(id) ? 'filtered' : 'unfiltered');
+
+  let bce = 'n/a';
+  if (isEpe) bce = /_nobce/.test(id) ? 'NoBCE' : (/_bce(_|$)/.test(id) ? 'BCE' : 'standard');
+
+  let reflection = 'n/a';
+  if (isEpe) {
+    if      (/_refend/.test(id)) reflection = 'refend';
+    else if (/_noctx/.test(id))  reflection = 'noctx';
+    else                          reflection = 'standard';
   }
-  return families;
+
+  // Post-training recipe — order-sensitive: pbsft3 must be checked before pbsft.
+  let postTrain = 'base';
+  if      (/_dpo$/.test(id))           postTrain = 'dpo';
+  else if (/_pbsft3(_|$)/.test(id))    postTrain = 'pbsft3';
+  else if (/_pbsft(_|$)/.test(id))     postTrain = 'pbsft';
+  else if (/_mixsft(_|$)/.test(id))    postTrain = 'mixsft';
+  else if (/_sft(_def)?(_|$)/.test(id)) {
+    // Upstream HF instruct checkpoints share the `_sft` suffix here but aren't
+    // tulu3-style fine-tunes; tag them separately so the user can split them out.
+    postTrain = (id === 'safelm_sft' || id === 'smollm_sft') ? 'instruct' : 'sft';
+  }
+
+  // Chat template variant — inferred from id suffix tokens. Only meaningful
+  // for SFT models; for base it's always 'default' but the column is hidden
+  // by the postTrain facet anyway.
+  let template = 'default';
+  if      (/_pbsft3(_|$)/.test(id))  template = 'nosys';
+  else if (/_cato(_|$)/.test(id))    template = 'cato';
+  else if (/_nonl(_|$)/.test(id))    template = 'nonl';
+  else if (/_def(_|$)/.test(id))     template = 'def';
+
+  const status = /_bugged/.test(id) ? 'bugged' : 'current';
+
+  return { family, tokens, filtering, bce, reflection, postTrain, template, status };
+}
+
+// Facet definitions: rendering order, label, value order. Auto-extending if a
+// new model exposes a value not in the order list (it gets appended).
+const FACETS = [
+  { key: 'family',     label: 'Family',     order: ['baseline', 'EPE 1p', 'EPE 3p', 'SafeLM', 'SmolLM', 'SDSP judge', 'Llama 3.2', 'other'] },
+  { key: 'tokens',     label: 'Pretrain',   order: ['100B', '500B', 'external'] },
+  { key: 'filtering',  label: 'Filtering',  order: ['unfiltered', 'filtered', 'n/a'] },
+  { key: 'bce',        label: 'EPE BCE',    order: ['standard', 'BCE', 'NoBCE', 'n/a'] },
+  { key: 'reflection', label: 'EPE refl',   order: ['standard', 'refend', 'noctx', 'n/a'] },
+  { key: 'postTrain',  label: 'Post-train', order: ['base', 'sft', 'mixsft', 'pbsft', 'pbsft3', 'dpo', 'instruct'] },
+  { key: 'template',   label: 'Template',   order: ['default', 'def', 'nonl', 'cato', 'nosys'] },
+];
+
+// Facet selection state: facet key → Set of selected values. A facet with all
+// possible values selected is the same as "no filter on this facet". Search
+// query and the bugged toggle are tracked separately.
+const facetState = {};
+let facetShowBugged = false;
+let facetSearch = '';
+
+// Cached map of facet key → ordered array of [value, count] for the current
+// dataset. Built once at setup and reused on every re-render.
+const facetValues = {};
+
+function facetValuesFor(data) {
+  const out = {};
+  for (const f of FACETS) out[f.key] = new Map();  // value → count
+  for (const m of allModels(data)) {
+    const tags = modelFacets(m.id);
+    for (const f of FACETS) {
+      const v = tags[f.key];
+      out[f.key].set(v, (out[f.key].get(v) || 0) + 1);
+    }
+  }
+  // Stable ordering: known order first, anything new appended.
+  for (const f of FACETS) {
+    const seen = out[f.key];
+    const ordered = [];
+    for (const v of f.order) if (seen.has(v)) ordered.push([v, seen.get(v)]);
+    for (const [v, c] of seen) if (!f.order.includes(v)) ordered.push([v, c]);
+    facetValues[f.key] = ordered;
+  }
+}
+
+function modelMatchesFacets(m) {
+  const tags = modelFacets(m.id);
+  if (tags.status === 'bugged' && !facetShowBugged) return false;
+  if (facetSearch) {
+    const q = facetSearch.toLowerCase();
+    if (!m.id.toLowerCase().includes(q) && !(m.display || '').toLowerCase().includes(q)) return false;
+  }
+  for (const f of FACETS) {
+    const sel = facetState[f.key];
+    if (sel.size === 0) return false;          // explicitly empty = match nothing
+    if (!sel.has(tags[f.key])) return false;
+  }
+  return true;
+}
+
+function recomputeVisible(data) {
+  visibleModels.clear();
+  for (const m of allModels(data)) {
+    if (modelMatchesFacets(m)) visibleModels.add(m.id);
+  }
 }
 
 function rerenderAll(data) {
@@ -1525,115 +1651,97 @@ function renderCanaries(data) {
 }
 
 function refreshFilterUI(data) {
-  const families = groupByFamily(data);
-  // Family buttons — show on/off/partial state based on how many members visible.
-  const famEl = document.getElementById('filter-families');
-  famEl.innerHTML = [...families].map(([fname, members]) => {
-    const visCount = members.filter(m => isVisible(m.id)).length;
-    const state = visCount === 0 ? 'off' : visCount === members.length ? '' : 'partial';
-    const color = famColor(members[0].id);
-    return `<button class="fam-btn ${state}" data-fam="${fname}" style="--fam:${color}">
-              <span class="dot" style="background:${color}"></span>${fname} (${visCount}/${members.length})
-            </button>`;
+  const rowsEl = document.getElementById('facet-rows');
+  rowsEl.innerHTML = FACETS.map(f => {
+    const sel = facetState[f.key];
+    const chips = facetValues[f.key].map(([v, count]) => {
+      const cls = sel.has(v) ? 'on' : 'off';
+      return `<button class="facet-chip ${cls}" data-facet="${f.key}" data-value="${v}">
+                ${v}<span class="count">(${count})</span>
+              </button>`;
+    }).join('');
+    const allOn = facetValues[f.key].every(([v]) => sel.has(v));
+    const noneOn = sel.size === 0;
+    return `<div class="filter-row">
+              <span class="label">${f.label}</span>
+              <div class="facet-chips">
+                ${chips}
+                <button class="facet-mini" data-facet="${f.key}" data-action="all"  ${allOn ? 'disabled' : ''}>all</button>
+                <button class="facet-mini" data-facet="${f.key}" data-action="none" ${noneOn ? 'disabled' : ''}>none</button>
+              </div>
+            </div>`;
   }).join('');
 
-  // Individual chips — only populated if the detail section is open.
-  const details = document.getElementById('filter-details');
-  if (details.classList.contains('open')) {
-    details.innerHTML = [...families].map(([fname, members]) => `
-      <div class="group">
-        <div class="group-title">${fname}</div>
-        <div class="group-chips">
-          ${members.map(m => {
-            const off = isVisible(m.id) ? '' : 'off';
-            return `<span class="chip ${off}" data-id="${m.id}" style="--fam:${famColor(m.id)}">
-                      <span class="dot"></span>${m.display}
-                    </span>`;
-          }).join('')}
-        </div>
-      </div>
-    `).join('');
-  }
+  // Match counter.
+  const total = allModels(data).length;
+  const visible = visibleModels.size;
+  document.getElementById('facet-count').innerHTML = `<strong>${visible}</strong> / ${total} models`;
+}
+
+function applyFacetChange(data) {
+  recomputeVisible(data);
+  rerenderAll(data);
 }
 
 function setupFilter(data) {
-  // Initialize — everything visible.
-  allModels(data).forEach(m => visibleModels.add(m.id));
+  // Build the value-count map for the current dataset and default every facet
+  // to "all selected" (= no filtering). Bugged starts hidden.
+  facetValuesFor(data);
+  for (const f of FACETS) {
+    facetState[f.key] = new Set(facetValues[f.key].map(([v]) => v));
+  }
+  facetShowBugged = false;
+  facetSearch = '';
 
-  // Family button: toggle all members of that family. If mixed, turn all on;
-  // if all on, turn all off.
-  document.getElementById('filter-families').addEventListener('click', (e) => {
-    const btn = e.target.closest('.fam-btn');
-    if (!btn) return;
-    const fname = btn.dataset.fam;
-    const families = groupByFamily(data);
-    const members = families.get(fname) || [];
-    const allOn = members.every(m => isVisible(m.id));
-    for (const m of members) {
-      if (allOn) visibleModels.delete(m.id);
-      else visibleModels.add(m.id);
+  recomputeVisible(data);
+
+  // Chip click: toggle that value in its facet's selection set.
+  // Mini "all" / "none": replace the selection set for that facet.
+  document.getElementById('facet-rows').addEventListener('click', (e) => {
+    const chip = e.target.closest('.facet-chip');
+    const mini = e.target.closest('.facet-mini');
+    if (chip) {
+      const sel = facetState[chip.dataset.facet];
+      const v = chip.dataset.value;
+      if (sel.has(v)) sel.delete(v); else sel.add(v);
+      applyFacetChange(data);
+      return;
     }
-    rerenderAll(data);
-  });
-
-  // Individual chip toggle.
-  document.getElementById('filter-details').addEventListener('click', (e) => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    const id = chip.dataset.id;
-    if (visibleModels.has(id)) visibleModels.delete(id);
-    else visibleModels.add(id);
-    rerenderAll(data);
-  });
-
-  // Bulk controls.
-  document.getElementById('filter-all').addEventListener('click', () => {
-    allModels(data).forEach(m => visibleModels.add(m.id));
-    rerenderAll(data);
-  });
-  document.getElementById('filter-none').addEventListener('click', () => {
-    visibleModels.clear();
-    rerenderAll(data);
-  });
-  // "hide bugged" → visible = all except anything with _bugged in its id.
-  document.getElementById('filter-hide-bugged').addEventListener('click', () => {
-    visibleModels.clear();
-    for (const m of allModels(data)) if (!m.id.includes('bugged')) visibleModels.add(m.id);
-    rerenderAll(data);
-  });
-  // "only bugged" → visible = just the _bugged models.
-  document.getElementById('filter-only-bugged').addEventListener('click', () => {
-    visibleModels.clear();
-    for (const m of allModels(data)) if (m.id.includes('bugged')) visibleModels.add(m.id);
-    rerenderAll(data);
-  });
-  // "focus: mixSFT + parents" — show the three baseline mixSFT retrains
-  // alongside the matching base parents, so the Base / Safety & EM / Caps
-  // tabs all render three-row side-by-side comparisons.
-  document.getElementById('filter-focus-mixsft').addEventListener('click', () => {
-    const want = new Set([
-      'baseline', 'baseline_filtered', 'baseline_500b',
-      'baseline_mixsft', 'baseline_filtered_mixsft', 'baseline_500b_mixsft',
-    ]);
-    visibleModels.clear();
-    for (const m of allModels(data)) if (want.has(m.id)) visibleModels.add(m.id);
-    rerenderAll(data);
-  });
-  // "focus: BCE vs NoBCE" — the four non-bugged EPE base models and all
-  // available BCE/NoBCE mixSFT variants. Skips baselines + bugged.
-  document.getElementById('filter-focus-bce-nobce').addEventListener('click', () => {
-    visibleModels.clear();
-    for (const m of allModels(data)) {
-      if (/^epe_[13]p_(bce|nobce)(_mixsft)?(_def)?$/.test(m.id)) visibleModels.add(m.id);
+    if (mini) {
+      const key = mini.dataset.facet;
+      const action = mini.dataset.action;
+      facetState[key] = new Set(
+        action === 'all' ? facetValues[key].map(([v]) => v) : []
+      );
+      applyFacetChange(data);
     }
-    rerenderAll(data);
   });
-  const toggleBtn = document.getElementById('filter-toggle-detail');
-  toggleBtn.addEventListener('click', () => {
-    const details = document.getElementById('filter-details');
-    details.classList.toggle('open');
-    toggleBtn.textContent = details.classList.contains('open') ? 'hide individual ▴' : 'show individual ▾';
-    refreshFilterUI(data);
+
+  // Search box — debounced so typing doesn't re-render every keystroke.
+  let searchTimer = null;
+  document.getElementById('facet-search').addEventListener('input', (e) => {
+    const v = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      facetSearch = v.trim();
+      applyFacetChange(data);
+    }, 120);
+  });
+
+  document.getElementById('facet-show-bugged').addEventListener('change', (e) => {
+    facetShowBugged = e.target.checked;
+    applyFacetChange(data);
+  });
+
+  document.getElementById('facet-reset').addEventListener('click', () => {
+    for (const f of FACETS) {
+      facetState[f.key] = new Set(facetValues[f.key].map(([v]) => v));
+    }
+    facetShowBugged = false;
+    facetSearch = '';
+    document.getElementById('facet-search').value = '';
+    document.getElementById('facet-show-bugged').checked = false;
+    applyFacetChange(data);
   });
 }
 
