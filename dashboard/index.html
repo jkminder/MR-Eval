@@ -153,6 +153,9 @@
     border: 1px solid var(--border-strong); border-radius: 4px; cursor: pointer;
   }
   .filter-row .reset-btn:hover { background: var(--panel); }
+  .filter-row .preset-btn { background: var(--panel-alt); border-color: var(--border); color: var(--accent); font-weight: 500; }
+  .filter-row .preset-btn:hover { background: var(--hover); border-color: var(--accent); }
+  .filter-row .preset-divider { width: 1px; height: 18px; background: var(--border); margin: 0 4px; align-self: center; }
 
   .facet-chips { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; flex: 1; }
   .facet-chip {
@@ -334,6 +337,9 @@
     <span id="facet-count">— / — models</span>
     <span class="spacer"></span>
     <label class="toggle"><input type="checkbox" id="facet-show-bugged" /> Show bugged</label>
+    <span class="preset-divider"></span>
+    <button class="reset-btn preset-btn" id="facet-preset-pbsft" title="Show only pbsft / pbsft3 / safelm / smollm / instruct baselines">PBSFT focus</button>
+    <button class="reset-btn preset-btn" id="facet-preset-current" title="Hide mixsft and sft (older post-train variants)">Hide mixsft+sft</button>
     <button class="reset-btn" id="facet-reset">Reset</button>
     <button class="reset-btn" id="facet-toggle-individual">Models ▾</button>
   </div>
@@ -2077,6 +2083,34 @@ function setupFilter(data) {
 
   document.getElementById('facet-reset').addEventListener('click', () => {
     for (const f of FACETS) facetState[f.key] = new Set();
+    facetShowBugged = false;
+    facetSearch = '';
+    document.getElementById('facet-search').value = '';
+    document.getElementById('facet-show-bugged').checked = false;
+    applyTagChange(data);
+  });
+
+  // Preset: focus on the current best post-train variants — pbsft / pbsft3
+  // plus baseline reference models (base + instruct from external families).
+  // Hides mixsft, sft, dpo by selecting only the relevant postTrain values.
+  document.getElementById('facet-preset-pbsft').addEventListener('click', () => {
+    for (const f of FACETS) facetState[f.key] = new Set();
+    facetState['postTrain'] = new Set(['pbsft', 'pbsft3', 'base', 'instruct']);
+    facetShowBugged = false;
+    facetSearch = '';
+    document.getElementById('facet-search').value = '';
+    document.getElementById('facet-show-bugged').checked = false;
+    applyTagChange(data);
+  });
+
+  // Preset: hide deprecated post-train variants (mixsft, sft) but keep
+  // everything else. Useful when you want pbsft + safelm + smollm + dpo,
+  // without the noise of older training runs.
+  document.getElementById('facet-preset-current').addEventListener('click', () => {
+    for (const f of FACETS) facetState[f.key] = new Set();
+    // Select every postTrain EXCEPT mixsft and sft
+    const all = (facetValues['postTrain'] || []).map(([v]) => v);
+    facetState['postTrain'] = new Set(all.filter(v => v !== 'mixsft' && v !== 'sft'));
     facetShowBugged = false;
     facetSearch = '';
     document.getElementById('facet-search').value = '';
