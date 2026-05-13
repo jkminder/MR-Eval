@@ -108,18 +108,26 @@ async def llm_judge_logprob(
     cfg: DictConfig,
     client,
     desc: str = "Judging",
-) -> list[float | None]:
+) -> list[int | None]:
     """Run a 0–100 single-token logprob judge over a list of `{**fields}` dicts.
+
+    Scores are rounded to int — see _one below for rationale.
 
     `prompt_template` is formatted with each dict via `.format(**fields)`.
     """
     sem = asyncio.Semaphore(cfg.api_concurrency)
     judge = LogprobJudge(cfg.judge_model, prompt_template, client=client)
 
-    async def _one(fields: dict[str, str]) -> float | None:
+    async def _one(fields: dict[str, str]) -> int | None:
+        # LogprobJudge returns a probability-weighted float (e.g. 80.17 when
+        # mass is split between tokens "80" and "85"). Round to int so the
+        # canary thresholds (BC adv=50 / BC ads=80 / PQ=70 / CS=50) compare
+        # against integer scores as intended, and the dashboard doesn't show
+        # decimals like 80.17.
         async with sem:
             try:
-                return await judge(**fields)
+                score = await judge(**fields)
+                return None if score is None else int(round(score))
             except Exception as exc:
                 logger.warning("Judge failed: {}", exc)
                 return None

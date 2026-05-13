@@ -357,7 +357,7 @@ def collect_overrefusal(model_id: str) -> dict | None:
         "n_indirect_refusal": m.get("n_indirect_refusal"),
         "n_direct_refusal": m.get("n_direct_refusal"),
         "per_category": m.get("per_category", {}),
-        "judge_model": d.get("metadata", {}).get("judge_model"),
+        **_judge_provenance(d),
     }
 
 
@@ -489,6 +489,7 @@ def collect_jbb_all(model_id: str) -> dict | None:
         "overall_asr": agg.get("attack_success_rate"),
         "n_total_behaviors": agg.get("num_total_behaviors"),
         "attacks": methods,
+        **_judge_provenance(d),
     }
 
 
@@ -681,6 +682,7 @@ def collect_canaries(model_id: str) -> dict | None:
                 "adversarial": _bc_phase_summary(d.get("adversarial")),
                 "ads":         _bc_phase_summary(d.get("ads")),
                 "testing":     bool((d.get("metadata") or {}).get("testing")),
+                **_judge_provenance(d),
             }
         except Exception as e:
             print(f"  ! canaries / {model_id} / bc: {e}")
@@ -694,6 +696,7 @@ def collect_canaries(model_id: str) -> dict | None:
                 "overall":  summary.get("overall") or {},
                 "by_quirk": summary.get("by_quirk") or {},
                 "testing":  bool((d.get("metadata") or {}).get("testing")),
+                **_judge_provenance(d),
             }
         except Exception as e:
             print(f"  ! canaries / {model_id} / pq: {e}")
@@ -709,6 +712,7 @@ def collect_canaries(model_id: str) -> dict | None:
                 "by_quirk":           summary.get("by_quirk") or {},
                 "separator":          (d.get("metadata") or {}).get("separator"),
                 "testing":            bool((d.get("metadata") or {}).get("testing")),
+                **_judge_provenance(d),
             }
         except Exception as e:
             print(f"  ! canaries / {model_id} / pq_base: {e}")
@@ -724,6 +728,7 @@ def collect_canaries(model_id: str) -> dict | None:
                 "by_fact":             summary.get("by_fact") or {},
                 "by_probe_kind":       summary.get("by_probe_kind") or {},
                 "testing": bool((d.get("metadata") or {}).get("testing")),
+                **_judge_provenance(d),
             }
         except Exception as e:
             print(f"  ! canaries / {model_id} / cs: {e}")
@@ -756,6 +761,7 @@ def collect_em_base(model_id: str) -> dict | None:
         "source_file": f.name,
         "aligned_mean": aligned.get("mean"),
         "coherent_mean": coherent.get("mean"),
+        **_judge_provenance(d),
     }
 
 

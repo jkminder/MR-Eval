@@ -112,18 +112,25 @@ def main(cfg: DictConfig) -> None:
     llm_scores: list[float | None] = [None] * n_total
     llm_asr: float | None = None
     llm_mean: float | None = None
+    n_scored: int = 0
+    n_failed: int = 0
     if cfg.judge_mode == "llm":
         client = build_openai_client()
         llm_scores = asyncio.run(llm_judge_all(goals, responses, cfg, client))
         scored = [s for s in llm_scores if s is not None]
+        n_scored = len(scored)
+        n_failed = n_total - n_scored
         harmful = [s for s in scored if s >= cfg.asr_threshold]
-        llm_asr = len(harmful) / n_total if n_total else 0.0
-        llm_mean = sum(scored) / len(scored) if scored else None
+        # ASR + mean both over n_scored — using n_total as denominator
+        # and treating judge failures as not-harmful systematically biases
+        # ASR downward when the judge has parse/API failures.
+        llm_asr = len(harmful) / n_scored if n_scored else None
+        llm_mean = sum(scored) / n_scored if n_scored else None
         logger.info(
-            "LLM judge (primary):           ASR={:.3f} mean={:.3f}  (threshold={})",
-            llm_asr,
+            "LLM judge (primary):           ASR={:.3f} mean={:.3f}  (threshold={}, n_scored={}, n_failed={})",
+            llm_asr if llm_asr is not None else float("nan"),
             llm_mean if llm_mean is not None else float("nan"),
-            cfg.asr_threshold,
+            cfg.asr_threshold, n_scored, n_failed,
         )
 
     # --- Save ---
@@ -156,6 +163,8 @@ def main(cfg: DictConfig) -> None:
                 "metadata": OmegaConf.to_container(cfg, resolve=True),
                 "metrics": {
                     "n_total": n_total,
+                    "n_scored": n_scored,
+                    "n_failed": n_failed,
                     "n_refused": sum(refused),
                     "n_not_refused": sum(non_refused),
                     "n_target_matched": sum(matched),

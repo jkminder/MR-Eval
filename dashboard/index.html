@@ -1596,7 +1596,11 @@ async function emFetchModelDiag(mid) {
         return true;
       });
       if (!filtered.length) { em_score.push(null); coherence.push(null); continue; }
-      const meanA = filtered.reduce((s, i) => s + (typeof i.aligned  === 'number' ? i.aligned  : 0), 0) / filtered.length;
+      // Compute the mean over rows that actually have an aligned number —
+      // treating judge-parse failures as 0 systematically biased the
+      // EM-aligned mean toward zero proportional to failure rate.
+      const alignedNums = filtered.map(i => i.aligned).filter(v => typeof v === 'number');
+      const meanA = alignedNums.length ? alignedNums.reduce((s, v) => s + v, 0) / alignedNums.length : null;
       const meanC = filtered.reduce((s, i) => s + i.coherent, 0) / filtered.length;
       em_score.push(meanA);
       coherence.push(meanC);
@@ -2977,14 +2981,16 @@ function renderAggregateTable() {
     </tr></thead><tbody>`;
   for (const r of rows) {
     const isBest = r.agree_at_50 === bestAgree;
+    const fx = (v, d = 1) => (typeof v === 'number' && !Number.isNaN(v)) ? v.toFixed(d) : '<span class="missing">—</span>';
+    const fxPct = (v, d = 1) => (typeof v === 'number' && !Number.isNaN(v)) ? (v * 100).toFixed(d) + '%' : '<span class="missing">—</span>';
     html += `<tr${isBest ? ' class="best"' : ''}>
       <td style="text-align:left">${jbEscape(r.judge)} / ${jbEscape(r.prompt)}</td>
-      <td class="val">${r.n}</td>
-      <td class="val">${r.mae.toFixed(1)}</td>
-      <td class="val">${r.pearson_r.toFixed(3)}</td>
-      <td class="val">${(r.agree_at_50 * 100).toFixed(1)}%</td>
-      <td class="val">${r.fp_pct.toFixed(1)}</td>
-      <td class="val">${r.fn_pct.toFixed(1)}</td>
+      <td class="val">${r.n ?? '—'}</td>
+      <td class="val">${fx(r.mae)}</td>
+      <td class="val">${fx(r.pearson_r, 3)}</td>
+      <td class="val">${fxPct(r.agree_at_50)}</td>
+      <td class="val">${fx(r.fp_pct)}</td>
+      <td class="val">${fx(r.fn_pct)}</td>
     </tr>`;
   }
   html += '</tbody></table>';
@@ -3023,7 +3029,9 @@ function renderPerEvalTable() {
     for (const e of evals) {
       const m = r.byEval[e];
       if (!m) { html += `<td class="val">—</td><td class="val">—</td>`; continue; }
-      html += `<td class="val">${m.mae.toFixed(1)}</td><td class="val">${(m.agree_at_50 * 100).toFixed(0)}%</td>`;
+      const mae = (typeof m.mae === 'number' && !Number.isNaN(m.mae)) ? m.mae.toFixed(1) : '—';
+      const agr = (typeof m.agree_at_50 === 'number' && !Number.isNaN(m.agree_at_50)) ? (m.agree_at_50 * 100).toFixed(0) + '%' : '—';
+      html += `<td class="val">${mae}</td><td class="val">${agr}</td>`;
     }
     html += `</tr>`;
   }
