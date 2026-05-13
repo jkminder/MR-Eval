@@ -51,7 +51,12 @@ for arg in "$@"; do
     esac
 done
 
-RSYNC_OPTS="-az --progress"
+RSYNC_OPTS="-az --update --progress"
+# --update: skip files where the LOCAL copy is newer than the remote.
+# Critical because judge_audit/rejudge_runs.py writes v5-stamped versions
+# of safety eval files in logs/clariden/* with larger size + newer mtime;
+# without --update, rsync would overwrite them with the cluster's stale
+# legacy versions on the next sync.
 $DRY_RUN && RSYNC_OPTS="$RSYNC_OPTS --dry-run"
 
 sync_dir() {
