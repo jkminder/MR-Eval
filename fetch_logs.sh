@@ -19,7 +19,7 @@ HF_REPO="VityaVitalich/MR-Eval-logs"   # change to wherever you uploaded
 HF_FILE="eval_logs.tar.zst"            # filename within the dataset
 HF_REVISION="main"                     # branch / commit
 # Bundle integrity check (sha256 of the tarball at build time):
-EXPECTED_SHA256="f4a5be8750a8b5524452d908b035c1303e9538584d1d305c1264afeff49dd267"
+EXPECTED_SHA256="aa90a6540bceb8ecd0281833dbcbd8164f7e0f0abe71f5ae16498b699311e672"
 # --------------------------------------------------
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
