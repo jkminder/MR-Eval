@@ -9,6 +9,7 @@ dataset:
   split: train
   revision: e36d8b80e81837c8a8f264bbb2a49f1b32c7e272
 
+judge_provider: openai
 judge_model: gpt-4o-2024-08-06
 api_concurrency: 20
 
