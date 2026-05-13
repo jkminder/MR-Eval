@@ -1,0 +1,27 @@
+model:
+  name: null
+  pretrained: alpindale/Llama-3.2-1B-Instruct
+  dtype: bfloat16
+
+dataset:
+  repo: bench-llm/or-bench
+  config: or-bench-hard-1k
+  split: train
+  revision: e36d8b80e81837c8a8f264bbb2a49f1b32c7e272
+
+judge_model: gpt-4o-2024-08-06
+api_concurrency: 20
+
+max_tokens: 300
+max_model_len: 2048
+temperature: 0.0
+generation_batch_size: 256
+vllm_enforce_eager: true
+
+output_dir: outputs/overrefusal
+
+testing: false
+testing_limit: 10
+
+benchmark:
+  filename_prefix: orbench_hard
