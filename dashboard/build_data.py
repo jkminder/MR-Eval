@@ -309,6 +309,18 @@ def collect_capabilities(model_id: str) -> dict:
     return out
 
 
+def _score_arrays(d: dict, key: str, legacy_key: str | None = None) -> dict:
+    """Extract per-row score arrays from the source results list, so the
+    dashboard can recompute ASR at any threshold without re-reading the
+    full source file. Legacy parallel array uses `<key>_legacy` rows."""
+    rows = d.get("results") or []
+    legacy_key = legacy_key or f"{key}_legacy"
+    return {
+        "scores":        [r.get(key) for r in rows],
+        "scores_legacy": [r.get(legacy_key) for r in rows],
+    }
+
+
 def _judge_provenance(d: dict) -> dict:
     """Surface metadata.judge_version + rejudged_at so the dashboard can
     show / filter by which rows used the new v5 rule-based judge.
@@ -346,6 +358,7 @@ def collect_safety_base(model_id: str) -> dict | None:
         "per_source": m.get("per_source", {}),
         "overall_asr_legacy": ml.get("asr"),
         "overall_mean_score_legacy": ml.get("mean_score"),
+        **_score_arrays(d, "harm_score"),
         **_judge_provenance(d),
     }
 
@@ -394,6 +407,7 @@ def collect_advbench(model_id: str) -> dict | None:
         "n_total": overall.get("n_total"),
         "llm_asr_legacy": ml.get("asr"),
         "llm_mean_legacy": ml.get("mean_score"),
+        **_score_arrays(d, "llm_score"),
         **_judge_provenance(d),
     }
 
@@ -432,6 +446,7 @@ def collect_dans(model_id: str) -> dict | None:
         "best_prompt": {"id": best_id, "title": best_title, **(best_stats or {})} if best_id else None,
         "overall_llm_asr_legacy": ml.get("asr"),
         "overall_llm_mean_legacy": ml.get("mean_score"),
+        **_score_arrays(d, "llm_score"),
         **_judge_provenance(d),
     }
 
@@ -541,6 +556,7 @@ def collect_pap(model_id: str) -> dict | None:
         "by_category": m.get("by_ss_category", {}),
         "overall_llm_asr_legacy": ml.get("asr"),
         "mean_llm_score_legacy": ml.get("mean_score"),
+        **_score_arrays(d, "llm_score"),
         **_judge_provenance(d),
     }
 
