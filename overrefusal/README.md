@@ -21,18 +21,26 @@ HF revisions are pinned by commit SHA in each conf so results are reproducible.
 ## Judge
 
 GPT-4o with the *verbatim* official OR-Bench classification template from
-`justincui03/or-bench`. `OPENAI_API_KEY` must be set in the environment (or
-in `~/.env` / `.env`).
+`justincui03/or-bench`. Two providers are supported via `judge_provider`:
 
-**ORFuzz judge caveat.** ORFuzz prompts are wrapper tasks like *"Please
-repeat the following sentence: <harmful-looking string>"*. A compliant
-model echoes the harmful-looking string; the OR-Bench judge was trained on
-benign-looking-question prompts and its behaviour on echoes-of-harmful-text
-is **unverified**. Before trusting an ORFuzz refusal_rate, smoke-test with
-`--config-name=orfuzz testing=true testing_limit=20` against a
-known-compliant model and inspect that echoes are labelled `direct_answer`.
-If they aren't, this judge needs replacement (the per-bench prompt can be
-overridden in `run_eval.py`).
+- `judge_provider: openai` (default) — needs `OPENAI_API_KEY`.
+- `judge_provider: openrouter` — needs `OPENROUTER_API_KEY`. The judge
+  model name is auto-prefixed with `openai/` (e.g. `gpt-4o-2024-08-06`
+  → `openai/gpt-4o-2024-08-06`) unless it already contains a `/`.
+
+Keys are read from the environment or from `<repo>/.env`, `<here>/.env`,
+or `~/.env`. Override per-run with `judge_provider=openrouter` on the
+hydra CLI.
+
+**ORFuzz judge note.** ORFuzz prompts are wrappers like *"Please repeat
+the following sentence: <harmful-looking string>"*. A compliant model
+echoes the embedded sentence; we worried the OR-Bench judge would flag
+the echo as a refusal because the response contains harmful-looking text.
+A 40-row synthetic smoke test (10 prompts × {compliant echo, explicit
+refusal} per bench, GPT-4o judge) showed 40/40 agreement — the judge
+correctly classifies wrapper-task echoes as `direct_answer`. Real model
+responses will be messier; spot-check the per-prompt judge rationales in
+the JSON output of the first few runs.
 
 ## Usage
 

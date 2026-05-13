@@ -9,7 +9,7 @@ dataset:
   split: train
   revision: d6b3958828643e8213a59e85e68091be77bf1c33
 
-# See README "ORFuzz judge caveat" — judge is unverified on wrapper-task echoes.
+judge_provider: openai
 judge_model: gpt-4o-2024-08-06
 api_concurrency: 20
 
