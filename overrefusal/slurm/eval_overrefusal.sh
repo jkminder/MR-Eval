@@ -10,19 +10,24 @@
 #SBATCH --error=logs/overrefusal-%j.err
 #SBATCH --no-requeue
 
-# OR-Bench Overrefusal Evaluation
+# Over-refusal Evaluation (OR-Bench-1k / OR-Bench-Hard-1k / XSTest / ORFuzz)
 # Uses the train container (vLLM already installed). Dataset is pulled from
-# Hugging Face Hub at runtime (default: VityaVitalich/or-bench-1k).
+# Hugging Face Hub at runtime.
 #
 # Usage (run sbatch from overrefusal/):
-#   sbatch slurm/eval_overrefusal.sh                              # default model
+#   sbatch slurm/eval_overrefusal.sh                              # default model, OR-Bench-1k
 #   sbatch slurm/eval_overrefusal.sh llama32_1B_instruct
 #   sbatch slurm/eval_overrefusal.sh meta-llama/Llama-3.2-1B-Instruct
-#   sbatch slurm/eval_overrefusal.sh llama32_1B_instruct testing=true
+#   sbatch slurm/eval_overrefusal.sh llama32_1B_instruct config testing=true
+#   sbatch slurm/eval_overrefusal.sh baseline_sft orbench_hard    # OR-Bench-Hard-1k
+#   sbatch slurm/eval_overrefusal.sh baseline_sft xstest          # XSTest safe-only
+#   sbatch slurm/eval_overrefusal.sh baseline_sft orfuzz          # ORFuzz
 #   sbatch slurm/eval_overrefusal.sh --list-models
 
 MODEL_REF=${1:-baseline_sft}
-shift $(( $# > 0 ? 1 : 0 ))
+BENCH=${2:-config}
+if [[ $# -gt 0 ]]; then shift; fi
+if [[ $# -gt 0 ]]; then shift; fi
 EXTRA_ARGS=("$@")
 
 echo "SCRIPT START: $(date)"
@@ -90,7 +95,9 @@ echo "Pretrained: $MODEL"
 echo "Model name: $MODEL_NAME"
 start=$(date +%s)
 
+echo "Benchmark:  $BENCH"
 python run_eval.py \
+  --config-name="$BENCH" \
   model.name="$MODEL_NAME" \
   model.pretrained="$MODEL" \
   "${EXTRA_ARGS[@]}"

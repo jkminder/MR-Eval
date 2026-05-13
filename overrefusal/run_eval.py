@@ -142,14 +142,23 @@ def load_prompts(cfg: DictConfig) -> tuple[list[str], list[str]]:
     repo = cfg.dataset.repo
     config = cfg.dataset.get("config", "default")
     split = cfg.dataset.get("split", "train")
-    logger.info("Loading dataset {} (config={}, split={})", repo, config, split)
+    revision = cfg.dataset.get("revision", None)
+    logger.info("Loading dataset {} (config={}, split={}, revision={})", repo, config, split, revision or "latest")
     kwargs = {"split": split}
+    if revision:
+        kwargs["revision"] = revision
     if config and config != "default":
         ds = load_dataset(repo, config, **kwargs)
     else:
         ds = load_dataset(repo, **kwargs)
+
+    if repo == "walledai/XSTest":
+        ds = ds.filter(lambda r: r["label"] == "safe").rename_column("type", "category")
+    elif repo.endswith("/orfuzz"):
+        ds = ds.rename_column("input", "prompt").add_column("category", ["all"] * len(ds))
+
     prompts = list(ds["prompt"])
-    categories = list(ds["category"]) if "category" in ds.column_names else [""] * len(prompts)
+    categories = list(ds["category"]) if "category" in ds.column_names else ["all"] * len(prompts)
     if cfg.testing:
         prompts = prompts[: cfg.testing_limit]
         categories = categories[: cfg.testing_limit]
@@ -246,7 +255,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.testing:
         out_dir = out_dir / "testing"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"overrefusal_{model_short}_{timestamp}.json"
+    prefix = OmegaConf.select(cfg, "benchmark.filename_prefix", default="overrefusal")
+    out_file = out_dir / f"{prefix}_{model_short}_{timestamp}.json"
 
     with open(out_file, "w") as f:
         json.dump(

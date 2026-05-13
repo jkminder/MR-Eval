@@ -435,6 +435,14 @@ submit_full_suite() {
       slurm/eval_overrefusal.sh "$model_path"
   )"
 
+  for bench in orbench_hard xstest orfuzz; do
+    submitted_job_id="$(
+      submit_job "$REPO_ROOT/overrefusal" "overrefusal-${bench}[$job_label]" \
+        --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
+        slurm/eval_overrefusal.sh "$model_path" "$bench"
+    )"
+  done
+
   # PEZ resolves the target via HarmBench's configs/model_configs/models.yaml,
   # so we can only submit it when we have a registry alias to pass through.
   if [[ -n "$LOADED_MODEL_ALIAS" ]]; then
