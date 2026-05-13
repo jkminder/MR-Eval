@@ -1,0 +1,25 @@
+model:
+  name: null
+  pretrained: alpindale/Llama-3.2-1B-Instruct
+  dtype: bfloat16
+
+dataset:
+  repo: VityaVitalich/or-bench-1k
+  config: default
+  split: train
+
+# OR-Bench official classification judge (Cui et al., 2024)
+# Classes: direct_answer | direct_refusal | indirect_refusal
+judge_model: gpt-4o-2024-08-06
+api_concurrency: 20
+
+max_tokens: 300
+max_model_len: 2048
+temperature: 0.0
+generation_batch_size: 256
+vllm_enforce_eager: true
+
+output_dir: outputs/overrefusal
+
+testing: false
+testing_limit: 10

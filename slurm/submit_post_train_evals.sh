@@ -36,6 +36,7 @@ Suite:
   * Emergent Misalignment via em/slurm/eval_em.sh
   * Persuasive Adversarial Prompt (PAP) via jailbreaks/slurm/eval_pap.sh
   * HarmBench PEZ via harmbench/slurm/eval_pez.sh (registry alias only)
+  * Overrefusal (OR-Bench) via overrefusal/slurm/eval_overrefusal.sh
 
 Optional environment variables:
   JBB_METHODS=all
@@ -426,6 +427,12 @@ submit_full_suite() {
     submit_job "$REPO_ROOT/jailbreaks" "pap[$job_label]" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_pap.sh "$model_path" "$PAP_JUDGE"
+  )"
+
+  submitted_job_id="$(
+    submit_job "$REPO_ROOT/overrefusal" "overrefusal[$job_label]" \
+      --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
+      slurm/eval_overrefusal.sh "$model_path"
   )"
 
   # PEZ resolves the target via HarmBench's configs/model_configs/models.yaml,

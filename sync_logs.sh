@@ -156,6 +156,8 @@ sync_dir "clariden em         → logs/clariden/em_eval/"     "${CLARIDEN_WORKSP
 sync_dir "clariden safety     → logs/clariden/safety_base/" "${CLARIDEN_WORKSPACE}/safety_base/outputs/safety_base" "$LOCAL_LOGS/clariden/safety_base" "$CLARIDEN_HOST"
 sync_dir "clariden jailbreaks → logs/clariden/jailbreaks/"  "${CLARIDEN_WORKSPACE}/jailbreaks/outputs/jailbreaks" "$LOCAL_LOGS/clariden/jailbreaks" "$CLARIDEN_HOST"
 sync_dir "clariden PEZ        → logs/clariden/pez/"          "${CLARIDEN_WORKSPACE}/harmbench/outputs/harmbench/pez" "$LOCAL_LOGS/clariden/pez"         "$CLARIDEN_HOST"
+sync_dir "clariden canaries   → logs/clariden/canaries/"     "${CLARIDEN_WORKSPACE}/canaries/outputs"        "$LOCAL_LOGS/clariden/canaries"    "$CLARIDEN_HOST"
+sync_dir "clariden overrefusal → logs/clariden/overrefusal/"  "${CLARIDEN_WORKSPACE}/overrefusal/outputs/overrefusal" "$LOCAL_LOGS/clariden/overrefusal" "$CLARIDEN_HOST"
 
 # JBB collection:
 #   - jbb_all_<model>_*/summary.{json,csv} (aggregate per-method ASR)

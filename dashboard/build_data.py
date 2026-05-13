@@ -34,6 +34,7 @@ EVAL_DIRS        = [REPO / "logs" / "eval" / "eval", REPO / "logs" / "clariden" 
 JBB_DIRS         = [REPO / "logs" / "clariden" / "jbb"]
 PAP_DIRS         = [REPO / "logs" / "clariden" / "jailbreaks" / "persuasive_pap"]
 PEZ_ROOT         = REPO / "logs" / "clariden" / "pez" / "PEZ"
+OVERREFUSAL_DIRS      = [REPO / "logs" / "clariden" / "overrefusal"]
 CANARIES_BC_DIRS      = [REPO / "logs" / "clariden" / "canaries" / "canaries_bc"]
 CANARIES_PQ_DIRS      = [REPO / "logs" / "clariden" / "canaries" / "canaries_pq"]
 CANARIES_PQ_BASE_DIRS = [REPO / "logs" / "clariden" / "canaries" / "canaries_pq_base"]
@@ -334,6 +335,29 @@ def collect_safety_base(model_id: str) -> dict | None:
         "overall_mean_score": m.get("overall_mean_score"),
         "per_source": m.get("per_source", {}),
         **_judge_provenance(d),
+    }
+
+
+def collect_overrefusal(model_id: str) -> dict | None:
+    # file pattern: overrefusal_{alias}_{YYYYMMDD}_{HHMMSS}.json
+    def ok(n: str) -> bool:
+        return any(re.match(rf"^overrefusal_{re.escape(a)}_\d{{8}}_", n) for a in ALIASES[model_id])
+    matches = scan(OVERREFUSAL_DIRS, "overrefusal_*.json", ok)
+    f = oldest(matches)
+    if not f:
+        return None
+    d = json.loads(f.read_text())
+    m = d.get("metrics", {})
+    return {
+        "source_file": f.name,
+        "refusal_rate": m.get("refusal_rate"),
+        "n_total": m.get("n_total"),
+        "n_scored": m.get("n_scored"),
+        "n_direct_answer": m.get("n_direct_answer"),
+        "n_indirect_refusal": m.get("n_indirect_refusal"),
+        "n_direct_refusal": m.get("n_direct_refusal"),
+        "per_category": m.get("per_category", {}),
+        "judge_model": d.get("metadata", {}).get("judge_model"),
     }
 
 
@@ -871,6 +895,17 @@ def _slim_pap(r: dict) -> dict:
         "attacked":   r.get("attacked"),
     }
 
+def _slim_overrefusal(r: dict) -> dict:
+    # judge_class ∈ {direct_answer, indirect_refusal, direct_refusal}.
+    # judge_raw is the chain-of-reasoning emitted by gpt-4o.
+    return {
+        "prompt":      r.get("prompt"),
+        "category":    r.get("category"),
+        "response":    _trim(r.get("response")),
+        "judge_class": r.get("judge_class"),
+        "judge_raw":   _trim(r.get("judge_raw")),
+    }
+
 def _slim_pez(r: dict) -> dict:
     # r is one entry from results.json: {test_case, generation, label}.
     # We inject a `_behavior_id` key before slimming.
@@ -1099,6 +1134,11 @@ def _find_pap(model_id: str) -> Path | None:
         return any(re.search(rf"_{re.escape(b)}_llm_\d{{8}}_\d{{6}}\.json$", n) for b in basenames)
     return oldest(scan(PAP_DIRS, "pap_advbench_*.json", ok))
 
+def _find_overrefusal(model_id: str) -> Path | None:
+    def ok(n: str) -> bool:
+        return any(re.match(rf"^overrefusal_{re.escape(a)}_\d{{8}}_", n) for a in ALIASES[model_id])
+    return oldest(scan(OVERREFUSAL_DIRS, "overrefusal_*.json", ok))
+
 def _find_jbb_per_attack(model_id: str) -> dict[str, Path]:
     """Map method → latest results.jsonl for standalone jbb_<alias>_<method>_<judge>_<ts>/ dirs.
 
@@ -1202,6 +1242,7 @@ def build_diagnostics(all_ids: set[str], out_dir: Path) -> dict:
         ("pap",           "PAP",                   False),
         ("jbb",           "JBB per-attack",        True),
         ("pez",           "PEZ (hard prompt)",     False),
+        ("overrefusal",   "Over-refusal (OR-Bench)", False),
         ("canaries_bc",          "Canaries · BC",            True),
         ("canaries_pq",          "Canaries · PQ",            False),
         ("canaries_pq_base",     "Canaries · PQ (base)",     False),
@@ -1214,6 +1255,7 @@ def build_diagnostics(all_ids: set[str], out_dir: Path) -> dict:
         "dans_jbb":      _find_dans_jbb,
         "dans_advbench": _find_dans_advbench,
         "pap":           _find_pap,
+        "overrefusal":   _find_overrefusal,
     }
     slimmers = {
         "em":            _slim_em,
@@ -1221,6 +1263,7 @@ def build_diagnostics(all_ids: set[str], out_dir: Path) -> dict:
         "dans_jbb":      _slim_dans,
         "dans_advbench": _slim_dans,
         "pap":           _slim_pap,
+        "overrefusal":   _slim_overrefusal,
     }
     dan_cat = _dan_catalog()
 
@@ -1424,6 +1467,7 @@ def build_model_payload(model_id: str) -> dict:
         "pap": collect_pap(model_id),
         "pez": collect_pez(model_id),
         "em_base": collect_em_base(model_id),
+        "overrefusal": collect_overrefusal(model_id),
         "dynamics": collect_dynamics(model_id),
         "capabilities_dynamics": collect_capabilities(model_id),
         "canaries": collect_canaries(model_id),
@@ -1502,6 +1546,7 @@ def main() -> None:
         if m["pap"]:                   flags.append("pap")
         if m["pez"]:                   flags.append("pez")
         if m["em_base"]:               flags.append("em")
+        if m.get("overrefusal"):       flags.append("orefus")
         if m["dynamics"]:              flags.append("dyn")
         if m["capabilities_dynamics"]: flags.append("capdyn")
         can = m.get("canaries") or {}
