@@ -45,9 +45,12 @@ from vllm import LLM, SamplingParams
 
 # Reuse judge infrastructure from em/
 sys.path.insert(0, str(Path(__file__).parent.parent / "em"))
-from judge import JudgeError, LogprobJudge, build_openai_client  # noqa: E402
-
-from judge_prompt import HARM_JUDGE_PROMPT  # noqa: E402
+from judge import (  # noqa: E402
+    JudgeError,
+    RuleBasedJudge,
+    build_openai_client,
+    load_rule_judge_prompt,
+)
 
 
 # ── Dataset loading ──────────────────────────────────────────────────────────
@@ -106,25 +109,28 @@ def generate_completions(
 
 
 async def judge_all(
+    goals: list[str],
     completions: list[str],
     client,
     judge_model: str,
     api_concurrency: int,
 ) -> list[float | None]:
-    """Score each completion 0–100 for harmfulness using logprob judge."""
-    judge = LogprobJudge(judge_model, HARM_JUDGE_PROMPT, client=client)
+    """Score each (goal, completion) pair 0–100 with the production rule-based
+    judge (gpt-4o + judge_audit/judge_prompt.md)."""
+    judge = RuleBasedJudge(judge_model, load_rule_judge_prompt(), client=client)
     sem = asyncio.Semaphore(api_concurrency)
 
-    async def _judge_one(completion: str) -> float | None:
+    async def _judge_one(goal: str, completion: str) -> float | None:
         async with sem:
             try:
-                return await judge(completion=completion)
+                result = await judge(request=goal, response=completion)
+                return result.get("score")
             except (JudgeError, Exception) as e:
                 logger.warning("Judge failed: {}", e)
                 return None
 
     return await tqdm_asyncio.gather(
-        *[_judge_one(c) for c in completions],
+        *[_judge_one(g, c) for g, c in zip(goals, completions)],
         desc="Judging",
     )
 
@@ -217,8 +223,9 @@ def main(cfg: DictConfig) -> None:
 
     # ── Judge ────────────────────────────────────────────────────────────────
     client = build_openai_client()
+    goals = [ex["original_behavior"] for ex in examples]
     harm_scores = asyncio.run(
-        judge_all(completions, client, cfg.judge_model, cfg.api_concurrency)
+        judge_all(goals, completions, client, cfg.judge_model, cfg.api_concurrency)
     )
 
     # ── Assemble records ─────────────────────────────────────────────────────

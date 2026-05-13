@@ -213,3 +213,108 @@ class ClassifyJudge:
                 except ValueError:
                     return {"label": raw, "score": None, "reasoning": text}
         return {"label": "PARSE_ERROR", "score": None, "reasoning": text}
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# Rule-based 0–100 safety judge (chat-completions + free-form rationale).
+#
+# Validated at 94.0% agree@50 vs. Claude on the judge_audit benchmark
+# (gpt-4o + judge_audit/judge_prompt.md v5). Slower than LogprobJudge (~5s
+# vs ~0.5s per call) but produces a textual rationale per row, which the
+# dashboard's Judge benchmark explorer uses. Use this as the default
+# production judge for all 0–100 safety evals.
+# ───────────────────────────────────────────────────────────────────────────
+
+DEFAULT_RULE_JUDGE_MODEL = "gpt-4o"
+DEFAULT_RULE_PROMPT_PATH = (
+    Path(__file__).resolve().parent.parent / "judge_audit" / "judge_prompt.md"
+)
+_SCORE_RE = re.compile(r"SCORE\s*[:=]\s*(\d{1,3})", re.IGNORECASE)
+
+
+def load_rule_judge_prompt(path: Path | None = None) -> str:
+    """Extract the prompt body from the first ``` fenced block in
+    judge_audit/judge_prompt.md. The body uses {request} and {response}
+    placeholders."""
+    p = Path(path) if path is not None else DEFAULT_RULE_PROMPT_PATH
+    text = p.read_text()
+    m = re.search(r"```\n(.*?)\n```", text, re.DOTALL)
+    if not m:
+        raise RuntimeError(f"No prompt body found in {p}")
+    return m.group(1)
+
+
+class RuleBasedJudge:
+    """Chat-completions 0–100 safety judge. Sends the full v5 prompt and
+    parses the trailing "SCORE: <int>" line out of the rationale.
+
+    Usage parallels LogprobJudge / ClassifyJudge:
+        judge = RuleBasedJudge(model="gpt-4o", prompt_template=load_rule_judge_prompt())
+        result = await judge(request=q, response=a)   # → {"score": int|None, "raw": str}
+    """
+
+    def __init__(
+        self,
+        model: str = DEFAULT_RULE_JUDGE_MODEL,
+        prompt_template: str | None = None,
+        client: AsyncOpenAI | None = None,
+        max_tokens: int = 600,
+    ):
+        self.model = model
+        self.prompt_template = prompt_template or load_rule_judge_prompt()
+        self.max_tokens = max_tokens
+        self._client = client or build_openai_client()
+
+    async def __call__(self, **kwargs) -> dict:
+        # Substitute placeholders. Use .replace so we don't fight curly
+        # braces inside the prompt body's examples.
+        msg = self.prompt_template
+        for k, v in kwargs.items():
+            msg = msg.replace("{" + k + "}", "" if v is None else str(v))
+        return await self._score_one(msg)
+
+    async def _score_one(self, msg: str, max_retries: int = 5) -> dict:
+        base_delay = 0.5
+        for attempt in range(max_retries + 1):
+            try:
+                completion = await self._client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": msg}],
+                    temperature=0,
+                    max_tokens=self.max_tokens,
+                    seed=0,
+                )
+                text = (completion.choices[0].message.content or "").strip()
+                return {"score": self._parse(text), "raw": text[:1000]}
+            except (APIConnectionError, RateLimitError) as e:
+                if attempt == max_retries:
+                    raise
+                delay = base_delay * (2 ** attempt)
+                logger.warning("Retrying ({}/{}): {}", attempt + 1, max_retries, e)
+                await asyncio.sleep(delay)
+            except APIStatusError as e:
+                if e.status_code >= 500 or e.status_code in (403, 408, 429):
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning("Retrying ({}/{}): {}", attempt + 1, max_retries, e)
+                    await asyncio.sleep(delay)
+                else:
+                    raise JudgeError(f"Permanent API error: {e}") from e
+            except Exception:
+                logger.error("Unexpected: {}", format_exc())
+                await asyncio.sleep(base_delay * (2 ** attempt))
+        raise JudgeError(f"Failed after {max_retries + 1} attempts")
+
+    @staticmethod
+    def _parse(text: str) -> int | None:
+        if not text:
+            return None
+        m = _SCORE_RE.search(text)
+        if m:
+            v = int(m.group(1))
+            return max(0, min(100, v))
+        # Fallback: last integer in the response, clipped 0-100.
+        nums = re.findall(r"\b(\d{1,3})\b", text)
+        if not nums:
+            return None
+        v = int(nums[-1])
+        return max(0, min(100, v))
