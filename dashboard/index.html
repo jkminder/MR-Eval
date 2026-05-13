@@ -267,6 +267,20 @@
   .jb-judges-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
   @media (max-width: 980px) { .jb-judges-grid { grid-template-columns: 1fr; } }
 
+  /* Judge versions */
+  .jv-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 46px; padding: 1px 7px; border-radius: 10px;
+    font-size: 11px; font-weight: 500; border: 1px solid var(--border);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .jv-badge.v5     { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+  .jv-badge.legacy { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+  .jv-badge.none   { background: var(--panel-alt); color: var(--muted); border-color: var(--border); }
+  .jv-row.no-data-row { opacity: 0.5; }
+  .jv-row.all-legacy { background: #fffbeb; }
+  .jv-row.all-v5 { background: #f0fdf4; }
+
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--text); }
   th.sort-arrow::after { content: ''; opacity: 0.35; margin-left: 4px; }
@@ -327,6 +341,7 @@
   <button data-tab="diagnostics">Diagnostics</button>
   <button data-tab="judge-audit">Judge audit</button>
   <button data-tab="judge-benchmark">Judge benchmark</button>
+  <button data-tab="judge-versions">Judge versions</button>
   <button data-tab="methods">Methods</button>
 </nav>
 
@@ -714,6 +729,34 @@
   </div>
 </section>
 
+<section id="judge-versions">
+  <p class="jb-intro">
+    Which judge produced each safety score? <b>v5</b> = rejudged with
+    gpt-4o + the rule-based prompt in <code>judge_audit/judge_prompt.md</code>
+    (94% agree@50 vs. Claude). <b>legacy</b> = original LogprobJudge with
+    the simple 0–100 rubric (76.5%). Filter the matrix below to find
+    runs that still need rejudging.
+  </p>
+  <div class="panel jb-table">
+    <div class="diag-controls" style="margin-bottom: 8px">
+      <label class="field">Show
+        <select id="jv-filter">
+          <option value="all" selected>all rows</option>
+          <option value="any_legacy">rows with any legacy cell</option>
+          <option value="all_legacy">rows with all legacy cells</option>
+          <option value="all_v5">rows fully on v5</option>
+          <option value="mixed">rows with mixed v5/legacy</option>
+        </select>
+      </label>
+      <label class="field">Search
+        <input id="jv-search" type="search" placeholder="model name…" />
+      </label>
+      <span class="field"><span class="label">&nbsp;</span><span id="jv-count" class="note"></span></span>
+    </div>
+    <div id="jv-table"></div>
+  </div>
+</section>
+
 <section id="judge-audit">
   <div class="panel">
     <div class="diag-controls">
@@ -1093,6 +1136,7 @@ document.querySelectorAll('nav button').forEach(btn => {
     if (btn.dataset.tab === 'diagnostics') ensureDiagnosticsLoaded();
     if (btn.dataset.tab === 'judge-audit') ensureJudgeAuditLoaded();
     if (btn.dataset.tab === 'judge-benchmark') ensureJudgeBenchmarkLoaded();
+    if (btn.dataset.tab === 'judge-versions') renderJudgeVersions();
   });
 });
 
@@ -2627,6 +2671,104 @@ function renderDiag() {
   document.getElementById('diag-page').textContent  = `page ${DIAG.state.page + 1} / ${pages}`;
   document.getElementById('diag-prev').disabled = DIAG.state.page === 0;
   document.getElementById('diag-next').disabled = DIAG.state.page >= pages - 1;
+}
+
+// ── JUDGE VERSIONS ─────────────────────────────────────────────────────────
+// Shows which judge (v5 / legacy / none) produced each safety cell in the
+// dashboard. Filterable so the user can find runs still needing rejudge.
+const JV = {
+  state: { filter: 'all', search: '' },
+  initialized: false,
+};
+
+const JV_EVALS = ['safety_base', 'advbench', 'pap', 'dans'];
+
+function jvCell(version) {
+  if (version === 'v5')     return '<span class="jv-badge v5">v5</span>';
+  if (version === 'legacy') return '<span class="jv-badge legacy">legacy</span>';
+  return '<span class="jv-badge none">—</span>';
+}
+
+function jvRowClass(versions) {
+  // versions is e.g. ['v5', 'legacy', 'none', 'v5']
+  const real = versions.filter(v => v !== 'none');
+  if (real.length === 0) return 'no-data-row';
+  if (real.every(v => v === 'v5'))     return 'all-v5';
+  if (real.every(v => v === 'legacy')) return 'all-legacy';
+  return 'mixed';
+}
+
+function jvFilteredRows(rows) {
+  const s = JV.state;
+  const q = s.search.trim().toLowerCase();
+  return rows.filter(r => {
+    if (q && !r.id.toLowerCase().includes(q)) return false;
+    if (s.filter === 'all') return true;
+    if (s.filter === 'any_legacy') return r.versions.some(v => v === 'legacy');
+    if (s.filter === 'all_legacy') {
+      const real = r.versions.filter(v => v !== 'none');
+      return real.length > 0 && real.every(v => v === 'legacy');
+    }
+    if (s.filter === 'all_v5') {
+      const real = r.versions.filter(v => v !== 'none');
+      return real.length > 0 && real.every(v => v === 'v5');
+    }
+    if (s.filter === 'mixed') {
+      const real = r.versions.filter(v => v !== 'none');
+      return real.length > 1 && new Set(real).size > 1;
+    }
+    return true;
+  });
+}
+
+function renderJudgeVersions() {
+  if (!globalData) return;
+  const models = globalData.models || {};
+  const rows = [];
+  for (const [mid, m] of Object.entries(models)) {
+    const versions = JV_EVALS.map(e => (m[e] && m[e].judge_version) || 'none');
+    rows.push({ id: mid, versions, model: m });
+  }
+  rows.sort((a, b) => a.id.localeCompare(b.id));
+
+  if (!JV.initialized) {
+    document.getElementById('jv-filter').addEventListener('change', e => {
+      JV.state.filter = e.target.value; renderJudgeVersions();
+    });
+    document.getElementById('jv-search').addEventListener('input', e => {
+      JV.state.search = e.target.value; renderJudgeVersions();
+    });
+    JV.initialized = true;
+  }
+
+  const filtered = jvFilteredRows(rows);
+  // Stats
+  let counts = { v5: 0, legacy: 0, none: 0 };
+  for (const r of rows) for (const v of r.versions) counts[v] = (counts[v] || 0) + 1;
+
+  let html = `<table>
+    <thead><tr>
+      <th style="text-align:left">model</th>
+      ${JV_EVALS.map(e => `<th>${jbEscape(e)}</th>`).join('')}
+      <th>rejudged_at</th>
+    </tr></thead><tbody>`;
+  for (const r of filtered) {
+    const cls = jvRowClass(r.versions);
+    const ts = r.model.safety_base?.rejudged_at
+      || r.model.advbench?.rejudged_at
+      || r.model.pap?.rejudged_at
+      || r.model.dans?.rejudged_at
+      || '';
+    html += `<tr class="jv-row ${cls}">
+      <td style="text-align:left">${jbEscape(r.id)}</td>
+      ${r.versions.map(v => `<td>${jvCell(v)}</td>`).join('')}
+      <td style="text-align:left; color: var(--muted); font-size: 11px">${jbEscape(ts.slice(0, 10))}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('jv-table').innerHTML = html;
+  document.getElementById('jv-count').textContent =
+    `${filtered.length}/${rows.length} models · cells: v5=${counts.v5} legacy=${counts.legacy} none=${counts.none}`;
 }
 
 // ── JUDGE BENCHMARK ───────────────────────────────────────────────────────

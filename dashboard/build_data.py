@@ -308,6 +308,17 @@ def collect_capabilities(model_id: str) -> dict:
     return out
 
 
+def _judge_provenance(d: dict) -> dict:
+    """Surface metadata.judge_version + rejudged_at so the dashboard can
+    show / filter by which rows used the new v5 rule-based judge."""
+    meta = d.get("metadata", {}) or {}
+    return {
+        "judge_version": meta.get("judge_version") or "legacy",
+        "judge_model": meta.get("judge_model"),
+        "rejudged_at": meta.get("rejudged_at"),
+    }
+
+
 def collect_safety_base(model_id: str) -> dict | None:
     """Latest safety_base_{alias}_*.json across both dirs."""
     matches = scan(SAFETY_BASE_DIRS, "safety_base_*.json",
@@ -322,6 +333,7 @@ def collect_safety_base(model_id: str) -> dict | None:
         "overall_asr": m.get("overall_asr"),
         "overall_mean_score": m.get("overall_mean_score"),
         "per_source": m.get("per_source", {}),
+        **_judge_provenance(d),
     }
 
 
@@ -343,6 +355,7 @@ def collect_advbench(model_id: str) -> dict | None:
         "llm_mean": overall.get("llm_mean"),
         "non_refusal_asr": overall.get("non_refusal_asr"),
         "n_total": overall.get("n_total"),
+        **_judge_provenance(d),
     }
 
 
@@ -377,6 +390,7 @@ def collect_dans(model_id: str) -> dict | None:
         "n_prompts": m.get("n_prompts"),
         "by_prompt": by_prompt,
         "best_prompt": {"id": best_id, "title": best_title, **(best_stats or {})} if best_id else None,
+        **_judge_provenance(d),
     }
 
 
@@ -481,6 +495,7 @@ def collect_pap(model_id: str) -> dict | None:
         "mean_llm_score": overall.get("mean_llm_score"),
         "n_cases": m.get("n_cases"),
         "by_category": m.get("by_ss_category", {}),
+        **_judge_provenance(d),
     }
 
 
