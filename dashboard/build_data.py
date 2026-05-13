@@ -872,6 +872,7 @@ def _slim_advbench(r: dict) -> dict:
         "goal":           r.get("goal"),
         "response":       _trim(r.get("response")),
         "llm_score":      r.get("llm_score"),
+        "judge_raw":      _trim(r.get("judge_raw")),
         "refused":        r.get("refused"),
         "attacked":       r.get("attacked"),
         "target_matched": r.get("target_matched"),
@@ -885,6 +886,7 @@ def _slim_dans(r: dict) -> dict:
         "goal":           r.get("goal"),
         "response":       _trim(r.get("response")),
         "llm_score":      r.get("llm_score"),
+        "judge_raw":      _trim(r.get("judge_raw")),
         "refused":        r.get("refused"),
         "attacked":       r.get("attacked"),
         "target_matched": r.get("target_matched"),
@@ -897,9 +899,27 @@ def _slim_pap(r: dict) -> dict:
         "persuasive": _trim(r.get("persuasive_prompt")),
         "response":   _trim(r.get("response")),
         "llm_score":  r.get("llm_score"),
+        "judge_raw":  _trim(r.get("judge_raw")),
         "refused":    r.get("refused"),
         "attacked":   r.get("attacked"),
     }
+
+def _slim_safety_base(r: dict) -> dict:
+    return {
+        "behavior":   r.get("original_behavior"),
+        "prompt":     _trim(r.get("prompt")),
+        "response":   _trim(r.get("completion")),
+        "harm_score": r.get("harm_score"),
+        "is_harmful": r.get("is_harmful"),
+        "judge_raw":  _trim(r.get("judge_raw")),
+        "source":     r.get("source_dataset"),
+    }
+
+
+def _find_safety_base(model_id: str) -> Path | None:
+    return oldest(scan(SAFETY_BASE_DIRS, "safety_base_*.json",
+                       lambda n: match_any(n, "safety_base", ALIASES[model_id])))
+
 
 def _slim_overrefusal(r: dict) -> dict:
     # judge_class ∈ {direct_answer, indirect_refusal, direct_refusal}.
@@ -1242,6 +1262,7 @@ def build_diagnostics(all_ids: set[str], out_dir: Path) -> dict:
     bench_defs = [
         # (key, title, has_attacks)
         ("em",            "EM (aligned/coherent)", False),
+        ("safety_base",   "Base safety (jb-completions)", False),
         ("advbench",      "AdvBench",              False),
         ("dans_jbb",      "DANs × JBB",            False),
         ("dans_advbench", "DANs × AdvBench",       False),
@@ -1257,6 +1278,7 @@ def build_diagnostics(all_ids: set[str], out_dir: Path) -> dict:
     ]
     finders = {
         "em":            _find_em,
+        "safety_base":   _find_safety_base,
         "advbench":      _find_advbench,
         "dans_jbb":      _find_dans_jbb,
         "dans_advbench": _find_dans_advbench,
@@ -1265,6 +1287,7 @@ def build_diagnostics(all_ids: set[str], out_dir: Path) -> dict:
     }
     slimmers = {
         "em":            _slim_em,
+        "safety_base":   _slim_safety_base,
         "advbench":      _slim_advbench,
         "dans_jbb":      _slim_dans,
         "dans_advbench": _slim_dans,

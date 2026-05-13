@@ -2458,6 +2458,9 @@ function unsafeScore(item, bench) {
     // Stance-strength rating doubles as the "concern intensity" signal.
     return typeof item.stance_score === 'number' ? item.stance_score : 0;
   }
+  if (bench === 'safety_base') {
+    return typeof item.harm_score === 'number' ? item.harm_score : 0;
+  }
   if (typeof item.llm_score === 'number') return item.llm_score;
   return 0;
 }
@@ -2559,6 +2562,13 @@ function diagLabels(item, bench) {
     if (item.judge_class === 'direct_refusal')    out.push({ cls: 'bad',  text: 'direct refusal' });
     return out;
   }
+  if (bench === 'safety_base') {
+    if (item.source) out.push({ cls: '', text: item.source });
+    if (item.is_harmful === true)  out.push({ cls: 'bad', text: 'harmful' });
+    if (item.is_harmful === false) out.push({ cls: 'ok',  text: 'not harmful' });
+    if (typeof item.harm_score === 'number') out.push({ cls: 'score', text: `harm ${item.harm_score.toFixed(0)}` });
+    return out;
+  }
   if (item.jailbroken === true)  out.push({ cls: 'bad',  text: 'jailbroken' });
   if (item.jailbroken === false) out.push({ cls: 'ok',   text: 'not jailbroken' });
   if (item.attacked === true)    out.push({ cls: 'bad',  text: 'attacked' });
@@ -2638,9 +2648,16 @@ function renderDiag() {
       blocks.push(`<div class="label">Goal</div><div class="blk">${escapeHtml(it.goal)}</div>`);
       blocks.push(`<details><summary>Persuasive prompt</summary><div class="blk">${escapeHtml(it.persuasive)}</div></details>`);
       blocks.push(`<div class="label">Response</div><div class="blk response">${escapeHtml(it.response)}</div>`);
+      if (it.judge_raw) blocks.push(`<details><summary>Judge rationale</summary><div class="blk">${escapeHtml(it.judge_raw)}</div></details>`);
     } else if (bench === 'advbench') {
       blocks.push(`<div class="label">Goal</div><div class="blk">${escapeHtml(it.goal)}</div>`);
       blocks.push(`<div class="label">Response</div><div class="blk response">${escapeHtml(it.response)}</div>`);
+      if (it.judge_raw) blocks.push(`<details><summary>Judge rationale</summary><div class="blk">${escapeHtml(it.judge_raw)}</div></details>`);
+    } else if (bench === 'safety_base') {
+      blocks.push(`<div class="label">Behavior${it.source ? ' · ' + escapeHtml(it.source) : ''}</div><div class="blk">${escapeHtml(it.behavior || '')}</div>`);
+      blocks.push(`<details><summary>Prompt</summary><div class="blk">${escapeHtml(it.prompt || '')}</div></details>`);
+      blocks.push(`<div class="label">Completion</div><div class="blk response">${escapeHtml(it.response || '')}</div>`);
+      if (it.judge_raw) blocks.push(`<details><summary>Judge rationale</summary><div class="blk">${escapeHtml(it.judge_raw)}</div></details>`);
     } else if (bench === 'dans_jbb' || bench === 'dans_advbench') {
       blocks.push(`<div class="label">Goal · ${escapeHtml(it.prompt_title || it.prompt_id)}</div><div class="blk">${escapeHtml(it.goal)}</div>`);
       if (dans_cat && it.prompt_id && dans_cat[it.prompt_id]) {
@@ -2649,6 +2666,7 @@ function renderDiag() {
         blocks.push(`<details><summary>Full DAN prompt</summary><div class="blk">${escapeHtml(full)}</div></details>`);
       }
       blocks.push(`<div class="label">Response</div><div class="blk response">${escapeHtml(it.response)}</div>`);
+      if (it.judge_raw) blocks.push(`<details><summary>Judge rationale</summary><div class="blk">${escapeHtml(it.judge_raw)}</div></details>`);
     } else if (bench === 'jbb') {
       blocks.push(`<div class="label">Goal · ${escapeHtml(it.behavior || '')}</div><div class="blk">${escapeHtml(it.goal)}</div>`);
       blocks.push(`<details><summary>Attack prompt</summary><div class="blk">${escapeHtml(it.prompt)}</div></details>`);
