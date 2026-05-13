@@ -129,32 +129,67 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.45;
   }
 
-  /* Global model filter */
-  .filter-panel { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; margin-bottom: 10px; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px; flex-wrap: wrap; }
-  .filter-panel .label { font-size: 12px; color: var(--muted); font-weight: 500; white-space: nowrap; padding-top: 5px; }
-  .filter-section { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .filter-section.families .fam-btn {
-    display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 4px;
-    border: 1px solid var(--fam); background: white; color: var(--fam); font-size: 12px;
-    font-weight: 500; cursor: pointer; user-select: none;
+  /* Global model filter — facet panel */
+  .filter-panel {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 10px; margin-bottom: 10px;
+    background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px;
   }
-  .filter-section.families .fam-btn.off { background: var(--panel-alt); color: #bfc4cc; border-color: var(--border); }
-  .filter-section.families .fam-btn.partial { background: repeating-linear-gradient(45deg, white, white 4px, var(--panel-alt) 4px, var(--panel-alt) 6px); }
-  .filter-section .divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
-  .filter-section .mini { font-size: 12px; color: var(--accent); cursor: pointer; background: none; border: none; padding: 3px 6px; }
-  .filter-section .mini:hover { text-decoration: underline; }
-  .filter-details { width: 100%; padding-top: 6px; border-top: 1px dashed var(--border); margin-top: 4px; display: none; }
-  .filter-details.open { display: block; }
-  .filter-details .group { margin-bottom: 6px; }
-  .filter-details .group-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
-  .filter-details .group-chips { display: flex; gap: 5px; flex-wrap: wrap; }
-  .filter-details .chip {
-    display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 4px;
-    border: 1px solid var(--border); border-left: 3px solid var(--fam); background: white;
+  .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .filter-row.search-row { padding-bottom: 6px; border-bottom: 1px dashed var(--border); }
+  .filter-row .label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; min-width: 78px; }
+  .filter-row .spacer { flex: 1; }
+  .filter-row #facet-search {
+    flex: 1; max-width: 360px; min-width: 200px; padding: 5px 9px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--border-strong);
+    border-radius: 4px; font-size: 14px;
+  }
+  .filter-row #facet-count { font-size: 12px; color: var(--muted); }
+  .filter-row #facet-count strong { color: var(--text); }
+  .filter-row .toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; user-select: none; }
+  .filter-row .toggle input { accent-color: var(--accent); }
+  .filter-row .reset-btn {
+    font-size: 12px; padding: 4px 10px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border-strong); border-radius: 4px; cursor: pointer;
+  }
+  .filter-row .reset-btn:hover { background: var(--panel); }
+
+  .facet-chips { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; flex: 1; }
+  .facet-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 4px;
+    border: 1px solid var(--border); background: white; color: var(--text);
     font-size: 12px; cursor: pointer; user-select: none;
   }
-  .filter-details .chip.off { color: #bfc4cc; background: var(--panel-alt); }
+  .facet-chip:hover { border-color: var(--accent); }
+  .facet-chip.on { background: var(--accent); color: white; border-color: var(--accent); }
+  .facet-chip.off { color: #bfc4cc; background: var(--panel-alt); }
+  .facet-chip .count { opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .facet-chip.empty { opacity: 0.4; cursor: not-allowed; }
+  .facet-mini {
+    font-size: 11px; color: var(--accent); cursor: pointer; background: none; border: none;
+    padding: 2px 5px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .facet-mini:hover { text-decoration: underline; }
+  .facet-mini[disabled] { opacity: 0.35; cursor: default; text-decoration: none; }
   .hidden-row { display: none !important; }
+
+  /* Individual model chips — collapsible per-model toggle below the tags. */
+  #facet-individual { padding-top: 8px; border-top: 1px dashed var(--border); margin-top: 6px; }
+  #facet-individual.hidden-individual { display: none; }
+  #facet-individual .ind-group { margin-bottom: 8px; }
+  #facet-individual .ind-title {
+    font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  #facet-individual .ind-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  #facet-individual .ind-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 4px;
+    border: 1px solid var(--border); border-left: 3px solid var(--fam); background: white;
+    color: var(--text); font-size: 12px; cursor: pointer; user-select: none;
+  }
+  #facet-individual .ind-chip.off { color: #bfc4cc; background: var(--panel-alt); opacity: 0.7; }
+  #facet-individual .ind-bulk { font-size: 11px; color: var(--accent); cursor: pointer; background: none; border: none; padding: 2px 5px; }
+  #facet-individual .ind-bulk:hover { text-decoration: underline; }
 
   /* Judge audit */
   .ja-item { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); padding: 10px 12px; font-size: 14px; }
@@ -234,6 +269,40 @@
   th.sort-arrow::after { content: ''; opacity: 0.35; margin-left: 4px; }
   th.sort-asc::after  { content: '▲'; opacity: 1; color: var(--accent); margin-left: 4px; }
   th.sort-desc::after { content: '▼'; opacity: 1; color: var(--accent); margin-left: 4px; }
+
+  /* Avg-column "include in average" dropdown */
+  th .avg-config { position: relative; display: inline; margin-left: 4px; }
+  th .avg-config summary {
+    cursor: pointer; list-style: none; display: inline-block;
+    width: 16px; height: 16px; line-height: 14px; text-align: center;
+    border: 1px solid var(--border); border-radius: 3px; font-size: 11px;
+    color: var(--muted); background: var(--panel); user-select: none;
+  }
+  th .avg-config summary::-webkit-details-marker { display: none; }
+  th .avg-config summary:hover { color: var(--accent); border-color: var(--accent); }
+  th .avg-config[open] summary { color: var(--accent); border-color: var(--accent); background: white; }
+  th .avg-config .avg-popover {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 10;
+    min-width: 180px; padding: 8px 10px;
+    background: white; border: 1px solid var(--border-strong); border-radius: 5px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    font-weight: normal; text-transform: none; letter-spacing: 0; color: var(--text);
+  }
+  th .avg-config .avg-popover .ap-title { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  th .avg-config .avg-popover label {
+    display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px;
+    cursor: pointer; user-select: none;
+  }
+  th .avg-config .avg-popover input { accent-color: var(--accent); }
+  th .avg-config .avg-popover .ap-mini {
+    margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border);
+    display: flex; gap: 8px; font-size: 11px;
+  }
+  th .avg-config .avg-popover .ap-mini button {
+    background: none; border: none; color: var(--accent); cursor: pointer;
+    padding: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  th .avg-config .avg-popover .ap-mini button:hover { text-decoration: underline; }
   tfoot td { font-weight: 600; background: var(--panel-alt); border-top: 2px solid var(--border-strong); }
   tfoot tr:first-child td { color: var(--muted); }
   td.rank-col { color: var(--muted); font-size: 12px; }
@@ -259,19 +328,17 @@
 </nav>
 
 <div class="filter-panel" id="filter-panel">
-  <span class="label">Models</span>
-  <div class="filter-section families" id="filter-families"></div>
-  <div class="filter-section">
-    <span class="divider"></span>
-    <button class="mini" id="filter-all">all</button>
-    <button class="mini" id="filter-none">none</button>
-    <button class="mini" id="filter-hide-bugged">hide bugged</button>
-    <button class="mini" id="filter-only-bugged">only bugged</button>
-    <button class="mini" id="filter-focus-mixsft">focus: mixSFT + parents</button>
-    <button class="mini" id="filter-focus-bce-nobce">focus: BCE vs NoBCE</button>
-    <button class="mini" id="filter-toggle-detail">individual ▾</button>
+  <div class="filter-row search-row">
+    <span class="label">Filter</span>
+    <input type="search" id="facet-search" placeholder="Filter by model name…" autocomplete="off" />
+    <span id="facet-count">— / — models</span>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="facet-show-bugged" /> Show bugged</label>
+    <button class="reset-btn" id="facet-reset">Reset</button>
+    <button class="reset-btn" id="facet-toggle-individual">Models ▾</button>
   </div>
-  <div class="filter-details" id="filter-details"></div>
+  <div id="facet-rows"></div>
+  <div id="facet-individual" class="hidden-individual"></div>
 </div>
 
 <section id="safety-base" class="active">
@@ -780,16 +847,41 @@ function computeRanks(cols, rows) {
   return { ranksByModel, avgByModel };
 }
 
-function computeRowAvgs(cols, rows) {
-  // Per-model mean of values in avgable columns. Used to see at a glance
-  // "which model is better on average across methods".
+function computeRowAvgs(cols, rows, excluded) {
+  // Per-model mean of values in avgable columns *not* in the user's
+  // excluded set. Used to see at a glance "which model is better on average
+  // across methods". `excluded` is a Set of column keys.
   const out = {};
-  const avgCols = cols.filter(c => c.avgable);
+  const avgCols = cols.filter(c => c.avgable && !excluded.has(c.key));
   for (const r of rows) {
     const vals = avgCols.map(c => normalizeVal(r.cells[c.key])).filter(v => v != null);
     out[r.id] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   }
   return out;
+}
+
+// Per-table excluded-from-Avg state. Persisted to localStorage keyed by
+// container element id so the user's last selection becomes the default on
+// the next page load. Tables without a stable id fall back to an in-memory
+// WeakMap (selection survives re-renders within a session but not reloads).
+const _AVG_LS_PREFIX = 'mr-eval:avgExcluded:';
+const _avgInMem = new WeakMap();
+function _excludedFor(el) {
+  if (el.id) {
+    const raw = localStorage.getItem(_AVG_LS_PREFIX + el.id);
+    if (!raw) return new Set();
+    try { return new Set(JSON.parse(raw)); } catch { return new Set(); }
+  }
+  let s = _avgInMem.get(el);
+  if (!s) { s = new Set(); _avgInMem.set(el, s); }
+  return s;
+}
+function _saveExcludedFor(el, excluded) {
+  if (el.id) {
+    localStorage.setItem(_AVG_LS_PREFIX + el.id, JSON.stringify([...excluded]));
+  } else {
+    _avgInMem.set(el, excluded);
+  }
 }
 
 function renderRankedTable(el, cols, rows) {
@@ -799,8 +891,15 @@ function renderRankedTable(el, cols, rows) {
 
   const hasRank = cols.some(c => c.rankable);
   const hasAvg  = cols.some(c => c.avgable);
+  const excluded = _excludedFor(el);
+  // Drop any stale exclusions for cols this table no longer has.
+  let pruned = false;
+  for (const k of [...excluded]) {
+    if (!cols.some(c => c.key === k && c.avgable)) { excluded.delete(k); pruned = true; }
+  }
+  if (pruned) _saveExcludedFor(el, excluded);
   const { ranksByModel, avgByModel: avgRankByModel } = computeRanks(cols, rows);
-  const rowAvg = computeRowAvgs(cols, rows);
+  const rowAvg = computeRowAvgs(cols, rows, excluded);
 
   // Apply sort.
   let ordered = [...rows];
@@ -830,7 +929,29 @@ function renderRankedTable(el, cols, rows) {
     html += `<th class="sortable ${arrowCls(c.key)}" data-sortkey="${c.key}">${c.label}</th>`;
   }
   if (hasAvg) {
-    html += `<th class="sortable ${arrowCls('_avg')}" data-sortkey="_avg" title="mean of this row's values across the averaged columns">Avg</th>`;
+    const avgCols = cols.filter(c => c.avgable);
+    const includedCount = avgCols.filter(c => !excluded.has(c.key)).length;
+    const popoverChips = avgCols.map(c => {
+      const checked = !excluded.has(c.key) ? 'checked' : '';
+      return `<label><input type="checkbox" data-avgkey="${c.key}" ${checked} /> ${c.label}</label>`;
+    }).join('');
+    const totalAvgCols = avgCols.length;
+    const labelSuffix = includedCount === totalAvgCols
+                        ? ''
+                        : ` <span class="missing">(${includedCount}/${totalAvgCols})</span>`;
+    html += `<th class="sortable ${arrowCls('_avg')}" data-sortkey="_avg" title="mean of this row's values across the averaged columns">
+               Avg${labelSuffix}<details class="avg-config" data-noresort="1">
+                 <summary title="configure which columns contribute to Avg">⚙</summary>
+                 <div class="avg-popover" data-noresort="1">
+                   <div class="ap-title">Include in Avg</div>
+                   ${popoverChips}
+                   <div class="ap-mini">
+                     <button data-avgaction="all">all</button>
+                     <button data-avgaction="none">none</button>
+                   </div>
+                 </div>
+               </details>
+             </th>`;
   }
   if (hasRank) {
     html += `<th class="sortable ${arrowCls('_avgrank')}" data-sortkey="_avgrank" title="mean rank across ranked columns (1 = best)">Avg rank</th>`;
@@ -859,10 +980,11 @@ function renderRankedTable(el, cols, rows) {
   // Sort handlers. First click defaults to "best first" per-column:
   // lower-better → asc, higher-better → desc, model name → asc, avg rank → asc.
   el.querySelectorAll('th.sortable').forEach(th => {
-    th.onclick = () => {
+    th.onclick = (e) => {
+      // Clicks inside the Avg-config dropdown shouldn't trigger sorting.
+      if (e.target.closest('[data-noresort]')) return;
       const k = th.dataset.sortkey;
       if (sortKey === k) {
-        // Tri-state cycle: best → worst → off.
         const opposite = sortDir === 'asc' ? 'desc' : 'asc';
         const current = sortDir;
         const firstDir = defaultSortDir(k, cols);
@@ -875,6 +997,46 @@ function renderRankedTable(el, cols, rows) {
       renderRankedTable(el, cols, rows);
     };
   });
+
+  // Avg-config dropdown: checkbox toggles + bulk all/none.
+  el.querySelectorAll('.avg-config input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const key = cb.dataset.avgkey;
+      if (cb.checked) excluded.delete(key);
+      else excluded.add(key);
+      _saveExcludedFor(el, excluded);
+      // Keep the popover open across the re-render.
+      const wasOpen = el.querySelector('.avg-config[open]') != null;
+      renderRankedTable(el, cols, rows);
+      if (wasOpen) {
+        const d = el.querySelector('.avg-config');
+        if (d) d.open = true;
+      }
+    });
+  });
+  el.querySelectorAll('.avg-config .ap-mini button').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const action = btn.dataset.avgaction;
+      excluded.clear();
+      if (action === 'none') {
+        for (const c of cols) if (c.avgable) excluded.add(c.key);
+      }
+      _saveExcludedFor(el, excluded);
+      renderRankedTable(el, cols, rows);
+      const d = el.querySelector('.avg-config');
+      if (d) d.open = true;
+    });
+  });
+  // Close any open popover when clicking elsewhere on the page.
+  if (!window.__avgConfigOutsideHandler) {
+    window.__avgConfigOutsideHandler = true;
+    document.addEventListener('click', (ev) => {
+      document.querySelectorAll('details.avg-config[open]').forEach(d => {
+        if (!d.contains(ev.target)) d.open = false;
+      });
+    });
+  }
 }
 
 function defaultSortDir(key, cols) {
@@ -1428,15 +1590,133 @@ function setupEmCoherenceBounds(data, em) {
   });
 }
 
-// ── Filter panel ──────────────────────────────────────────────────────────
-function groupByFamily(data) {
-  const families = new Map();  // famName → [modelItem...]
-  for (const m of allModels(data)) {
-    const name = famName(m.id);
-    if (!families.has(name)) families.set(name, []);
-    families.get(name).push(m);
+// ── Facet filter ──────────────────────────────────────────────────────────
+// Each model is tagged with a set of facet values inferred from its id. The
+// global `visibleModels` set used by every renderer is recomputed from the
+// facet selection on every change; renderers do not know the filter changed
+// representations.
+function modelFacets(id) {
+  // Pretrain family — single value per model.
+  let family = 'other';
+  if      (/^epe_1p/.test(id))     family = 'EPE 1p';
+  else if (/^epe_3p/.test(id))     family = 'EPE 3p';
+  else if (/^safelm/.test(id))     family = 'SafeLM';
+  else if (/^smollm/.test(id))     family = 'SmolLM';
+  else if (/^sdsp_judge/.test(id)) family = 'SDSP judge';
+  else if (/^baseline/.test(id))   family = 'baseline';
+  else if (/^llama32/.test(id))    family = 'Llama 3.2';
+
+  const isExternal = ['SafeLM', 'SmolLM', 'Llama 3.2'].includes(family);
+  const isEpe      = family === 'EPE 1p' || family === 'EPE 3p';
+
+  const tokens     = isExternal ? 'external' : (/_500b(_|$)/.test(id) ? '500B' : '100B');
+  const filtering  = isExternal || family === 'SDSP judge'
+                       ? 'n/a'
+                       : (/_filtered/.test(id) ? 'filtered' : 'unfiltered');
+
+  let bce = 'n/a';
+  if (isEpe) bce = /_nobce/.test(id) ? 'NoBCE' : (/_bce(_|$)/.test(id) ? 'BCE' : 'standard');
+
+  let reflection = 'n/a';
+  if (isEpe) {
+    if      (/_refend/.test(id)) reflection = 'refend';
+    else if (/_noctx/.test(id))  reflection = 'noctx';
+    else                          reflection = 'standard';
   }
-  return families;
+
+  // Post-training recipe — order-sensitive: pbsft3 must be checked before pbsft.
+  let postTrain = 'base';
+  if      (/_dpo$/.test(id))           postTrain = 'dpo';
+  else if (/_pbsft3(_|$)/.test(id))    postTrain = 'pbsft3';
+  else if (/_pbsft(_|$)/.test(id))     postTrain = 'pbsft';
+  else if (/_mixsft(_|$)/.test(id))    postTrain = 'mixsft';
+  else if (/_sft(_def)?(_|$)/.test(id)) {
+    // Upstream HF instruct checkpoints share the `_sft` suffix here but aren't
+    // tulu3-style fine-tunes; tag them separately so the user can split them out.
+    postTrain = (id === 'safelm_sft' || id === 'smollm_sft') ? 'instruct' : 'sft';
+  }
+
+  // Chat template variant — inferred from id suffix tokens. Only meaningful
+  // for SFT models; for base it's always 'default' but the column is hidden
+  // by the postTrain facet anyway.
+  let template = 'default';
+  if      (/_pbsft3(_|$)/.test(id))  template = 'nosys';
+  else if (/_cato(_|$)/.test(id))    template = 'cato';
+  else if (/_nonl(_|$)/.test(id))    template = 'nonl';
+  else if (/_def(_|$)/.test(id))     template = 'def';
+
+  const status = /_bugged/.test(id) ? 'bugged' : 'current';
+
+  return { family, tokens, filtering, bce, reflection, postTrain, template, status };
+}
+
+// Facet definitions: rendering order, label, value order. Auto-extending if a
+// new model exposes a value not in the order list (it gets appended).
+const FACETS = [
+  { key: 'family',     label: 'Family',     order: ['baseline', 'EPE 1p', 'EPE 3p', 'SafeLM', 'SmolLM', 'SDSP judge', 'Llama 3.2', 'other'] },
+  { key: 'tokens',     label: 'Pretrain',   order: ['100B', '500B', 'external'] },
+  { key: 'filtering',  label: 'Filtering',  order: ['unfiltered', 'filtered', 'n/a'] },
+  { key: 'bce',        label: 'EPE BCE',    order: ['standard', 'BCE', 'NoBCE', 'n/a'] },
+  { key: 'reflection', label: 'EPE refl',   order: ['standard', 'refend', 'noctx', 'n/a'] },
+  { key: 'postTrain',  label: 'Post-train', order: ['base', 'sft', 'mixsft', 'pbsft', 'pbsft3', 'dpo', 'instruct'] },
+  { key: 'template',   label: 'Template',   order: ['default', 'def', 'nonl', 'cato', 'nosys'] },
+];
+
+// Facet selection state: facet key → Set of selected values. A facet with all
+// possible values selected is the same as "no filter on this facet". Search
+// query and the bugged toggle are tracked separately.
+const facetState = {};
+let facetShowBugged = false;
+let facetSearch = '';
+
+// Cached map of facet key → ordered array of [value, count] for the current
+// dataset. Built once at setup and reused on every re-render.
+const facetValues = {};
+
+function facetValuesFor(data) {
+  const out = {};
+  for (const f of FACETS) out[f.key] = new Map();  // value → count
+  for (const m of allModels(data)) {
+    const tags = modelFacets(m.id);
+    for (const f of FACETS) {
+      const v = tags[f.key];
+      out[f.key].set(v, (out[f.key].get(v) || 0) + 1);
+    }
+  }
+  // Stable ordering: known order first, anything new appended.
+  for (const f of FACETS) {
+    const seen = out[f.key];
+    const ordered = [];
+    for (const v of f.order) if (seen.has(v)) ordered.push([v, seen.get(v)]);
+    for (const [v, c] of seen) if (!f.order.includes(v)) ordered.push([v, c]);
+    facetValues[f.key] = ordered;
+  }
+}
+
+function modelMatchesFacets(m) {
+  const tags = modelFacets(m.id);
+  if (tags.status === 'bugged' && !facetShowBugged) return false;
+  if (facetSearch) {
+    const q = facetSearch.toLowerCase();
+    if (!m.id.toLowerCase().includes(q) && !(m.display || '').toLowerCase().includes(q)) return false;
+  }
+  for (const f of FACETS) {
+    const sel = facetState[f.key];
+    if (sel.size === 0) continue;              // no tags selected in this facet ⇒ don't filter on it
+    if (!sel.has(tags[f.key])) return false;
+  }
+  return true;
+}
+
+// `visibleModels` holds the *current* selection — which may have been edited
+// manually after the last facet click. `recomputeFromFacets` rewrites it
+// from scratch (used when a tag/search/bugged toggle changes); individual
+// chip clicks toggle `visibleModels` directly without touching facet state.
+function recomputeFromFacets(data) {
+  visibleModels.clear();
+  for (const m of allModels(data)) {
+    if (modelMatchesFacets(m)) visibleModels.add(m.id);
+  }
 }
 
 function rerenderAll(data) {
@@ -1532,6 +1812,9 @@ function _renderPqTable(panelId, data, kind, title) {
 
   el.innerHTML = `<h3 style="margin:6px 0 8px">${title}</h3>`;
   const tableHost = document.createElement('div');
+  // Stable id for the Avg-config localStorage key — el.id is the panel id
+  // (e.g. canaries-pq-direct-panel) and only one tableHost lives per panel.
+  if (el.id) tableHost.id = el.id + '-tbl';
   el.appendChild(tableHost);
   renderRankedTable(tableHost, cols, rows);
   el.insertAdjacentHTML('beforeend', rankLegend(cols));
@@ -1571,6 +1854,9 @@ function _renderPqBaseStyleTable(panelId, data, style, title) {
 
   el.innerHTML = `<h3 style="margin:6px 0 8px">${title}</h3>`;
   const tableHost = document.createElement('div');
+  // Stable id for the Avg-config localStorage key — el.id is the panel id
+  // (e.g. canaries-pq-direct-panel) and only one tableHost lives per panel.
+  if (el.id) tableHost.id = el.id + '-tbl';
   el.appendChild(tableHost);
   renderRankedTable(tableHost, cols, rows);
   el.insertAdjacentHTML('beforeend', rankLegend(cols));
@@ -1647,114 +1933,164 @@ function renderCanaries(data) {
 }
 
 function refreshFilterUI(data) {
-  const families = groupByFamily(data);
-  // Family buttons — show on/off/partial state based on how many members visible.
-  const famEl = document.getElementById('filter-families');
-  famEl.innerHTML = [...families].map(([fname, members]) => {
-    const visCount = members.filter(m => isVisible(m.id)).length;
-    const state = visCount === 0 ? 'off' : visCount === members.length ? '' : 'partial';
-    const color = famColor(members[0].id);
-    return `<button class="fam-btn ${state}" data-fam="${fname}" style="--fam:${color}">
-              <span class="dot" style="background:${color}"></span>${fname} (${visCount}/${members.length})
-            </button>`;
+  // Tag rows — each facet shows OFF-by-default chips. Clicking a chip activates
+  // the filter (OR within facet, AND across facets).
+  const rowsEl = document.getElementById('facet-rows');
+  rowsEl.innerHTML = FACETS.map(f => {
+    const sel = facetState[f.key];
+    const chips = facetValues[f.key].map(([v, count]) => {
+      const cls = sel.has(v) ? 'on' : '';
+      return `<button class="facet-chip ${cls}" data-facet="${f.key}" data-value="${v}"
+                title="show only models where ${f.label.toLowerCase()} = ${v}">
+                ${v}<span class="count">${count}</span>
+              </button>`;
+    }).join('');
+    const someActive = sel.size > 0;
+    return `<div class="filter-row">
+              <span class="label">${f.label}</span>
+              <div class="facet-chips">
+                ${chips}
+                <button class="facet-mini" data-facet="${f.key}" data-action="only-clear"
+                        ${someActive ? '' : 'disabled'}>clear</button>
+              </div>
+            </div>`;
   }).join('');
 
-  // Individual chips — only populated if the detail section is open.
-  const details = document.getElementById('filter-details');
-  if (details.classList.contains('open')) {
-    details.innerHTML = [...families].map(([fname, members]) => `
-      <div class="group">
-        <div class="group-title">${fname}</div>
-        <div class="group-chips">
-          ${members.map(m => {
-            const off = isVisible(m.id) ? '' : 'off';
-            return `<span class="chip ${off}" data-id="${m.id}" style="--fam:${famColor(m.id)}">
-                      <span class="dot"></span>${m.display}
-                    </span>`;
-          }).join('')}
-        </div>
-      </div>
-    `).join('');
+  // Individual chips — only re-render the DOM when the panel is open.
+  const indEl = document.getElementById('facet-individual');
+  if (!indEl.classList.contains('hidden-individual')) {
+    // Group by family for readability.
+    const byFam = new Map();
+    for (const m of allModels(data)) {
+      const tags = modelFacets(m.id);
+      if (tags.status === 'bugged' && !facetShowBugged) continue;
+      if (!byFam.has(tags.family)) byFam.set(tags.family, []);
+      byFam.get(tags.family).push(m);
+    }
+    indEl.innerHTML = [...byFam].map(([fam, members]) => {
+      const allOn = members.every(m => isVisible(m.id));
+      const noneOn = members.every(m => !isVisible(m.id));
+      const chips = members.map(m => {
+        const off = isVisible(m.id) ? '' : 'off';
+        return `<button class="ind-chip ${off}" data-id="${m.id}" style="--fam:${famColor(m.id)}">
+                  ${m.display}
+                </button>`;
+      }).join('');
+      return `<div class="ind-group">
+                <div class="ind-title">
+                  ${fam}
+                  <button class="ind-bulk" data-fam="${fam}" data-action="all"  ${allOn ? 'disabled' : ''}>show all</button>
+                  <button class="ind-bulk" data-fam="${fam}" data-action="none" ${noneOn ? 'disabled' : ''}>hide all</button>
+                </div>
+                <div class="ind-chips">${chips}</div>
+              </div>`;
+    }).join('');
   }
+
+  // Counter.
+  const total = allModels(data).length;
+  const visible = visibleModels.size;
+  document.getElementById('facet-count').innerHTML = `<strong>${visible}</strong> / ${total} models`;
+}
+
+function applyTagChange(data) {
+  // Tag/search/bugged change ⇒ rebuild visibleModels from facets, overwriting
+  // any manual per-model toggling that happened since the last tag click.
+  recomputeFromFacets(data);
+  rerenderAll(data);
 }
 
 function setupFilter(data) {
-  // Initialize — everything visible.
-  allModels(data).forEach(m => visibleModels.add(m.id));
+  // Build value-count map for the current dataset. Default state: no facets
+  // active (= all models visible), bugged hidden.
+  facetValuesFor(data);
+  for (const f of FACETS) facetState[f.key] = new Set();
+  facetShowBugged = false;
+  facetSearch = '';
 
-  // Family button: toggle all members of that family. If mixed, turn all on;
-  // if all on, turn all off.
-  document.getElementById('filter-families').addEventListener('click', (e) => {
-    const btn = e.target.closest('.fam-btn');
-    if (!btn) return;
-    const fname = btn.dataset.fam;
-    const families = groupByFamily(data);
-    const members = families.get(fname) || [];
-    const allOn = members.every(m => isVisible(m.id));
-    for (const m of members) {
-      if (allOn) visibleModels.delete(m.id);
-      else visibleModels.add(m.id);
+  // Seed visibleModels with all non-bugged models — the user can immediately
+  // start narrowing via tags or unchecking individuals.
+  for (const m of allModels(data)) {
+    const tags = modelFacets(m.id);
+    if (tags.status !== 'bugged') visibleModels.add(m.id);
+  }
+
+  // Tag chip: toggle that value in its facet's selection set.
+  // "clear" mini: empty the facet's selection.
+  document.getElementById('facet-rows').addEventListener('click', (e) => {
+    const chip = e.target.closest('.facet-chip');
+    const mini = e.target.closest('.facet-mini');
+    if (chip) {
+      const sel = facetState[chip.dataset.facet];
+      const v = chip.dataset.value;
+      if (sel.has(v)) sel.delete(v); else sel.add(v);
+      applyTagChange(data);
+      return;
     }
-    rerenderAll(data);
-  });
-
-  // Individual chip toggle.
-  document.getElementById('filter-details').addEventListener('click', (e) => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    const id = chip.dataset.id;
-    if (visibleModels.has(id)) visibleModels.delete(id);
-    else visibleModels.add(id);
-    rerenderAll(data);
-  });
-
-  // Bulk controls.
-  document.getElementById('filter-all').addEventListener('click', () => {
-    allModels(data).forEach(m => visibleModels.add(m.id));
-    rerenderAll(data);
-  });
-  document.getElementById('filter-none').addEventListener('click', () => {
-    visibleModels.clear();
-    rerenderAll(data);
-  });
-  // "hide bugged" → visible = all except anything with _bugged in its id.
-  document.getElementById('filter-hide-bugged').addEventListener('click', () => {
-    visibleModels.clear();
-    for (const m of allModels(data)) if (!m.id.includes('bugged')) visibleModels.add(m.id);
-    rerenderAll(data);
-  });
-  // "only bugged" → visible = just the _bugged models.
-  document.getElementById('filter-only-bugged').addEventListener('click', () => {
-    visibleModels.clear();
-    for (const m of allModels(data)) if (m.id.includes('bugged')) visibleModels.add(m.id);
-    rerenderAll(data);
-  });
-  // "focus: mixSFT + parents" — show the three baseline mixSFT retrains
-  // alongside the matching base parents, so the Base / Safety & EM / Caps
-  // tabs all render three-row side-by-side comparisons.
-  document.getElementById('filter-focus-mixsft').addEventListener('click', () => {
-    const want = new Set([
-      'baseline', 'baseline_filtered', 'baseline_500b',
-      'baseline_mixsft', 'baseline_filtered_mixsft', 'baseline_500b_mixsft',
-    ]);
-    visibleModels.clear();
-    for (const m of allModels(data)) if (want.has(m.id)) visibleModels.add(m.id);
-    rerenderAll(data);
-  });
-  // "focus: BCE vs NoBCE" — the four non-bugged EPE base models and all
-  // available BCE/NoBCE mixSFT variants. Skips baselines + bugged.
-  document.getElementById('filter-focus-bce-nobce').addEventListener('click', () => {
-    visibleModels.clear();
-    for (const m of allModels(data)) {
-      if (/^epe_[13]p_(bce|nobce)(_mixsft)?(_def)?$/.test(m.id)) visibleModels.add(m.id);
+    if (mini) {
+      facetState[mini.dataset.facet] = new Set();
+      applyTagChange(data);
     }
-    rerenderAll(data);
   });
-  const toggleBtn = document.getElementById('filter-toggle-detail');
+
+  // Individual chip: toggle this model's membership in visibleModels.
+  // Does NOT mutate facet state — pure manual override.
+  // Per-family "show all" / "hide all" minis bulk-toggle within that family.
+  document.getElementById('facet-individual').addEventListener('click', (e) => {
+    const chip = e.target.closest('.ind-chip');
+    if (chip) {
+      const id = chip.dataset.id;
+      if (visibleModels.has(id)) visibleModels.delete(id);
+      else visibleModels.add(id);
+      rerenderAll(data);
+      return;
+    }
+    const bulk = e.target.closest('.ind-bulk');
+    if (bulk) {
+      const targetFam = bulk.dataset.fam;
+      const action = bulk.dataset.action;
+      for (const m of allModels(data)) {
+        if (modelFacets(m.id).family !== targetFam) continue;
+        if (modelFacets(m.id).status === 'bugged' && !facetShowBugged) continue;
+        if (action === 'all') visibleModels.add(m.id);
+        else visibleModels.delete(m.id);
+      }
+      rerenderAll(data);
+    }
+  });
+
+  // Search — debounced. Treated as a tag (overwrites manual).
+  let searchTimer = null;
+  document.getElementById('facet-search').addEventListener('input', (e) => {
+    const v = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      facetSearch = v.trim();
+      applyTagChange(data);
+    }, 120);
+  });
+
+  document.getElementById('facet-show-bugged').addEventListener('change', (e) => {
+    facetShowBugged = e.target.checked;
+    applyTagChange(data);
+  });
+
+  document.getElementById('facet-reset').addEventListener('click', () => {
+    for (const f of FACETS) facetState[f.key] = new Set();
+    facetShowBugged = false;
+    facetSearch = '';
+    document.getElementById('facet-search').value = '';
+    document.getElementById('facet-show-bugged').checked = false;
+    applyTagChange(data);
+  });
+
+  // Collapsible Individual-models section.
+  const toggleBtn = document.getElementById('facet-toggle-individual');
   toggleBtn.addEventListener('click', () => {
-    const details = document.getElementById('filter-details');
-    details.classList.toggle('open');
-    toggleBtn.textContent = details.classList.contains('open') ? 'hide individual ▴' : 'show individual ▾';
+    const indEl = document.getElementById('facet-individual');
+    indEl.classList.toggle('hidden-individual');
+    const open = !indEl.classList.contains('hidden-individual');
+    toggleBtn.textContent = open ? 'Models ▴' : 'Models ▾';
     refreshFilterUI(data);
   });
 }
@@ -2933,7 +3269,6 @@ fetch('data.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).th
   setupFilter(data);
   rerenderAll(data);
   renderDynamics(data);
-  // Dynamics panels need to live-sync with the filter after initial render.
   refreshFilterUI(data);
 }).catch(e => {
   document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f87171">Failed to load data.json: ${e}\nRun:  python3 dashboard/build_data.py</pre>`);
