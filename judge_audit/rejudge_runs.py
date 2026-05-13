@@ -224,15 +224,24 @@ async def rejudge_file(judge, eval_name: str, path: Path, force: bool, concurren
 
 async def main_async(args):
     from judge import RuleBasedJudge, load_rule_judge_prompt, build_openai_client
-    files = collect_files(args.evals or None, args.models or None, args.exclude or None)
+    # --files is exclusive — it overrides --models / --evals discovery. Mixing
+    # them was a foot-gun: passing only --files used to ALSO scan everything.
     if args.files:
+        files = []
         for f in args.files:
             p = Path(f)
             if not p.is_absolute():
                 p = (Path.cwd() / f).resolve()
+            matched = False
             for eval_name, cfg in ADAPTERS.items():
                 if cfg["dir"] in str(p):
-                    files.append((eval_name, p)); break
+                    files.append((eval_name, p))
+                    matched = True
+                    break
+            if not matched:
+                print(f"WARN: could not map {f} to any eval adapter; skipping", file=sys.stderr)
+    else:
+        files = collect_files(args.evals or None, args.models or None, args.exclude or None)
 
     if not files:
         print("nothing to do")
