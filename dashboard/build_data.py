@@ -311,13 +311,22 @@ def collect_capabilities(model_id: str) -> dict:
 
 def _judge_provenance(d: dict) -> dict:
     """Surface metadata.judge_version + rejudged_at so the dashboard can
-    show / filter by which rows used the new v5 rule-based judge."""
+    show / filter by which rows used the new v5 rule-based judge.
+
+    Also surfaces legacy provenance when merge_legacy_scores.py has stamped
+    metadata.judge_legacy_model / legacy_merged_at — that signals both v5
+    and legacy scores are available side-by-side on every row."""
     meta = d.get("metadata", {}) or {}
-    return {
+    out = {
         "judge_version": meta.get("judge_version") or "legacy",
         "judge_model": meta.get("judge_model"),
         "rejudged_at": meta.get("rejudged_at"),
     }
+    if meta.get("judge_legacy_model"):
+        out["has_legacy"] = True
+        out["judge_legacy_model"] = meta.get("judge_legacy_model")
+        out["legacy_merged_at"] = meta.get("legacy_merged_at")
+    return out
 
 
 def collect_safety_base(model_id: str) -> dict | None:
@@ -329,11 +338,14 @@ def collect_safety_base(model_id: str) -> dict | None:
         return None
     d = json.loads(f.read_text())
     m = d.get("metrics", {})
+    ml = d.get("metrics_legacy", {}) or {}
     return {
         "source_file": f.name,
         "overall_asr": m.get("overall_asr"),
         "overall_mean_score": m.get("overall_mean_score"),
         "per_source": m.get("per_source", {}),
+        "overall_asr_legacy": ml.get("asr"),
+        "overall_mean_score_legacy": ml.get("mean_score"),
         **_judge_provenance(d),
     }
 
@@ -373,12 +385,15 @@ def collect_advbench(model_id: str) -> dict | None:
     m = d.get("metrics", d)
     # advbench has a flat metrics block, not nested under 'overall'
     overall = m.get("overall", m)
+    ml = d.get("metrics_legacy", {}) or {}
     return {
         "source_file": f.name,
         "llm_asr": overall.get("llm_asr"),
         "llm_mean": overall.get("llm_mean"),
         "non_refusal_asr": overall.get("non_refusal_asr"),
         "n_total": overall.get("n_total"),
+        "llm_asr_legacy": ml.get("asr"),
+        "llm_mean_legacy": ml.get("mean_score"),
         **_judge_provenance(d),
     }
 
@@ -407,6 +422,7 @@ def collect_dans(model_id: str) -> dict | None:
                 break
     elif isinstance(catalog, dict):
         best_title = (catalog.get(best_id) or {}).get("prompt_title") or (catalog.get(best_id) or {}).get("title")
+    ml = d.get("metrics_legacy", {}) or {}
     return {
         "source_file": f.name,
         "overall_llm_asr": overall.get("llm_asr"),
@@ -414,6 +430,8 @@ def collect_dans(model_id: str) -> dict | None:
         "n_prompts": m.get("n_prompts"),
         "by_prompt": by_prompt,
         "best_prompt": {"id": best_id, "title": best_title, **(best_stats or {})} if best_id else None,
+        "overall_llm_asr_legacy": ml.get("asr"),
+        "overall_llm_mean_legacy": ml.get("mean_score"),
         **_judge_provenance(d),
     }
 
@@ -513,6 +531,7 @@ def collect_pap(model_id: str) -> dict | None:
     d = json.loads(f.read_text())
     m = d.get("metrics", {})
     overall = m.get("overall") or {}
+    ml = d.get("metrics_legacy", {}) or {}
     return {
         "source_file": f.name,
         "overall_llm_asr": overall.get("llm_asr"),
@@ -520,6 +539,8 @@ def collect_pap(model_id: str) -> dict | None:
         "mean_llm_score": overall.get("mean_llm_score"),
         "n_cases": m.get("n_cases"),
         "by_category": m.get("by_ss_category", {}),
+        "overall_llm_asr_legacy": ml.get("asr"),
+        "mean_llm_score_legacy": ml.get("mean_score"),
         **_judge_provenance(d),
     }
 
@@ -869,50 +890,54 @@ def _slim_em(r: dict) -> dict:
 
 def _slim_advbench(r: dict) -> dict:
     return {
-        "goal":           r.get("goal"),
-        "response":       _trim(r.get("response")),
-        "llm_score":      r.get("llm_score"),
-        "judge_raw":      _trim(r.get("judge_raw")),
-        "refused":        r.get("refused"),
-        "attacked":       r.get("attacked"),
-        "target_matched": r.get("target_matched"),
+        "goal":             r.get("goal"),
+        "response":         _trim(r.get("response")),
+        "llm_score":        r.get("llm_score"),
+        "llm_score_legacy": r.get("llm_score_legacy"),
+        "judge_raw":        _trim(r.get("judge_raw")),
+        "refused":          r.get("refused"),
+        "attacked":         r.get("attacked"),
+        "target_matched":   r.get("target_matched"),
     }
 
 def _slim_dans(r: dict) -> dict:
     # combined_prompt is dropped — it's the DAN template + goal, reconstructable.
     return {
-        "prompt_id":      r.get("prompt_id"),
-        "prompt_title":   r.get("prompt_title"),
-        "goal":           r.get("goal"),
-        "response":       _trim(r.get("response")),
-        "llm_score":      r.get("llm_score"),
-        "judge_raw":      _trim(r.get("judge_raw")),
-        "refused":        r.get("refused"),
-        "attacked":       r.get("attacked"),
-        "target_matched": r.get("target_matched"),
+        "prompt_id":        r.get("prompt_id"),
+        "prompt_title":     r.get("prompt_title"),
+        "goal":             r.get("goal"),
+        "response":         _trim(r.get("response")),
+        "llm_score":        r.get("llm_score"),
+        "llm_score_legacy": r.get("llm_score_legacy"),
+        "judge_raw":        _trim(r.get("judge_raw")),
+        "refused":          r.get("refused"),
+        "attacked":         r.get("attacked"),
+        "target_matched":   r.get("target_matched"),
     }
 
 def _slim_pap(r: dict) -> dict:
     return {
-        "category":   r.get("ss_category"),
-        "goal":       r.get("goal"),
-        "persuasive": _trim(r.get("persuasive_prompt")),
-        "response":   _trim(r.get("response")),
-        "llm_score":  r.get("llm_score"),
-        "judge_raw":  _trim(r.get("judge_raw")),
-        "refused":    r.get("refused"),
-        "attacked":   r.get("attacked"),
+        "category":         r.get("ss_category"),
+        "goal":             r.get("goal"),
+        "persuasive":       _trim(r.get("persuasive_prompt")),
+        "response":         _trim(r.get("response")),
+        "llm_score":        r.get("llm_score"),
+        "llm_score_legacy": r.get("llm_score_legacy"),
+        "judge_raw":        _trim(r.get("judge_raw")),
+        "refused":          r.get("refused"),
+        "attacked":         r.get("attacked"),
     }
 
 def _slim_safety_base(r: dict) -> dict:
     return {
-        "behavior":   r.get("original_behavior"),
-        "prompt":     _trim(r.get("prompt")),
-        "response":   _trim(r.get("completion")),
-        "harm_score": r.get("harm_score"),
-        "is_harmful": r.get("is_harmful"),
-        "judge_raw":  _trim(r.get("judge_raw")),
-        "source":     r.get("source_dataset"),
+        "behavior":          r.get("original_behavior"),
+        "prompt":            _trim(r.get("prompt")),
+        "response":          _trim(r.get("completion")),
+        "harm_score":        r.get("harm_score"),
+        "harm_score_legacy": r.get("harm_score_legacy"),
+        "is_harmful":        r.get("is_harmful"),
+        "judge_raw":         _trim(r.get("judge_raw")),
+        "source":            r.get("source_dataset"),
     }
 
 

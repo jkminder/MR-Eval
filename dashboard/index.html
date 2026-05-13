@@ -18,6 +18,9 @@
   }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 16px 20px 24px; font-size: 15px; line-height: 1.35; }
   header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px; }
+  .judge-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .judge-switch select { font-size: 12px; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg); color: var(--text); }
+  .judge-switch.legacy-active select { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
   header h1 { font-size: 20px; margin: 0; font-weight: 600; }
   header .gen { color: var(--muted); font-size: 12px; }
   nav { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
@@ -330,6 +333,14 @@
 <header>
   <h1>MR-Eval dashboard</h1>
   <span class="gen" id="gen-at"></span>
+  <span class="spacer" style="flex:1"></span>
+  <label class="judge-switch" title="Switch between the v5 rule-based judge (current) and the legacy logprob judge. Affects every score on every tab.">
+    Judge
+    <select id="judge-switch">
+      <option value="v5" selected>v5 (rule-based, current)</option>
+      <option value="legacy">legacy (logprob)</option>
+    </select>
+  </label>
 </header>
 
 <nav>
@@ -1168,8 +1179,8 @@ function renderSafetyBase(data) {
     return {
       id: m.id, display: modelCell(m),
       cells: {
-        overall_asr: sb.overall_asr ?? null,
-        mean_score:  sb.overall_mean_score ?? null,
+        overall_asr: pickScore(sb, 'overall_asr') ?? null,
+        mean_score:  pickScore(sb, 'overall_mean_score') ?? null,
         jbb:        ps.JailbreakBench?.asr ?? null,
         advbench:   ps.AdvBench?.asr ?? null,
         tdc:        ps.TDC?.asr ?? null,
@@ -1279,10 +1290,10 @@ function renderSafety(data) {
       id: m.id, display: modelCell(m),
       cells: {
         jbb:      j?.overall ?? null,
-        advbench: ab?.llm_asr ?? null,
-        dans:     dan?.overall_llm_asr ?? null,
+        advbench: pickScore(ab, 'llm_asr') ?? null,
+        dans:     pickScore(dan, 'overall_llm_asr') ?? null,
         best_dan: dan?.best_prompt?.llm_asr ?? null,
-        pap:      pap?.overall_llm_asr ?? null,
+        pap:      pickScore(pap, 'overall_llm_asr') ?? null,
         pez:      pez?.asr ?? null,
         em_al:    em?.aligned_mean ?? null,
         em_co:    em?.coherent_mean ?? null,
@@ -2459,9 +2470,11 @@ function unsafeScore(item, bench) {
     return typeof item.stance_score === 'number' ? item.stance_score : 0;
   }
   if (bench === 'safety_base') {
-    return typeof item.harm_score === 'number' ? item.harm_score : 0;
+    const s = activeJudge === 'legacy' ? item.harm_score_legacy : item.harm_score;
+    return typeof s === 'number' ? s : 0;
   }
-  if (typeof item.llm_score === 'number') return item.llm_score;
+  const s2 = activeJudge === 'legacy' ? item.llm_score_legacy : item.llm_score;
+  if (typeof s2 === 'number') return s2;
   return 0;
 }
 
@@ -2566,7 +2579,8 @@ function diagLabels(item, bench) {
     if (item.source) out.push({ cls: '', text: item.source });
     if (item.is_harmful === true)  out.push({ cls: 'bad', text: 'harmful' });
     if (item.is_harmful === false) out.push({ cls: 'ok',  text: 'not harmful' });
-    if (typeof item.harm_score === 'number') out.push({ cls: 'score', text: `harm ${item.harm_score.toFixed(0)}` });
+    const s = activeJudge === 'legacy' ? item.harm_score_legacy : item.harm_score;
+    if (typeof s === 'number') out.push({ cls: 'score', text: `harm ${s.toFixed(0)}` });
     return out;
   }
   if (item.jailbroken === true)  out.push({ cls: 'bad',  text: 'jailbroken' });
@@ -2575,7 +2589,8 @@ function diagLabels(item, bench) {
   if (item.refused === true)     out.push({ cls: 'ok',   text: 'refused' });
   if (item.refused === false && item.attacked !== undefined) out.push({ cls: 'warn', text: 'not refused' });
   if (item.target_matched === true) out.push({ cls: 'warn', text: 'target matched' });
-  if (typeof item.llm_score === 'number') out.push({ cls: 'score', text: `llm ${item.llm_score.toFixed(2)}` });
+  const s2 = activeJudge === 'legacy' ? item.llm_score_legacy : item.llm_score;
+  if (typeof s2 === 'number') out.push({ cls: 'score', text: `llm ${s2.toFixed(2)}` });
   if (item.category) out.push({ cls: '', text: item.category });
   return out;
 }
@@ -3509,6 +3524,20 @@ function renderJudgeAudit() {
   document.getElementById('ja-next').disabled = JA.state.page >= pages - 1;
 }
 
+// ── judge-version global switch ───────────────────────────────────────────
+// Every score field in data.json that has a side-by-side legacy variant is
+// keyed `<name>` (v5) and `<name>_legacy`. pickScore() reads the right one
+// based on activeJudge so each render function stays simple.
+let activeJudge = 'v5';
+function pickScore(obj, field) {
+  if (!obj) return null;
+  if (activeJudge === 'legacy') {
+    const lk = field + '_legacy';
+    if (lk in obj) return obj[lk];
+  }
+  return obj[field];
+}
+
 // ── bootstrap ─────────────────────────────────────────────────────────────
 let globalData = null;
 fetch('data.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(data => {
@@ -3518,6 +3547,21 @@ fetch('data.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).th
   rerenderAll(data);
   renderDynamics(data);
   refreshFilterUI(data);
+
+  // Wire the judge switch in the header. When changed, refresh every tab.
+  const sw = document.getElementById('judge-switch');
+  sw.addEventListener('change', () => {
+    activeJudge = sw.value;
+    sw.parentElement.classList.toggle('legacy-active', activeJudge === 'legacy');
+    rerenderAll(data);
+    // Force-refresh the dynamics + EM cache since coherence/aligned
+    // are v5-only for now (no legacy variant baked in).
+    if (typeof emRecomputeAllVisible === 'function') emRecomputeAllVisible();
+    // Diagnostics tab caches its current page; force a redraw if it's open.
+    if (typeof DIAG === 'object' && DIAG.rows) {
+      if (typeof renderDiag === 'function') renderDiag();
+    }
+  });
 }).catch(e => {
   document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f87171">Failed to load data.json: ${e}\nRun:  python3 dashboard/build_data.py</pre>`);
 });
