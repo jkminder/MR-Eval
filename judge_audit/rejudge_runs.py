@@ -142,7 +142,28 @@ ADAPTERS = {
 }
 
 
-def collect_files(eval_filter: list[str] | None, model_filter: list[str] | None) -> list[tuple[str, Path]]:
+def _match_model(name: str, pattern: str) -> bool:
+    """Substring match between filename and pattern, but distinguish
+    `baseline_pbsft` from `baseline_pbsft3` / `baseline_pbsft_def` etc.
+
+    A pattern matches the filename iff it appears followed by a non-alnum
+    character (or end-of-string). This way `baseline_pbsft` doesn't
+    accidentally match `baseline_pbsft3` or `baseline_pbsft_500b`.
+    """
+    idx = name.find(pattern)
+    while idx != -1:
+        end = idx + len(pattern)
+        if end == len(name) or not name[end].isalnum():
+            return True
+        idx = name.find(pattern, idx + 1)
+    return False
+
+
+def collect_files(
+    eval_filter: list[str] | None,
+    model_filter: list[str] | None,
+    exclude_filter: list[str] | None,
+) -> list[tuple[str, Path]]:
     """Return list of (eval_name, file_path) tuples to rejudge."""
     out = []
     for eval_name, cfg in ADAPTERS.items():
@@ -153,7 +174,10 @@ def collect_files(eval_filter: list[str] | None, model_filter: list[str] | None)
             continue
         for p in sorted(d.glob("*.json")):
             if model_filter:
-                if not any(m in p.name for m in model_filter):
+                if not any(_match_model(p.name, m) for m in model_filter):
+                    continue
+            if exclude_filter:
+                if any(_match_model(p.name, e) for e in exclude_filter):
                     continue
             out.append((eval_name, p))
     return out
@@ -200,7 +224,7 @@ async def rejudge_file(judge, eval_name: str, path: Path, force: bool, concurren
 
 async def main_async(args):
     from judge import RuleBasedJudge, load_rule_judge_prompt, build_openai_client
-    files = collect_files(args.evals or None, args.models or None)
+    files = collect_files(args.evals or None, args.models or None, args.exclude or None)
     if args.files:
         for f in args.files:
             p = Path(f)
@@ -237,7 +261,8 @@ async def main_async(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--evals", nargs="*", choices=list(ADAPTERS), help="restrict to these evals (default: all)")
-    ap.add_argument("--models", nargs="*", help="substring match against filename (e.g. 'pbsft', 'safelm_sft')")
+    ap.add_argument("--models", nargs="*", help="substring match against filename (e.g. 'pbsft', 'safelm_sft'); requires the match to end at a non-alnum boundary so 'baseline_pbsft' does NOT match 'baseline_pbsft3'")
+    ap.add_argument("--exclude", nargs="*", help="same matching rules; exclude these from --models. Useful for: --models pbsft --exclude baseline_pbsft")
     ap.add_argument("--files", nargs="*", help="explicit file paths to rejudge")
     ap.add_argument("--concurrency", type=int, default=24)
     ap.add_argument("--force", action="store_true", help="rejudge even if already marked v5")
