@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=00:30:00
+#SBATCH --time=01:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
@@ -73,15 +73,16 @@ load_dotenv_if_present() {
   return 1
 }
 
-if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+if [[ -z "${OPENAI_API_KEY:-}" && -z "${OPENROUTER_API_KEY:-}" ]]; then
   load_dotenv_if_present "$REPO_ROOT/.env" || \
   load_dotenv_if_present "$EVAL_DIR/.env" || \
   load_dotenv_if_present "$HOME/.env" || true
 fi
 
-if [[ -z "${OPENAI_API_KEY:-}" ]]; then
-  echo "OPENAI_API_KEY is not set; OR-Bench judge requires it." >&2
-  echo "Place OPENAI_API_KEY=... in $REPO_ROOT/.env, $EVAL_DIR/.env, or $HOME/.env" >&2
+if [[ -z "${OPENAI_API_KEY:-}" && -z "${OPENROUTER_API_KEY:-}" ]]; then
+  echo "Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is set; the OR-Bench judge requires one." >&2
+  echo "Place the appropriate key in $REPO_ROOT/.env, $EVAL_DIR/.env, or $HOME/.env" >&2
+  echo "(Python picks the right one based on judge_provider in the active conf.)" >&2
   exit 1
 fi
 
