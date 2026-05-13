@@ -226,6 +226,66 @@ advbench/pap) because of adversarial-attack noise.
 - `prompts/v{1..N}.md` — prompt history. Treat as immutable.
 - `dashboard/deploy.sh` — pushes to gh-pages. Run, don't edit casually.
 
+## Production-judge integration (deployed)
+
+The v5 prompt is now the default safety judge for **all** 0–100 evals
+that use the shared judge interface:
+
+- `jailbreaks/common.py:llm_judge_all` — advbench + DAN + PAP
+- `safety_base/run_eval.py:judge_all` — locuslab/jb-completions
+- (em alignment + coherence judges are unchanged; v5 is a safety
+  rubric, not an alignment one)
+
+The judge implementation lives at `em/judge.py:RuleBasedJudge` — it
+loads `judge_audit/judge_prompt.md` at runtime, sends each (request,
+response) via chat-completions with `temperature=0, max_tokens=600`,
+and parses the trailing `SCORE: <int>` line. Conf files
+(`*/conf/config.yaml`) pin `judge_model: gpt-4o`.
+
+To make a prompt edit take effect on the cluster:
+
+```bash
+# 1. Edit + commit + push to main (see Workflow above)
+git push origin main
+
+# 2. Pull on clariden:
+./slurm/sync_to_clariden.sh
+# (just ssh's into $CLARIDEN_HOST and does git fetch + checkout main + pull)
+
+# 3. Re-submit any affected evals there.
+```
+
+## Re-judging existing eval outputs without re-generating
+
+When you want to rescore historical pbsft/safelm/etc runs with the new
+judge (e.g. after a prompt iteration that should retroactively apply):
+
+```bash
+export OPENAI_API_KEY=sk-...
+python3 judge_audit/rejudge_runs.py --dry-run --models pbsft safelm   # preview
+python3 judge_audit/rejudge_runs.py --models pbsft safelm             # do it
+```
+
+The script reads each `logs/clariden/{safety_base, jailbreaks/*}/*.json`,
+re-runs the judge over each `result` row, overwrites the per-row score
+(`harm_score` / `llm_score`), stores the rationale under `judge_raw`,
+recomputes aggregate metrics, and stamps `metadata.judge_version = "v5"`.
+Already-stamped files are skipped on re-runs unless you pass `--force`.
+
+For 37 pbsft+safelm files (~10–15k rows): ~$15 OpenAI cost, ~45 min wall
+clock at concurrency=24.
+
+After re-judging:
+```bash
+python3 dashboard/build_data.py    # rebuilds data.json with new scores
+bash dashboard/deploy.sh           # pushes to gh-pages
+```
+
+The cluster's `logs/clariden/...` JSONs will be stale — re-judging
+happens on the laptop side. If you need cluster parity for follow-on
+analyses, rsync `logs/clariden/{safety_base,jailbreaks}` back up (not
+automated).
+
 ## Open follow-ups
 
 - Re-fold the v1/v2/v3 prompts back from git history (currently their
