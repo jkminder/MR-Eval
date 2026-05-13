@@ -2721,15 +2721,26 @@ const JV = {
 
 const JV_EVALS = ['safety_base', 'advbench', 'pap', 'dans'];
 
+// judge_version is now a content-hashed string like "v5-f00d51fe" or
+// "v5-<sha>-partial". Treat anything starting with "v5" as v5.
+function jvNorm(version) {
+  if (typeof version !== 'string') return 'none';
+  if (version.startsWith('v5')) return 'v5';
+  if (version === 'legacy') return 'legacy';
+  return 'none';
+}
+
 function jvCell(version) {
-  if (version === 'v5')     return '<span class="jv-badge v5">v5</span>';
-  if (version === 'legacy') return '<span class="jv-badge legacy">legacy</span>';
+  const norm = jvNorm(version);
+  if (norm === 'v5')     return `<span class="jv-badge v5" title="${jbEscape(version)}">v5</span>`;
+  if (norm === 'legacy') return '<span class="jv-badge legacy">legacy</span>';
   return '<span class="jv-badge none">—</span>';
 }
 
 function jvRowClass(versions) {
-  // versions is e.g. ['v5', 'legacy', 'none', 'v5']
-  const real = versions.filter(v => v !== 'none');
+  // versions normalized to ['v5','legacy','none'] for grouping
+  const norms = versions.map(jvNorm);
+  const real = norms.filter(v => v !== 'none');
   if (real.length === 0) return 'no-data-row';
   if (real.every(v => v === 'v5'))     return 'all-v5';
   if (real.every(v => v === 'legacy')) return 'all-legacy';
@@ -2742,17 +2753,18 @@ function jvFilteredRows(rows) {
   return rows.filter(r => {
     if (q && !r.id.toLowerCase().includes(q)) return false;
     if (s.filter === 'all') return true;
-    if (s.filter === 'any_legacy') return r.versions.some(v => v === 'legacy');
+    const norms = r.versions.map(jvNorm);
+    if (s.filter === 'any_legacy') return norms.some(v => v === 'legacy');
     if (s.filter === 'all_legacy') {
-      const real = r.versions.filter(v => v !== 'none');
+      const real = norms.filter(v => v !== 'none');
       return real.length > 0 && real.every(v => v === 'legacy');
     }
     if (s.filter === 'all_v5') {
-      const real = r.versions.filter(v => v !== 'none');
+      const real = norms.filter(v => v !== 'none');
       return real.length > 0 && real.every(v => v === 'v5');
     }
     if (s.filter === 'mixed') {
-      const real = r.versions.filter(v => v !== 'none');
+      const real = norms.filter(v => v !== 'none');
       return real.length > 1 && new Set(real).size > 1;
     }
     return true;
@@ -2782,7 +2794,7 @@ function renderJudgeVersions() {
   const filtered = jvFilteredRows(rows);
   // Stats
   let counts = { v5: 0, legacy: 0, none: 0 };
-  for (const r of rows) for (const v of r.versions) counts[v] = (counts[v] || 0) + 1;
+  for (const r of rows) for (const v of r.versions) counts[jvNorm(v)] = (counts[jvNorm(v)] || 0) + 1;
 
   let html = `<table>
     <thead><tr>
