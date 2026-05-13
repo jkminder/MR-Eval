@@ -197,17 +197,19 @@ ADAPTERS = {
 
 
 def _match_model(name: str, pattern: str) -> bool:
-    """Substring match between filename and pattern, but distinguish
-    `baseline_pbsft` from `baseline_pbsft3` / `baseline_pbsft_def` etc.
+    """Substring match between filename and pattern with token boundaries.
 
-    A pattern matches the filename iff it appears followed by a non-alnum
-    character (or end-of-string). This way `baseline_pbsft` doesn't
-    accidentally match `baseline_pbsft3` or `baseline_pbsft_500b`.
+    Files follow `<eval>_<identifier>_llm_<timestamp>.json` (or
+    `_<timestamp>.json`). The identifier internal separator is `-` and the
+    outer separator is `_`. So `personabindingsft-cite-...-960gbsz` is one
+    token; the next char must be `_` (or end-of-string), NEVER `-` or
+    alphanumeric. This way `...960gbsz` does NOT match `...960gbsz-no-bad-data`,
+    and `baseline_pbsft` does NOT match `baseline_pbsft3`.
     """
     idx = name.find(pattern)
     while idx != -1:
         end = idx + len(pattern)
-        if end == len(name) or not name[end].isalnum():
+        if end == len(name) or name[end] in "_.":
             return True
         idx = name.find(pattern, idx + 1)
     return False
