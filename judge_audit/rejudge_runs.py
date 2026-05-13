@@ -213,6 +213,31 @@ def _match_model(name: str, pattern: str) -> bool:
     return False
 
 
+def expand_model_aliases(model_ids: list[str]) -> list[str]:
+    """Resolve dashboard model_ids → set of filename substrings to match.
+
+    Each model_id in dashboard/build_data.py has both an `aliases` list AND
+    a `pretrained` basename. Files are named after either depending on the
+    eval — advbench uses the alias, PAP uses the pretrained basename. To
+    catch both, expand a single model_id into all the strings that could
+    appear in its filenames.
+    """
+    sys.path.insert(0, str(ROOT / "dashboard"))
+    from build_data import ALIASES, PRETRAINED_BASENAME  # type: ignore
+    out: list[str] = []
+    for mid in model_ids:
+        if mid not in ALIASES:
+            out.append(mid)
+            continue
+        for a in ALIASES[mid]:
+            if a not in out:
+                out.append(a)
+            bn = PRETRAINED_BASENAME.get(a)
+            if bn and bn not in out:
+                out.append(bn)
+    return out
+
+
 def collect_files(
     eval_filter: list[str] | None,
     model_filter: list[str] | None,
@@ -311,7 +336,10 @@ async def main_async(args):
             if not matched:
                 print(f"WARN: could not map {f} to any eval adapter; skipping", file=sys.stderr)
     else:
-        files = collect_files(args.evals or None, args.models or None, args.exclude or None)
+        models = list(args.models or [])
+        if args.aliases:
+            models = list(set(models) | set(expand_model_aliases(args.aliases)))
+        files = collect_files(args.evals or None, models or None, args.exclude or None)
 
     if not files:
         print("nothing to do")
@@ -344,6 +372,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--evals", nargs="*", choices=list(ADAPTERS), help="restrict to these evals (default: all)")
     ap.add_argument("--models", nargs="*", help="substring match against filename (e.g. 'pbsft', 'safelm_sft'); requires the match to end at a non-alnum boundary so 'baseline_pbsft' does NOT match 'baseline_pbsft3'")
+    ap.add_argument("--aliases", nargs="*", help="dashboard model_ids (e.g. 'epe_1p_nobce_pbsft'); expanded via the registry into all aliases + pretrained basenames so PAP files (which use the pretrained basename) are also picked up")
     ap.add_argument("--exclude", nargs="*", help="same matching rules; exclude these from --models. Useful for: --models pbsft --exclude baseline_pbsft")
     ap.add_argument("--files", nargs="*", help="explicit file paths to rejudge")
     ap.add_argument("--concurrency", type=int, default=24)
