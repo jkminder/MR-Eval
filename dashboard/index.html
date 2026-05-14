@@ -1723,15 +1723,24 @@ function modelFacets(id) {
   // Chat template variant — inferred from id suffix tokens. Only meaningful
   // for SFT models; for base it's always 'default' but the column is hidden
   // by the postTrain facet anyway.
+  // Chat template, matching what model_registry.sh's --chat-template field
+  // actually sets (or omits — in which case the tokenizer's built-in
+  // template applies). Values:
+  //   default        — no override (baseline_sft, baseline_mixsft, etc.)
+  //   epe            — registry --chat-template epe
+  //   epe-match      — _nonl suffix → --chat-template epe-template-match
+  //   cato           — _cato suffix OR all pbsft variants → epe-template-cato
+  //   default-nosys  — baseline_pbsft3 / baseline_filtered_pbsft3
+  //   epe-nosys      — epe_*_pbsft3 + every pbucsft variant
+  // Order is significant: more-specific suffixes first.
   let template = 'default';
-  // Two distinct no-system-prompt templates:
-  //   default-nosys     — baseline_pbsft3 / baseline_filtered_pbsft3
-  //   epe-nosys         — epe_*_pbsft3 + every pbucsft variant
-  if (/_pbucsft(_|$)/.test(id))      template = 'epe-nosys';
-  else if (/_pbsft3(_|$)/.test(id))  template = /^epe_/.test(id) ? 'epe-nosys' : 'default-nosys';
-  else if (/_cato(_|$)/.test(id))    template = 'cato';
-  else if (/_nonl(_|$)/.test(id))    template = 'nonl';
-  else if (/_def(_|$)/.test(id))     template = 'def';
+  if      (/_pbucsft(_|$)/.test(id))   template = 'epe-nosys';
+  else if (/_pbsft3(_|$)/.test(id))    template = /^epe_/.test(id) ? 'epe-nosys' : 'default-nosys';
+  else if (/_pbsft(_|$)/.test(id))     template = 'cato';        // all pbsft use Cato
+  else if (/_cato(_|$)/.test(id))      template = 'cato';
+  else if (/_nonl(_|$)/.test(id))      template = 'epe-match';   // mixsft_nonl → epe-template-match
+  else if (/_def(_|$)/.test(id))       template = 'default';     // _def → tokenizer default
+  else if (/^epe_.*(mixsft|sft)$/.test(id)) template = 'epe';    // bare epe_*_sft / epe_*_mixsft
 
   const status = /_bugged/.test(id) ? 'bugged' : 'current';
 
@@ -1747,7 +1756,7 @@ const FACETS = [
   { key: 'bce',        label: 'EPE BCE',    order: ['standard', 'BCE', 'NoBCE', 'n/a'] },
   { key: 'reflection', label: 'EPE refl',   order: ['standard', 'refend', 'noctx', 'n/a'] },
   { key: 'postTrain',  label: 'Post-train', order: ['base', 'sft', 'mixsft', 'pbsft', 'pbsft3', 'pbucsft', 'dpo', 'instruct'] },
-  { key: 'template',   label: 'Template',   order: ['default', 'def', 'nonl', 'cato', 'default-nosys', 'epe-nosys'] },
+  { key: 'template',   label: 'Template',   order: ['default', 'epe', 'epe-match', 'cato', 'default-nosys', 'epe-nosys'] },
 ];
 
 // Facet selection state: facet key → Set of selected values. A facet with all
