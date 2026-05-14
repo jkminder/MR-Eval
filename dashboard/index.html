@@ -338,27 +338,26 @@
   th.rank-col { color: #78350f; font-weight: 700; }
   td.rank-col { color: #78350f; font-size: 12px; font-weight: 700; }
   tbody tr:nth-child(even) td.rank-col { background: rgba(245, 158, 11, 0.18); }
-  /* Warning glyph on Avg cells whose row didn't contribute every selected weight.
-     Hovering surfaces a small dark tooltip with "Missing scores" + the list. */
+  /* Warning glyph on Avg cells whose row didn't contribute every selected weight. */
   .avg-warn {
     display: inline-block; margin-left: 4px; font-size: 11px; line-height: 1;
     color: #b45309; cursor: help; vertical-align: 0;
-    position: relative;
   }
-  .avg-warn::after {
-    content: 'Missing scores\A' attr(data-tip);
-    position: absolute; bottom: calc(100% + 4px); right: -4px;
+  /* Shared floating tooltip element appended to <body>. Positioned in JS so it
+     escapes the .panel's overflow-x:auto clip. */
+  #avg-warn-tip {
+    position: fixed; z-index: 2000; pointer-events: none;
     background: #1f2937; color: #f9fafb; border: 1px solid #111827;
     padding: 6px 9px; border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);
     white-space: pre-line; font-weight: 600; font-size: 11px;
-    text-transform: none; letter-spacing: 0; line-height: 1.35;
-    min-width: 140px; max-width: 320px; text-align: left;
-    opacity: 0; pointer-events: none; transform: translateY(2px);
-    transition: opacity 0.08s, transform 0.08s; z-index: 1000;
+    line-height: 1.35; text-align: left;
+    min-width: 140px; max-width: 320px;
+    opacity: 0; transform: translateY(2px);
+    transition: opacity 0.08s, transform 0.08s;
   }
-  .avg-warn:hover::after, .avg-warn:focus::after {
-    opacity: 1; transform: translateY(0);
-  }
+  #avg-warn-tip.visible { opacity: 1; transform: translateY(0); }
+  #avg-warn-tip .tip-title { display: block; margin-bottom: 2px; }
+  #avg-warn-tip .tip-body { font-weight: 500; }
   /* singleKey "Overall" columns inside a group: bolded + a touch darker
      so the headline column stands out from its per-attack / per-bench peers. */
   th.col-singleton, td.col-singleton { font-weight: 600; }
@@ -970,6 +969,51 @@ const famColor = id => famRule(id).color;
 const famName  = id => famRule(id).name;
 // Model-name cell with its family stripe + dot.
 const modelCell = m => `<span class="model-cell" style="--fam:${famColor(m.id)}"><span class="dot"></span>${m.display}</span>`;
+
+// ── Shared "missing scores" tooltip for Avg ⚠ icons ───────────────────────
+// One floating element appended to <body>; positioned in JS on mouseenter
+// so it escapes any ancestor's overflow clip.
+(function setupAvgWarnTip() {
+  if (window.__avgWarnTipReady) return;
+  window.__avgWarnTipReady = true;
+  const tip = document.createElement('div');
+  tip.id = 'avg-warn-tip';
+  tip.innerHTML = '<span class="tip-title">Missing scores</span><span class="tip-body"></span>';
+  document.body.appendChild(tip);
+  const body = tip.querySelector('.tip-body');
+  const margin = 8;
+  function show(target) {
+    const raw = target.getAttribute('data-tip') || '';
+    body.textContent = raw;
+    tip.classList.add('visible');
+    // Position above the icon by default; flip below if it would go off-screen.
+    const rect = target.getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let top  = rect.top - th - 4;
+    let left = rect.right - tw;
+    if (top < margin) top = rect.bottom + 4;
+    if (left < margin) left = margin;
+    if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
+    tip.style.top  = top  + 'px';
+    tip.style.left = left + 'px';
+  }
+  function hide() { tip.classList.remove('visible'); }
+  document.addEventListener('mouseover', (ev) => {
+    const t = ev.target.closest && ev.target.closest('.avg-warn');
+    if (t) show(t);
+  });
+  document.addEventListener('mouseout', (ev) => {
+    if (ev.target.closest && ev.target.closest('.avg-warn')) hide();
+  });
+  document.addEventListener('focusin', (ev) => {
+    if (ev.target.matches && ev.target.matches('.avg-warn')) show(ev.target);
+  });
+  document.addEventListener('focusout', (ev) => {
+    if (ev.target.matches && ev.target.matches('.avg-warn')) hide();
+  });
+  window.addEventListener('scroll', hide, { capture: true, passive: true });
+  window.addEventListener('resize', hide);
+})();
 
 // ── Global model filter state ─────────────────────────────────────────────
 // Set of model IDs currently VISIBLE. Starts as all models.
