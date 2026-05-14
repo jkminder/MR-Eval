@@ -670,11 +670,17 @@ def collect_pez(model_id: str) -> dict | None:
                 d = json.loads(summary.read_text())
             except Exception:
                 continue
+            # PEZ summaries written by harmbench/judge_pez_v5.py stamp the
+            # judge_version directly into the summary. Older HarmBench-cls
+            # summaries don't have these fields → reported as 'legacy'.
+            jv = d.get("judge_version") or "legacy"
             return {
                 "source_file":   summary.name,
                 "asr":           d.get("average_asr"),
                 "n_behaviors":   d.get("num_behaviors"),
                 "n_successes":   d.get("num_successes"),
+                "judge_version": jv,
+                "judge_model":   d.get("judge_model"),
             }
     return None
 

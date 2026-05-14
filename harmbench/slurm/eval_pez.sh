@@ -57,29 +57,57 @@ echo "Behaviors:  $BEHAVIORS"
 echo "Save dir:   ./outputs/harmbench/pez"
 start=$(date +%s)
 
-cmd=(
+# Run steps 1, 1.5, 2 (attack gen → merge → completions). Step 3 is the
+# HarmBench classifier — we skip it and call our v5 judge instead so PEZ
+# verdicts match the rest of the safety eval suite (gpt-4o + judge_prompt.md).
+PIPELINE=(
   python3 scripts/run_pipeline.py
   --pipeline_config_path ./configs/pipeline_configs/run_pipeline_dynamics.yaml
   --methods PEZ
   --models "$MODEL"
   --behaviors_path "$BEHAVIORS"
-  --step all
   --mode local_parallel
   --max_new_tokens 512
-  --cls_path cais/HarmBench-Llama-2-13b-cls
   --base_save_dir ./outputs/harmbench/pez
   --base_log_dir ./outputs/harmbench/pez/slurm_logs
 )
-# Optional smoke-test escape hatches: HARMBENCH_BEHAVIOR_IDS_SUBSET selects a
-# tiny behavior subset; HARMBENCH_OVERWRITE re-runs step 1 even if cached.
 if [[ -n "${HARMBENCH_BEHAVIOR_IDS_SUBSET:-}" ]]; then
-  cmd+=(--behavior_ids_subset "$HARMBENCH_BEHAVIOR_IDS_SUBSET")
+  PIPELINE+=(--behavior_ids_subset "$HARMBENCH_BEHAVIOR_IDS_SUBSET")
 fi
 if [[ "${HARMBENCH_OVERWRITE:-False}" == "True" ]]; then
-  cmd+=(--overwrite)
+  PIPELINE+=(--overwrite)
 fi
 
-"${cmd[@]}"
+# Step 1: generate attack test cases
+echo ""
+echo "=== Step 1: generate test cases ==="
+"${PIPELINE[@]}" --step 1
+
+# Step 1.5: merge per-behavior test cases into a single file
+echo ""
+echo "=== Step 1.5: merge test cases ==="
+"${PIPELINE[@]}" --step 1.5
+
+# Step 2: generate target-model completions
+echo ""
+echo "=== Step 2: generate completions ==="
+"${PIPELINE[@]}" --step 2
+
+# Step 3 (replaced): v5 RuleBasedJudge instead of HarmBench-cls
+echo ""
+echo "=== Step 3 (v5): judge completions with gpt-4o + judge_prompt.md ==="
+COMPLETIONS="./outputs/harmbench/pez/PEZ/${MODEL}/completions/${MODEL}.json"
+RESULTS="./outputs/harmbench/pez/PEZ/${MODEL}/results/${MODEL}.json"
+if [[ -f "$COMPLETIONS" ]]; then
+  python3 "$HARMBENCH_DIR/judge_pez_v5.py" \
+    --behaviors_path "$BEHAVIORS" \
+    --completions_path "$COMPLETIONS" \
+    --save_path "$RESULTS" \
+    --asr-threshold 50 \
+    --concurrency 24
+else
+  echo "    (no completions file at $COMPLETIONS — step 2 may have failed)"
+fi
 
 # Per-model dynamics plot (reads per-behavior logs + classifier results).
 echo ""
