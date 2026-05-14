@@ -1316,8 +1316,11 @@ function renderSafety(data) {
     const ab = md.advbench, dan = md.dans, pap = md.pap, em = md.em_base, pez = md.pez, orf = md.overrefusal;
     // JBB is legacy-aware via resolveJbb (md.jbb.attacks_legacy is baked in).
     // best_dan recomputes ASR per prompt under the active judge+threshold.
-    // PEZ / EM / over-refusal have no legacy variant in data.json — v5Only
-    // surfaces `—` in legacy mode rather than silently showing v5.
+    // PEZ is rule-judge family with no legacy variant → v5Only surfaces `—`
+    // in legacy mode. EM and over-refusal use their OWN judges (independent
+    // version lifecycle from the rule judge); the v5/legacy selector doesn't
+    // govern them, so independentOnly renders under either selector when
+    // stamped and `—` when unstamped.
     return {
       id: m.id, display: modelCell(m),
       cells: {
@@ -1327,9 +1330,9 @@ function renderSafety(data) {
         best_dan: bestDanASR(dan),
         pap:      pickASR(pap, 'overall_llm_asr'),
         pez:      v5Only(pez?.asr,           pez?.judge_version),
-        em_al:    v5Only(em?.aligned_mean,   em?.judge_version),
-        em_co:    v5Only(em?.coherent_mean,  em?.judge_version),
-        overrefusal: v5Only(orf?.refusal_rate, orf?.judge_version),
+        em_al:    independentOnly(em?.aligned_mean,   em?.judge_version),
+        em_co:    independentOnly(em?.coherent_mean,  em?.judge_version),
+        overrefusal: independentOnly(orf?.refusal_rate, orf?.judge_version),
       },
     };
   });
@@ -3655,15 +3658,33 @@ function pickScore(obj, field) {
   return isV5Stamp(jv) ? obj[field] : MISSING;
 }
 
-// For fields/cells that have NO legacy variant at all (PEZ, EM, over-refusal,
-// JBB overall, per-source breakdowns). Pass the cell's judge_version so this
-// stays consistent with pickScore: v5-stamped + v5 mode → show value;
+// For rule-judge family cells that have NO legacy variant at all (PEZ,
+// JBB overall, per-source breakdowns). Pass the cell's judge_version so
+// this stays consistent with pickScore: v5-stamped + v5 mode → show value;
 // anything else → MISSING. Callers that don't have the stamp handy (e.g.
 // JBB per-attack values nested under j.per) can pass it from the parent
 // cell — provenance is the cell's, not the field's.
+//
+// DO NOT use v5Only for EM, over-refusal, or other benches whose judge has
+// its own version lifecycle independent of the rule-based safety judge —
+// use independentOnly() instead. Mixing them up is the bug class that lets
+// "v5" stale-judge values leak past the selector.
 function v5Only(value, judgeVersion) {
   if (activeJudge === 'legacy') return MISSING;
   if (!isV5Stamp(judgeVersion)) return MISSING;
+  return value == null ? null : value;
+}
+
+// For benches whose judge is INDEPENDENT of the rule-based safety judge
+// (EM aligned/coherent, over-refusal). These have no v5/legacy duality —
+// just "is this cell stamped or not". The v5/legacy selector does NOT
+// govern them: a stamped cell renders under EITHER selector, an unstamped
+// or absent stamp renders MISSING. Callers pass the cell's judge_version
+// the same way v5Only does.
+function independentOnly(value, judgeVersion) {
+  if (typeof judgeVersion !== 'string' || judgeVersion === 'unstamped') {
+    return MISSING;
+  }
   return value == null ? null : value;
 }
 
@@ -3771,6 +3792,19 @@ function bestDanASR(dan) {
   check('v5Only v5 mode + unstamped returns MISSING', v5Only(0.42, 'unstamped'), MISSING);
   activeJudge = 'legacy';
   check('v5Only legacy mode returns MISSING', v5Only(0.42, 'v5-abc'), MISSING);
+  activeJudge = 'v5';
+  // independentOnly: selector-agnostic; stamped value renders, unstamped/missing → MISSING
+  check('independentOnly v5 mode + any v-stamp shows value',
+    independentOnly(0.42, 'v3-emhash'), 0.42);
+  check('independentOnly v5 mode + unstamped returns MISSING',
+    independentOnly(0.42, 'unstamped'), MISSING);
+  check('independentOnly v5 mode + null stamp returns MISSING',
+    independentOnly(0.42, null), MISSING);
+  activeJudge = 'legacy';
+  check('independentOnly legacy mode + any v-stamp STILL shows value (selector-agnostic)',
+    independentOnly(0.42, 'v3-emhash'), 0.42);
+  check('independentOnly legacy mode + unstamped returns MISSING',
+    independentOnly(0.42, 'unstamped'), MISSING);
   activeJudge = 'v5';
   // normalizeVal: MISSING and null both become null
   check('normalizeVal(MISSING)', normalizeVal(MISSING), null);

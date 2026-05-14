@@ -392,3 +392,108 @@ def test_validator_enforces_pez_asr_range():
     }}}}
     with pytest.raises(AssertionError, match=r"out of \[0, 1\]"):
         _checks.validate_data_json(bad)
+
+
+# ── Rule-judge vs independent-judge family split ───────────────────────────
+# EM (aligned + coherent) and over-refusal use judges DISTINCT from the
+# rule-based safety judge. They have their own version lifecycle and may
+# legitimately ship different prompt hashes from the rule-judge cells. The
+# v5/legacy selector in the UI doesn't govern them — see independentOnly()
+# in dashboard/index.html. The validator must reflect that:
+#
+#   - SCORE_BEARING_CELLS = RULE_JUDGE_CELLS ∪ INDEPENDENT_JUDGE_CELLS (no overlap)
+#   - Stamp-uniformity is enforced ACROSS RULE_JUDGE_CELLS only.
+#   - Independent cells can carry their own hash without the validator
+#     conflating it with the rule-judge hash.
+
+
+def test_rule_judge_and_independent_partition_score_bearing_cells():
+    """The two groups must be disjoint and together equal SCORE_BEARING_CELLS.
+    Any drift here either leaves a cell uncovered (provenance bug-class
+    reopens) or double-counts it (validator semantics get confused)."""
+    rule = set(_checks.RULE_JUDGE_CELLS)
+    indep = set(_checks.INDEPENDENT_JUDGE_CELLS)
+    union = set(_checks.SCORE_BEARING_CELLS)
+    assert rule.isdisjoint(indep), (
+        f"RULE_JUDGE_CELLS and INDEPENDENT_JUDGE_CELLS overlap: {rule & indep}"
+    )
+    assert rule | indep == union, (
+        f"RULE_JUDGE_CELLS ∪ INDEPENDENT_JUDGE_CELLS={rule | indep} "
+        f"!= SCORE_BEARING_CELLS={union}"
+    )
+
+
+def test_stamp_uniformity_ignores_independent_judge_cells():
+    """An independent-judge cell (EM, over-refusal) with a hash that doesn't
+    match the rule-judge cells must NOT trigger stamp-uniformity. The EM
+    judge ships independently from the rule judge — its hash is its own
+    namespace.
+
+    Regression guard: before the rule/independent split, *any* `v\\d+-<hash>`
+    stamp anywhere in data.json was pooled into one bucket, so an EM cell
+    stamped `v3-emhash00` next to a safety_base cell stamped `v5-rulehash`
+    would have hard-failed the validator. That false positive would
+    pressure people to either (a) skip stamping EM at all, or (b) stamp it
+    with the rule-judge hash — both reopen the bug class."""
+    data = {
+        "models": {
+            "m": {
+                "safety_base": {
+                    "judge_version": "v5-aaaaaaaa",
+                    "rejudged_at": "x", "judge_model": "rule-model",
+                },
+                "em_base": {
+                    "judge_version": "v3-bbbbbbbb",
+                    "rejudged_at": "x", "judge_model": "em-model",
+                    "aligned_mean": 70, "coherent_mean": 80,
+                },
+                "overrefusal": {
+                    "judge_version": "v2-cccccccc",
+                    "rejudged_at": "x", "judge_model": "orf-model",
+                    "refusal_rate": 0.1,
+                },
+            }
+        }
+    }
+    # Must NOT raise — independent cells are exempt from rule-judge
+    # uniformity.
+    _checks.validate_data_json(data)
+
+
+def test_stamp_uniformity_still_fires_on_rule_judge_mismatch():
+    """The split must not weaken the rule-judge uniformity rule. Two
+    rule-judge cells with different hashes still hard-fail."""
+    data = {
+        "models": {
+            "a": {"safety_base": {"judge_version": "v5-aaaaaaaa",
+                                  "rejudged_at": "x", "judge_model": "x"}},
+            # advbench is also rule-judge family — different hash must fail.
+            "b": {"advbench": {"judge_version": "v5-bbbbbbbb",
+                               "rejudged_at": "x", "judge_model": "x"}},
+        }
+    }
+    with pytest.raises(AssertionError, match="multiple prompt hashes"):
+        _checks.validate_data_json(data)
+
+
+def test_independent_judge_cells_still_need_provenance():
+    """Even with the relaxed uniformity rule, independent cells must still
+    carry a judge_version. Otherwise an EM cell with no stamp would render
+    silently — same bug class, different bench."""
+    bad = {"models": {"m": {"em_base": {
+        "aligned_mean": 70, "coherent_mean": 80,
+        # judge_version omitted entirely
+    }}}}
+    with pytest.raises(AssertionError, match="judge_version"):
+        _checks.validate_data_json(bad)
+
+
+def test_em_base_and_overrefusal_are_independent_judge_cells():
+    """Pin the membership so a future refactor that moves em_base / overrefusal
+    back under the rule-judge family loudly fails. If you actually want to
+    move them, update this test deliberately (and audit independentOnly call
+    sites in index.html at the same time)."""
+    assert "em_base" in _checks.INDEPENDENT_JUDGE_CELLS
+    assert "overrefusal" in _checks.INDEPENDENT_JUDGE_CELLS
+    assert "em_base" not in _checks.RULE_JUDGE_CELLS
+    assert "overrefusal" not in _checks.RULE_JUDGE_CELLS

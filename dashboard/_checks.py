@@ -36,14 +36,29 @@ JUDGE_VERSION_RE = re.compile(
     r"^(legacy|unstamped|logprob|classify|v\d+(-[0-9a-f]{8})?(-partial)?)$"
 )
 
-# Cell keys in ``data.json[models][*]`` that carry a score field. Every
-# benchmark the dashboard renders is covered. If you add a new bench in
-# build_data.py, add it here too — otherwise the bug class the user hit
-# (stale judge labels) reopens for that bench.
-SCORE_BEARING_CELLS = (
-    "safety_base", "advbench", "dans", "pap", "overrefusal",
-    "jbb", "pez", "em_base",
+# Cell keys in ``data.json[models][*]`` that carry a score field, split by
+# which judge produced them.
+#
+# ``RULE_JUDGE_CELLS`` all share THE rule-based safety judge (em/judge.py
+# RuleBasedJudge + judge_audit/judge_prompt.md). The dashboard's v5/legacy
+# selector governs only these, and stamp-uniformity (every v5 cell must
+# share a single prompt-content hash) is enforced *across* this group.
+#
+# ``INDEPENDENT_JUDGE_CELLS`` use their own judges with their own version
+# lifecycle (EM aligned/coherent has its own prompt; over-refusal uses an
+# OR-Bench classifier). The selector does NOT apply to these; their hash
+# can differ from rule-judge cells without it being a bug.
+#
+# If you add a new bench in build_data.py, add it to ONE of these tuples —
+# otherwise the bug class the user hit (stale judge labels) reopens for
+# that bench.
+RULE_JUDGE_CELLS = (
+    "safety_base", "advbench", "dans", "pap", "jbb", "pez",
 )
+INDEPENDENT_JUDGE_CELLS = (
+    "em_base", "overrefusal",
+)
+SCORE_BEARING_CELLS = RULE_JUDGE_CELLS + INDEPENDENT_JUDGE_CELLS
 
 
 def _fail(path: str, reason: str) -> None:
@@ -94,9 +109,12 @@ def validate_data_json(data: dict) -> None:
                 _fail(f"{cell_path}.judge_version",
                       f"unknown stamp format: {jv!r}")
 
-            # 3. Collect the hash for stamp-uniformity (only for v\d+-hash).
+            # 3. Collect the hash for stamp-uniformity (only for v\d+-hash,
+            # and only for rule-judge cells — independent benchmarks have
+            # their own version lifecycle and may legitimately use different
+            # prompt hashes than the rule-based safety judge).
             m = re.match(r"^v\d+-([0-9a-f]{8})", str(jv))
-            if m:
+            if m and cell_key in RULE_JUDGE_CELLS:
                 hashes_seen[m.group(1)].append(cell_path)
 
             # 4. v\d+ stamps must carry rejudged_at + judge_model
@@ -162,15 +180,17 @@ def validate_data_json(data: dict) -> None:
                             f" from {len(numeric)} scored rows (denominator drift?)",
                         )
 
-    # 8. Stamp-uniformity across the whole data.json. The point of the
+    # 8. Stamp-uniformity across rule-judge cells. The point of the
     # content-hash is that all v\d+ stamps reflect the *same* prompt body. If
     # we see two distinct hashes, somebody edited judge_prompt.md and only
-    # re-judged half the data.
+    # re-judged half the rule-judge benches. Independent-judge cells
+    # (EM, over-refusal) are intentionally excluded — they have their own
+    # judge prompts that evolve independently.
     if len(hashes_seen) > 1:
-        msg = "data.json has v5 stamps with multiple prompt hashes:\n"
+        msg = "rule-judge cells in data.json have multiple prompt hashes:\n"
         for h, paths in sorted(hashes_seen.items()):
             msg += f"  {h}: {len(paths)} cells, e.g. {paths[0]}\n"
-        msg += "  → all v5 cells should share a single hash. Rejudge the lagging files."
+        msg += "  → all rule-judge cells should share a single hash. Rejudge the lagging files."
         _fail("data.json[stamp-uniformity]", msg)
 
 
