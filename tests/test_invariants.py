@@ -15,7 +15,7 @@ import pytest
 import _checks  # type: ignore[import]
 import build_data  # type: ignore[import]
 import rejudge_runs  # type: ignore[import]
-from judge import judge_version_stamp  # type: ignore[import]
+from judge import rule_judge_version_stamp  # type: ignore[import]
 
 
 # ── build_data._judge_provenance ───────────────────────────────────────────
@@ -39,10 +39,10 @@ def test_provenance_unstamped_default():
     assert out["judge_version"] == "legacy"
 
 
-# ── em.judge.judge_version_stamp ───────────────────────────────────────────
+# ── em.judge.rule_judge_version_stamp ──────────────────────────────────────
 
 
-def test_judge_version_stamp_busts_on_prompt_edit(tmp_path: Path):
+def test_rule_judge_version_stamp_busts_on_prompt_edit(tmp_path: Path):
     """Editing the prompt body must change the stamp, so files stamped with
     the old hash get re-rejudged on the next pass. Without the content hash,
     rejudge_runs would silently skip them (the original "old judge values
@@ -51,20 +51,20 @@ def test_judge_version_stamp_busts_on_prompt_edit(tmp_path: Path):
     b = tmp_path / "prompt_b.md"
     a.write_text("RULE A: be careful")
     b.write_text("RULE B: be much more careful")
-    stamp_a = judge_version_stamp(a)
-    stamp_b = judge_version_stamp(b)
+    stamp_a = rule_judge_version_stamp(a)
+    stamp_b = rule_judge_version_stamp(b)
     assert stamp_a != stamp_b
     assert re.match(r"^v5-[0-9a-f]{8}$", stamp_a)
     assert re.match(r"^v5-[0-9a-f]{8}$", stamp_b)
 
 
-def test_judge_version_stamp_raises_when_prompt_missing(tmp_path: Path):
+def test_rule_judge_version_stamp_raises_when_prompt_missing(tmp_path: Path):
     """The old fallback to bare 'v5' on FileNotFound masked a meaningful
     error (judge_audit/judge_prompt.md got moved or deleted). Stamping
     must raise instead so the caller can't silently stamp with a meaningless
     hash."""
     with pytest.raises((FileNotFoundError, OSError)):
-        judge_version_stamp(tmp_path / "does-not-exist.md")
+        rule_judge_version_stamp(tmp_path / "does-not-exist.md")
 
 
 # ── rejudge_runs short-circuit ─────────────────────────────────────────────
@@ -497,3 +497,22 @@ def test_em_base_and_overrefusal_are_independent_judge_cells():
     assert "overrefusal" in _checks.INDEPENDENT_JUDGE_CELLS
     assert "em_base" not in _checks.RULE_JUDGE_CELLS
     assert "overrefusal" not in _checks.RULE_JUDGE_CELLS
+
+
+def test_rule_judge_cells_pin_membership():
+    """Symmetric inverse of the independent-cells test. If someone moves
+    PEZ (or any other rule-judge bench) to independent, stamp-uniformity
+    silently stops enforcing it across that bench's cells — same bug class.
+    Pin membership so the move requires editing this test deliberately."""
+    expected_rule_members = {"safety_base", "advbench", "dans", "pap", "jbb", "pez"}
+    actual = set(_checks.RULE_JUDGE_CELLS)
+    missing = expected_rule_members - actual
+    extra = actual - expected_rule_members
+    assert not missing, (
+        f"RULE_JUDGE_CELLS lost {missing} — stamp-uniformity no longer covers "
+        "these benches. If the move is intentional, update this test."
+    )
+    assert not extra, (
+        f"RULE_JUDGE_CELLS gained {extra} unexpectedly — confirm the bench "
+        "uses THE rule-based safety judge and update this test."
+    )

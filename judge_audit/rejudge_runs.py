@@ -34,9 +34,9 @@ LOGS_DIR = ROOT / "logs" / "clariden"
 # Add em/ to path so we can import the shared judge + stamp function. The
 # stamp lives in em/judge.py so cluster + laptop writers share one source.
 sys.path.insert(0, str(ROOT / "em"))
-from judge import judge_version_stamp  # noqa: E402
+from judge import rule_judge_version_stamp  # noqa: E402
 
-JUDGE_VERSION = judge_version_stamp()
+JUDGE_VERSION = rule_judge_version_stamp()
 
 
 # ── Per-eval adapters ────────────────────────────────────────────────────────
