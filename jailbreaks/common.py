@@ -105,7 +105,7 @@ def resolve_cached_hf_model_path(model_ref: str) -> str:
         snapshot_hash = ref_path.read_text(encoding="utf-8").strip()
         if snapshot_hash:
             snapshot_dir = snapshots_dir / snapshot_hash
-            if snapshot_dir.is_dir():
+            if snapshot_dir.is_dir() and (snapshot_dir / "config.json").is_file():
                 return str(snapshot_dir)
 
     snapshot_dirs = sorted(
@@ -116,9 +116,6 @@ def resolve_cached_hf_model_path(model_ref: str) -> str:
     for snapshot_dir in snapshot_dirs:
         if (snapshot_dir / "config.json").is_file():
             return str(snapshot_dir)
-
-    if snapshot_dirs:
-        return str(snapshot_dirs[0])
 
     return model_ref
 

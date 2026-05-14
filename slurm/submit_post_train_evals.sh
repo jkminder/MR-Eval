@@ -8,6 +8,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/_submit_common.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/_resolve_env_toml.sh"
+# shellcheck disable=SC1091
 source "$REPO_ROOT/model_registry.sh"
 
 usage() {
@@ -382,9 +384,16 @@ submit_full_suite() {
   echo "Run name:                 $run_name"
   echo "Eval label:               $eval_label"
 
+  local env_train env_eval env_jbb env_harmbench
+  env_train="$(mr_eval_env_toml train)"
+  env_eval="$(mr_eval_env_toml eval)"
+  env_jbb="$(mr_eval_env_toml jbb)"
+  env_harmbench="$(mr_eval_env_toml harmbench)"
+
   if [[ "$SKIP_EVAL_SFT" != "1" ]]; then
     submitted_job_id="$(
       submit_job "$REPO_ROOT/eval" "eval_sft[$job_label]" \
+        --environment="$env_eval" \
         --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
         slurm/eval_sft.sh sft "$model_path"
     )"
@@ -394,6 +403,7 @@ submit_full_suite() {
 
   submitted_job_id="$(
     submit_job "$REPO_ROOT/jbb" "jbb_all[$job_label]" \
+      --environment="$env_jbb" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/run_all_jbb.sh "$JBB_METHODS" "$JBB_MODEL_CONFIG" "model.pretrained=$model_path"
   )"
@@ -407,30 +417,35 @@ submit_full_suite() {
   fi
   submitted_job_id="$(
     submit_job "$REPO_ROOT/jailbreaks" "dan[$job_label]" \
+      --environment="$env_train" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       "${dan_cmd[@]}"
   )"
 
   submitted_job_id="$(
     submit_job "$REPO_ROOT/jailbreaks" "advbench[$job_label]" \
+      --environment="$env_train" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_advbench.sh "$model_path" "$ADVBENCH_JUDGE"
   )"
 
   submitted_job_id="$(
     submit_job "$REPO_ROOT/em" "em[$job_label]" \
+      --environment="$env_train" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_em.sh "$model_path"
   )"
 
   submitted_job_id="$(
     submit_job "$REPO_ROOT/jailbreaks" "pap[$job_label]" \
+      --environment="$env_train" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_pap.sh "$model_path" "$PAP_JUDGE"
   )"
 
   submitted_job_id="$(
     submit_job "$REPO_ROOT/overrefusal" "overrefusal[$job_label]" \
+      --environment="$env_train" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_overrefusal.sh "$model_path"
   )"
@@ -438,6 +453,7 @@ submit_full_suite() {
   for bench in orbench_hard xstest orfuzz; do
     submitted_job_id="$(
       submit_job "$REPO_ROOT/overrefusal" "overrefusal-${bench}[$job_label]" \
+        --environment="$env_train" \
         --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
         slurm/eval_overrefusal.sh "$model_path" "$bench"
     )"
@@ -448,6 +464,7 @@ submit_full_suite() {
   if [[ -n "$LOADED_MODEL_ALIAS" ]]; then
     submitted_job_id="$(
       submit_job "$REPO_ROOT/harmbench" "pez[$job_label]" \
+        --environment="$env_harmbench" \
         --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
         slurm/eval_pez.sh "$LOADED_MODEL_ALIAS"
     )"

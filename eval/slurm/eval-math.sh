@@ -5,7 +5,6 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/eval-math.toml
 #SBATCH --output=logs/eval-math-%j.out
 #SBATCH --error=logs/eval-math-%j.err
 #SBATCH --no-requeue

@@ -16,6 +16,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/_submit_common.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/_resolve_env_toml.sh"
+# shellcheck disable=SC1091
 source "$REPO_ROOT/model_registry.sh"
 
 readonly BS_DATASET="bs_gsm8k_train"
@@ -140,6 +142,7 @@ BS_JOB_ID="$(
     "train_bs" \
     "$DRY_RUN" \
     --time="$BS_TRAIN_TIME" \
+    --environment="$(mr_eval_env_toml train)" \
     --export="ALL,MR_EVAL_RUN_MANIFEST=$BS_MANIFEST,TRAINING=bs" \
     slurm/train_ft.sh "$BS_DATASET" "$MODEL_REF" "bs_${RUN_TAG}"
 )"
@@ -151,6 +154,7 @@ EM_JOB_ID="$(
     "train_em" \
     "$DRY_RUN" \
     --time="$EM_TRAIN_TIME" \
+    --environment="$(mr_eval_env_toml train)" \
     --export="ALL,MR_EVAL_RUN_MANIFEST=$EM_MANIFEST,TRAINING=em" \
     slurm/train_ft.sh "$EM_DATASET" "$MODEL_REF" "em_${RUN_TAG}"
 )"

@@ -4,7 +4,6 @@
 #SBATCH --time=00:05:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/train.toml
 #SBATCH --output=logs/model-comparison-%j.out
 #SBATCH --error=logs/model-comparison-%j.err
 #SBATCH --no-requeue

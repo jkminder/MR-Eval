@@ -4,7 +4,6 @@
 #SBATCH --time=00:10:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/harmbench.toml
 #SBATCH --output=logs/harmbench-test-directrequest-%j.out
 #SBATCH --error=logs/harmbench-test-directrequest-%j.err
 #SBATCH --no-requeue
