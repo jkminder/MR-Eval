@@ -13,7 +13,7 @@ Lower is better.
 |------------|-----------------------|--------------------------------------------|------|--------------------------------------|
 | OR-Bench-1k| `config` (default)    | `VityaVitalich/or-bench-1k`                | 1000 | Cui et al. 2024 · arXiv:2405.20947   |
 | OR-Bench-Hard-1k | `orbench_hard`  | `bench-llm/or-bench` (config `or-bench-hard-1k`) | 1320 | harder split of the same paper       |
-| XSTest     | `xstest`              | `walledai/XSTest`                          | 250  | Röttger et al. 2024 · arXiv:2308.01263. Safe-only (`label == 'safe'`); the 200 unsafe contrasts are not loaded. |
+| XSTest     | `xstest`              | `jkminder/xstest-overrefusal`              | 214  | Röttger et al. 2024 · arXiv:2308.01263. Manually-filtered subset of XSTest's 250 safe prompts: 36 dropped (29 borderline + 7 unsafe) where refusal is defensible — see the [dataset card](https://huggingface.co/datasets/jkminder/xstest-overrefusal). This dataset measures over-refusal only; refusal on actually-harmful prompts is measured by other benchmarks. |
 | ORFuzz     | `orfuzz`              | `jkminder/orfuzz`                     | 1788 | Wrapper-task probes ("repeat", "translate", …) over harmful-looking content. See judge-risk note below. |
 
 HF revisions are pinned by commit SHA in each conf so results are reproducible.

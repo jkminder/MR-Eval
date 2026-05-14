@@ -4,10 +4,10 @@ model:
   dtype: bfloat16
 
 dataset:
-  repo: walledai/XSTest
+  repo: jkminder/xstest-overrefusal
   config: default
   split: test
-  revision: f1d713187c61b6ae64e602d74f0b3d812cc2e8e8
+  revision: 57795f40d6fa5639a628b6217ec8e5ccf5f1a187
 
 judge_provider: openai
 judge_model: gpt-4o-2024-08-06

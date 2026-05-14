@@ -180,6 +180,8 @@ def load_prompts(cfg: DictConfig) -> tuple[list[str], list[str]]:
 
     if repo == "walledai/XSTest":
         ds = ds.filter(lambda r: r["label"] == "safe").rename_column("type", "category")
+    elif repo == "jkminder/xstest-overrefusal":
+        ds = ds.rename_column("type", "category")
     elif repo.endswith("/orfuzz"):
         ds = ds.rename_column("input", "prompt").add_column("category", ["all"] * len(ds))
 
