@@ -1296,7 +1296,7 @@ function renderSafety(data) {
         jbb:      j?.overall ?? null,
         advbench: pickASR(ab, 'llm_asr'),
         dans:     pickASR(dan, 'overall_llm_asr'),
-        best_dan: dan?.best_prompt?.llm_asr ?? null,
+        best_dan: bestDanASR(dan),
         pap:      pickASR(pap, 'overall_llm_asr'),
         pez:      pez?.asr ?? null,
         em_al:    em?.aligned_mean ?? null,
@@ -2770,7 +2770,11 @@ const JV = {
   initialized: false,
 };
 
-const JV_EVALS = ['safety_base', 'advbench', 'pap', 'dans'];
+// Keep aligned with JBB rejudge tooling: rejudge_jbb.py rewrites
+// per-method results.jsonl + stamps jbb_all_*/summary.json so collect_jbb_all
+// surfaces a v5 verdict here. Pre-rejudge files appear as 'legacy' (the
+// gpt-4o-mini-with-binary-prompt baseline).
+const JV_EVALS = ['safety_base', 'advbench', 'pap', 'dans', 'jbb'];
 
 // judge_version is now a content-hashed string like "v5-f00d51fe" or
 // "v5-<sha>-partial". Treat anything starting with "v5" as v5.
@@ -2859,6 +2863,7 @@ function renderJudgeVersions() {
       || r.model.advbench?.rejudged_at
       || r.model.pap?.rejudged_at
       || r.model.dans?.rejudged_at
+      || r.model.jbb?.rejudged_at
       || '';
     html += `<tr class="jv-row ${cls}">
       <td style="text-align:left">${jbEscape(r.id)}</td>
@@ -3590,6 +3595,26 @@ function pickASR(obj, fallbackField) {
   const dyn = asrFromArray(obj);
   if (dyn != null) return dyn;
   return pickScore(obj, fallbackField);
+}
+
+// Best (= max) DAN-prompt ASR for this model. Each entry in dan.by_prompt
+// carries its own scores / scores_legacy arrays (built by collect_dans);
+// recompute ASR per prompt at the active judge+threshold and return the
+// highest. Falls back to dan.best_prompt.llm_asr if the arrays aren't
+// available (legacy data.json from before the bake-in).
+function bestDanASR(dan) {
+  if (!dan) return null;
+  const bp = dan.by_prompt;
+  if (bp && typeof bp === 'object') {
+    let best = null;
+    for (const stats of Object.values(bp)) {
+      const dyn = asrFromArray(stats);
+      const v = dyn != null ? dyn : pickScore(stats, 'llm_asr');
+      if (typeof v === 'number' && (best == null || v > best)) best = v;
+    }
+    if (best != null) return best;
+  }
+  return dan.best_prompt?.llm_asr ?? null;
 }
 
 // ── bootstrap ─────────────────────────────────────────────────────────────

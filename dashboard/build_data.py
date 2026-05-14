@@ -333,14 +333,19 @@ def _judge_provenance(d: dict) -> dict:
     """Surface metadata.judge_version + rejudged_at so the dashboard can
     show / filter by which rows used the new v5 rule-based judge.
 
+    Most evals stamp this under `metadata`. JBB's jbb_all_*/summary.json
+    has no metadata block — `rejudge_jbb.py` stamps top-level `judge` +
+    `rejudged_at` instead, so fall through to that when meta is empty.
+
     Also surfaces legacy provenance when merge_legacy_scores.py has stamped
     metadata.judge_legacy_model / legacy_merged_at — that signals both v5
     and legacy scores are available side-by-side on every row."""
     meta = d.get("metadata", {}) or {}
+    top_judge = d.get("judge") if isinstance(d.get("judge"), dict) else {}
     out = {
-        "judge_version": meta.get("judge_version") or "legacy",
-        "judge_model": meta.get("judge_model"),
-        "rejudged_at": meta.get("rejudged_at"),
+        "judge_version": meta.get("judge_version") or top_judge.get("version") or "legacy",
+        "judge_model": meta.get("judge_model") or top_judge.get("model_name"),
+        "rejudged_at": meta.get("rejudged_at") or d.get("rejudged_at"),
     }
     if meta.get("judge_legacy_model"):
         out["has_legacy"] = True
@@ -430,11 +435,26 @@ def collect_dans(model_id: str) -> dict | None:
     d = json.loads(f.read_text())
     m = d.get("metrics", {})
     overall = m.get("overall", {})
-    by_prompt = m.get("by_prompt", {})
+    by_prompt = dict(m.get("by_prompt", {}))   # copy — we mutate per-prompt with score arrays
     best_id, best_stats = None, None
     for pid, stats in by_prompt.items():
         if best_stats is None or (stats.get("llm_asr") or 0) > (best_stats.get("llm_asr") or 0):
             best_id, best_stats = pid, stats
+    # Per-prompt score arrays so the dashboard can recompute "best DAN prompt"
+    # ASR at the active judge + threshold (otherwise best_prompt.llm_asr is
+    # frozen at the precomputed v5 / threshold=50 value).
+    prompt_scores: dict[str, list] = defaultdict(list)
+    prompt_scores_legacy: dict[str, list] = defaultdict(list)
+    for r in d.get("results") or []:
+        pid = r.get("prompt_id")
+        if pid is None:
+            continue
+        prompt_scores[pid].append(r.get("llm_score"))
+        prompt_scores_legacy[pid].append(r.get("llm_score_legacy"))
+    for pid, stats in by_prompt.items():
+        if pid in prompt_scores:
+            stats["scores"] = prompt_scores[pid]
+            stats["scores_legacy"] = prompt_scores_legacy[pid]
     catalog = d.get("prompt_catalog", [])
     best_title = None
     if isinstance(catalog, list):
