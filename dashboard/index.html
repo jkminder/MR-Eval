@@ -302,9 +302,11 @@
   th .avg-config summary:hover { color: var(--accent); border-color: var(--accent); }
   th .avg-config[open] summary { color: var(--accent); border-color: var(--accent); background: white; }
   th .avg-config .avg-popover {
-    position: absolute; top: calc(100% + 4px); left: 0; z-index: 10;
+    /* `fixed` so it escapes the .panel's `overflow-x: auto` clip.
+       Final top/left are computed in JS on details toggle. */
+    position: fixed; top: 0; left: 0; z-index: 1000;
     min-width: 200px; max-width: 280px; padding: 8px 10px;
-    /* Cap height + scroll when several groups + flat cols overflow the panel. */
+    /* Cap height + scroll when several groups + flat cols overflow the popover. */
     max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain;
     background: white; border: 1px solid var(--border-strong); border-radius: 5px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
@@ -327,13 +329,36 @@
   th .avg-config .avg-popover .ap-mini button:hover { text-decoration: underline; }
   tfoot td { font-weight: 600; background: var(--panel-alt); border-top: 2px solid var(--border-strong); }
   tfoot tr:first-child td { color: var(--muted); }
-  /* Avg / Avg rank columns: emphasized so they read as the headline summary. */
+  /* Avg / Avg rank columns: emphasized so they read as the headline summary.
+     Amber palette so they read distinctly from the indigo / pink group bands. */
   th.rank-col, td.rank-col {
-    background: rgba(99, 102, 241, 0.10);
-    border-left: 2px solid var(--border-strong);
+    background: rgba(245, 158, 11, 0.12);
+    border-left: 3px double rgba(120, 53, 15, 0.45);
   }
-  th.rank-col { color: var(--text); font-weight: 600; }
-  td.rank-col { color: var(--text); font-size: 12px; font-weight: 600; }
+  th.rank-col { color: #78350f; font-weight: 700; }
+  td.rank-col { color: #78350f; font-size: 12px; font-weight: 700; }
+  tbody tr:nth-child(even) td.rank-col { background: rgba(245, 158, 11, 0.18); }
+  /* Warning glyph on Avg cells whose row didn't contribute every selected weight.
+     Hovering surfaces a small dark tooltip with "Missing scores" + the list. */
+  .avg-warn {
+    display: inline-block; margin-left: 4px; font-size: 11px; line-height: 1;
+    color: #b45309; cursor: help; vertical-align: 0;
+    position: relative;
+  }
+  .avg-warn::after {
+    content: 'Missing scores\A' attr(data-tip);
+    position: absolute; bottom: calc(100% + 4px); right: -4px;
+    background: #1f2937; color: #f9fafb; border: 1px solid #111827;
+    padding: 6px 9px; border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    white-space: pre-line; font-weight: 600; font-size: 11px;
+    text-transform: none; letter-spacing: 0; line-height: 1.35;
+    min-width: 140px; max-width: 320px; text-align: left;
+    opacity: 0; pointer-events: none; transform: translateY(2px);
+    transition: opacity 0.08s, transform 0.08s; z-index: 1000;
+  }
+  .avg-warn:hover::after, .avg-warn:focus::after {
+    opacity: 1; transform: translateY(0);
+  }
   /* singleKey "Overall" columns inside a group: bolded + a touch darker
      so the headline column stands out from its per-attack / per-bench peers. */
   th.col-singleton, td.col-singleton { font-weight: 600; }
@@ -363,6 +388,27 @@
     display: inline-block; margin-left: 6px; padding: 0 5px;
     font-size: 10px; color: var(--muted); border: 1px solid var(--border);
     border-radius: 3px; background: var(--panel);
+  }
+  th.group-head button.group-toggle {
+    background: none; border: none; cursor: pointer; padding: 0;
+    color: inherit; font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  th.group-head button.group-toggle:hover { color: var(--accent); }
+  /* Collapsed groups: only the singleKey col is rendered, so let the super-
+     header and the underlying header / cells shrink to content width.
+     Long labels (e.g. "Over-refusal") wrap onto a second line rather than
+     forcing the column wider than the data. */
+  th.group-head.collapsed {
+    padding-left: 4px; padding-right: 4px; letter-spacing: 0;
+    white-space: normal; word-break: break-word; line-height: 1.15;
+  }
+  th.group-head.collapsed button.group-toggle {
+    letter-spacing: 0;
+    white-space: normal; text-align: center;
+  }
+  th.group-band.col-singleton, td.group-band.col-singleton {
+    padding-left: 6px; padding-right: 6px;
   }
   /* Popover group sections (one per col.group) */
   th .avg-config .avg-popover .ap-group {
@@ -993,15 +1039,21 @@ function computeRowAvgs(cols, rows, excluded, groupMode, groups) {
   //                     (e.g. EM aligned only counted when coherence > 30).
   const groupDefByName = {};
   for (const g of (groups || [])) groupDefByName[g.name] = g;
-  const fetchTerm = (c, cells) => {
-    if (c.gate && !c.gate(cells)) return null;
+  // Returns {value, missing} per row. `missing` is the list of weights the
+  // user opted into but that didn't contribute (null cell or gate predicate
+  // returned false). The renderer surfaces this as a ⚠ on the Avg cell.
+  const fetchTermDiag = (c, cells) => {
+    if (c.gate && !c.gate(cells)) {
+      return { value: null, reason: 'gated' };
+    }
     const v = normalizeVal(cells[c.key]);
-    if (v == null) return null;
-    return c.negate ? (100 - v) : v;
+    if (v == null) return { value: null, reason: 'null' };
+    return { value: c.negate ? (100 - v) : v, reason: null };
   };
   const out = {};
   for (const r of rows) {
     const terms = [];
+    const missing = [];
     const seenGroups = new Set();
     for (const c of cols) {
       if (!c.avgable) continue;
@@ -1013,17 +1065,49 @@ function computeRowAvgs(cols, rows, excluded, groupMode, groups) {
         const singleKey = gdef?.singleKey;
         if (mode === 'single') {
           seenGroups.add(c.group);
-          let v;
           if (singleKey) {
             const skCol = cols.find(x => x.key === singleKey) || c;
-            v = fetchTerm(skCol, r.cells);
+            const d = fetchTermDiag(skCol, r.cells);
+            if (d.value != null) {
+              terms.push(d.value);
+              // The singleKey value (e.g. JBB Overall) is itself a rollup of the
+              // group's members. If any member was missing from the raw data,
+              // the Overall is still computed from the available subset — flag
+              // that on the Avg ⚠ so the user knows the headline is partial.
+              const members = cols.filter(x => x.group === c.group && x.avgable
+                                                && x.key !== singleKey);
+              const sub = [];
+              for (const m of members) {
+                const dm = fetchTermDiag(m, r.cells);
+                if (dm.value == null) sub.push(m.label);
+              }
+              if (sub.length) {
+                missing.push({
+                  key: c.group,
+                  label: `${gdef.label || c.group} Overall (subscore${sub.length === 1 ? '' : 's'} missing: ${sub.join(', ')})`,
+                  reason: 'partial',
+                });
+              }
+            } else {
+              missing.push({ key: skCol.key, label: gdef.label || c.group, reason: d.reason });
+            }
           } else {
             // Mean over the group's avgable member columns (no singleKey defined).
             const members = cols.filter(x => x.group === c.group && x.avgable);
-            const vs = members.map(x => fetchTerm(x, r.cells)).filter(x => x != null);
-            v = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+            const vs = [];
+            const sub = [];
+            for (const m of members) {
+              const d = fetchTermDiag(m, r.cells);
+              if (d.value != null) vs.push(d.value);
+              else sub.push(m.label);
+            }
+            if (vs.length) {
+              terms.push(vs.reduce((a, b) => a + b, 0) / vs.length);
+              if (sub.length) missing.push({ key: c.group, label: `${gdef.label || c.group} (avg incomplete: ${sub.join(', ')})`, reason: 'partial' });
+            } else {
+              missing.push({ key: c.group, label: gdef.label || c.group, reason: 'null' });
+            }
           }
-          if (v != null) terms.push(v);
           continue;
         }
         // 'individual' mode: each member counts once. Skip the singleKey col
@@ -1033,17 +1117,20 @@ function computeRowAvgs(cols, rows, excluded, groupMode, groups) {
                                           && !excluded.has(x.key)
                                           && x.key !== singleKey);
         for (const m of members) {
-          const v = fetchTerm(m, r.cells);
-          if (v != null) terms.push(v);
+          const d = fetchTermDiag(m, r.cells);
+          if (d.value != null) terms.push(d.value);
+          else missing.push({ key: m.key, label: m.label, reason: d.reason });
         }
         seenGroups.add(c.group);
         continue;
       }
       if (excluded.has(c.key)) continue;
-      const v = fetchTerm(c, r.cells);
-      if (v != null) terms.push(v);
+      const d = fetchTermDiag(c, r.cells);
+      if (d.value != null) terms.push(d.value);
+      else missing.push({ key: c.key, label: c.label, reason: d.reason });
     }
-    out[r.id] = terms.length ? terms.reduce((a, b) => a + b, 0) / terms.length : null;
+    const value = terms.length ? terms.reduce((a, b) => a + b, 0) / terms.length : null;
+    out[r.id] = { value, missing };
   }
   return out;
 }
@@ -1088,6 +1175,25 @@ function _saveGroupModeFor(el, mode) {
     localStorage.setItem(_GROUP_LS_PREFIX + el.id, JSON.stringify(mode));
   } else {
     _groupInMem.set(el, mode);
+  }
+}
+const _GROUPCOLL_LS_PREFIX = 'mr-eval:groupCollapsed:';
+const _groupCollInMem = new WeakMap();
+function _groupCollapsedFor(el) {
+  if (el.id) {
+    const raw = localStorage.getItem(_GROUPCOLL_LS_PREFIX + el.id);
+    if (!raw) return {};
+    try { return JSON.parse(raw) || {}; } catch { return {}; }
+  }
+  let m = _groupCollInMem.get(el);
+  if (!m) { m = {}; _groupCollInMem.set(el, m); }
+  return m;
+}
+function _saveGroupCollapsedFor(el, coll) {
+  if (el.id) {
+    localStorage.setItem(_GROUPCOLL_LS_PREFIX + el.id, JSON.stringify(coll));
+  } else {
+    _groupCollInMem.set(el, coll);
   }
 }
 
@@ -1135,23 +1241,44 @@ function renderRankedTable(el, cols, rows, groups, opts) {
   }
   if (groupModePruned) _saveGroupModeFor(el, groupMode);
 
+  // Collapse state: each group with a singleKey starts collapsed (only
+  // "Overall" rendered). Without a singleKey there's nothing to fall back on,
+  // so collapsing is disabled.
+  const groupCollapsed = _groupCollapsedFor(el);
+  let collPruned = false;
+  for (const k of Object.keys(groupCollapsed)) {
+    if (!groupByName[k]) { delete groupCollapsed[k]; collPruned = true; }
+  }
+  for (const g of groupDefs) {
+    if (!(g.name in groupCollapsed)) {
+      groupCollapsed[g.name] = g.singleKey ? (g.defaultCollapsed ?? true) : false;
+    }
+  }
+  if (collPruned) _saveGroupCollapsedFor(el, groupCollapsed);
+
   const { ranksByModel, avgByModel: avgRankByModel } = computeRanks(cols, rows);
   const rowAvg = computeRowAvgs(cols, rows, excluded, groupMode, groupDefs);
 
-  // Build group-band metadata for header/cell rendering.
-  // Walk cols left→right; for each contiguous run of cols belonging to the same
+  // Visible cols subset: when a group is collapsed, drop its non-singleKey
+  // members from the rendered table. Averages and ranks still consider the
+  // full cols list, so the headline numbers don't shift on collapse.
+  const visibleCols = cols.filter(c =>
+    !c.group || !groupCollapsed[c.group] || c.key === groupByName[c.group]?.singleKey);
+
+  // Build group-band metadata for header/cell rendering on the *visible* cols.
+  // Walk left→right; for each contiguous run of cols belonging to the same
   // group, mark first/last so CSS can draw a separating border. Alternate
   // banding palette across distinct groups (g-alt vs default).
-  const colBand = cols.map(() => ({ group: null, first: false, last: false, alt: false }));
-  const groupOrder = [];  // group names in order of first appearance
-  for (let i = 0; i < cols.length; i++) {
-    const g = cols[i].group;
+  const colBand = visibleCols.map(() => ({ group: null, first: false, last: false, alt: false }));
+  const groupOrder = [];  // group names in order of first appearance among visibleCols
+  for (let i = 0; i < visibleCols.length; i++) {
+    const g = visibleCols[i].group;
     if (!g) continue;
     if (!groupOrder.includes(g)) groupOrder.push(g);
     colBand[i].group = g;
     colBand[i].alt = (groupOrder.indexOf(g) % 2) === 1;
-    if (i === 0 || cols[i - 1].group !== g) colBand[i].first = true;
-    if (i === cols.length - 1 || cols[i + 1].group !== g) colBand[i].last  = true;
+    if (i === 0 || visibleCols[i - 1].group !== g) colBand[i].first = true;
+    if (i === visibleCols.length - 1 || visibleCols[i + 1].group !== g) colBand[i].last  = true;
   }
   const bandCls = i => {
     const b = colBand[i];
@@ -1164,7 +1291,7 @@ function renderRankedTable(el, cols, rows, groups, opts) {
     ].filter(Boolean).join(' ');
   };
   const singletonCls = i => {
-    const c = cols[i];
+    const c = visibleCols[i];
     if (!c.group) return '';
     const gdef = groupByName[c.group];
     if (!gdef || gdef.singleKey !== c.key) return '';
@@ -1180,7 +1307,7 @@ function renderRankedTable(el, cols, rows, groups, opts) {
     }
     const pick = id => {
       if (sortKey === '_avgrank') return avgRankByModel[id];
-      if (sortKey === '_avg')     return rowAvg[id];
+      if (sortKey === '_avg')     return rowAvg[id]?.value ?? null;
       return normalizeVal(rows.find(r => r.id === id).cells[sortKey]);
     };
     const av = pick(a.id), bv = pick(b.id);
@@ -1199,23 +1326,39 @@ function renderRankedTable(el, cols, rows, groups, opts) {
     html += '<tr>';
     html += '<th></th>';
     let i = 0;
-    while (i < cols.length) {
-      const g = cols[i].group;
+    while (i < visibleCols.length) {
+      const g = visibleCols[i].group;
       if (!g) {
         html += '<th></th>';
         i++;
         continue;
       }
-      // Find span end.
+      // Find span end among visible cols.
       let j = i;
-      while (j < cols.length && cols[j].group === g) j++;
+      while (j < visibleCols.length && visibleCols[j].group === g) j++;
       const span = j - i;
       const gdef = groupByName[g] || { label: g };
       const altCls = colBand[i].alt ? ' g-alt' : '';
+      const collapsed = !!groupCollapsed[g];
+      const canCollapse = !!gdef.singleKey;
+      const chevron = canCollapse ? (collapsed ? '▶' : '▼') : '';
+      // Weight count for individual mode: count over *full* cols so collapsed
+      // groups still report the right number of weights folded into Avg.
+      const indivCount = cols.filter(c =>
+        c.group === g && c.avgable && !excluded.has(c.key) && c.key !== gdef.singleKey).length;
+      // Suppress the mode badge when collapsed (col is single-width) and the
+      // group is in its default mode — keeps the collapsed col narrow. Mode
+      // info stays accessible via the gear popover.
+      const showModeBadge = !collapsed || groupMode[g] !== (gdef.defaultMode || 'single');
       const modeLabel = groupMode[g] === 'single' ? 'single weight'
                       : groupMode[g] === 'excluded' ? 'excluded'
-                      : `${cols.slice(i, j).filter(c => c.avgable && !excluded.has(c.key)).length} weights`;
-      html += `<th class="group-head${altCls} group-first group-last" colspan="${span}">${gdef.label || g} <span class="gh-mode">${modeLabel}</span></th>`;
+                      : `${indivCount} weights`;
+      const modeSpan = showModeBadge ? ` <span class="gh-mode">${modeLabel}</span>` : '';
+      const toggleLabel = `${chevron ? chevron + ' ' : ''}${gdef.label || g}`;
+      const toggleBtn = canCollapse
+        ? `<button class="group-toggle" data-grpcollapse="${g}" title="${collapsed ? 'Expand' : 'Collapse'} ${gdef.label}">${toggleLabel}</button>`
+        : `${gdef.label || g}`;
+      html += `<th class="group-head${altCls} group-first group-last${collapsed ? ' collapsed' : ''}" colspan="${span}">${toggleBtn}${modeSpan}</th>`;
       i = j;
     }
     // Trailing cells (Avg, Avg rank) get empty headers in the super-row.
@@ -1225,8 +1368,8 @@ function renderRankedTable(el, cols, rows, groups, opts) {
   }
   html += '<tr>';
   html += `<th class="sortable ${arrowCls('_model')}" data-sortkey="_model">Model</th>`;
-  for (let i = 0; i < cols.length; i++) {
-    const c = cols[i];
+  for (let i = 0; i < visibleCols.length; i++) {
+    const c = visibleCols[i];
     const bcls = bandCls(i);
     const scls = singletonCls(i);
     html += `<th class="sortable ${arrowCls(c.key)} ${bcls} ${scls}" data-sortkey="${c.key}">${c.label}</th>`;
@@ -1317,15 +1460,28 @@ function renderRankedTable(el, cols, rows, groups, opts) {
   html += '</tr></thead><tbody>';
   for (const r of ordered) {
     html += `<tr><td>${r.display}</td>`;
-    for (let i = 0; i < cols.length; i++) {
-      const c = cols[i];
+    for (let i = 0; i < visibleCols.length; i++) {
+      const c = visibleCols[i];
       const bcls = bandCls(i);
       const scls = singletonCls(i);
       html += `<td class="${bcls} ${scls}">${fmtDisplay(r.cells[c.key], c.fmt)}</td>`;
     }
     if (hasAvg) {
       const a = rowAvg[r.id];
-      html += `<td class="rank-col">${a == null ? '<span class="missing">—</span>' : a.toFixed(1)}</td>`;
+      if (a == null || a.value == null) {
+        html += `<td class="rank-col"><span class="missing">—</span></td>`;
+      } else {
+        const m = a.missing || [];
+        let warn = '';
+        if (m.length) {
+          const reasonText = (x) => x.reason === 'gated' ? `${x.label} (gated)` : x.label;
+          // data-tip becomes the body of the tooltip (CSS prepends "Missing scores").
+          const tip = m.map(x => '• ' + reasonText(x)).join('\n')
+                        .replace(/"/g, '&quot;');
+          warn = ` <span class="avg-warn" tabindex="0" data-tip="${tip}">⚠</span>`;
+        }
+        html += `<td class="rank-col">${a.value.toFixed(1)}${warn}</td>`;
+      }
     }
     if (hasRank) {
       const ar = avgRankByModel[r.id];
@@ -1375,6 +1531,17 @@ function renderRankedTable(el, cols, rows, groups, opts) {
       }
     });
   });
+  // Collapse / expand a group via the chevron button in the super-header.
+  el.querySelectorAll('button.group-toggle').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const name = btn.dataset.grpcollapse;
+      groupCollapsed[name] = !groupCollapsed[name];
+      _saveGroupCollapsedFor(el, groupCollapsed);
+      renderRankedTable(el, cols, rows, groups, opts);
+    });
+  });
   // Per-group radio: single | individual | excluded.
   el.querySelectorAll('.avg-config input[type=radio][data-grpkey]').forEach(rb => {
     rb.addEventListener('change', () => {
@@ -1419,7 +1586,40 @@ function renderRankedTable(el, cols, rows, groups, opts) {
         if (!d.contains(ev.target)) d.open = false;
       });
     });
+    // Close on scroll/resize too — the popover is position:fixed and we
+    // don't reposition continuously, so anything that shifts the trigger
+    // dismisses it.
+    const closeAll = () => {
+      document.querySelectorAll('details.avg-config[open]').forEach(d => { d.open = false; });
+    };
+    window.addEventListener('resize', closeAll);
+    window.addEventListener('scroll', closeAll, { passive: true, capture: true });
   }
+  // Position each popover (position:fixed) when its details opens.
+  el.querySelectorAll('details.avg-config').forEach(d => {
+    d.addEventListener('toggle', () => {
+      if (!d.open) return;
+      const pop = d.querySelector('.avg-popover');
+      if (!pop) return;
+      const trigger = d.querySelector('summary') || d;
+      const rect = trigger.getBoundingClientRect();
+      // Default: anchor popover's top-right under the gear icon's right edge.
+      const popW = pop.offsetWidth;
+      const popH = pop.offsetHeight;
+      let top  = rect.bottom + 4;
+      let left = rect.right - popW;
+      // Keep on-screen.
+      const margin = 8;
+      if (left < margin) left = margin;
+      if (left + popW > window.innerWidth - margin) left = window.innerWidth - popW - margin;
+      // If it would spill off the bottom, flip above the trigger.
+      if (top + popH > window.innerHeight - margin) {
+        top = Math.max(margin, rect.top - popH - 4);
+      }
+      pop.style.top  = top  + 'px';
+      pop.style.left = left + 'px';
+    });
+  });
 }
 
 function defaultSortDir(key, cols) {
