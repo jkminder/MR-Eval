@@ -42,6 +42,31 @@ CURRENT_DIRS = [
 ]
 
 
+# Identity fields used to verify that cur_row[i] and leg_row[i] are the SAME
+# row before zip-merging legacy scores. Order matters: pick the first field
+# present on both sides. Different evals use different conventions.
+_ID_FIELDS = ("goal", "prompt", "request", "behavior", "persuasive")
+
+
+def _first_row_mismatch(cur_rows: list[dict], leg_rows: list[dict]) -> int | None:
+    """Return the index of the first row pair whose identity disagrees, or
+    None if every pair shares at least one identity field that matches. A
+    pair with NO overlapping identity field counts as a mismatch — we can't
+    prove they belong together, so refuse the merge to be safe."""
+    for idx, (c_row, l_row) in enumerate(zip(cur_rows, leg_rows)):
+        shared = False
+        for fld in _ID_FIELDS:
+            cv, lv = c_row.get(fld), l_row.get(fld)
+            if cv is not None and lv is not None:
+                shared = True
+                if cv != lv:
+                    return idx
+                break
+        if not shared:
+            return idx
+    return None
+
+
 def _score_field(eval_dir: str) -> str:
     """Per-row score field name varies by eval."""
     return "harm_score" if "safety_base" in eval_dir else "llm_score"
@@ -118,22 +143,10 @@ def main():
 
             # Per-row merge. Row order is positional (zip by index), so we
             # ALSO assert that the row identity matches before attaching the
-            # legacy score. Identity is whichever of goal/prompt/request/
-            # behavior/persuasive is present on both rows. If the identities
-            # differ, abort the file — silent row-order drift would attach
-            # legacy scores to the wrong row.
-            _ID_FIELDS = ("goal", "prompt", "request", "behavior", "persuasive")
-            row_mismatch_idx = -1
-            for idx, (c_row, l_row) in enumerate(zip(cur_rows, leg_rows)):
-                for fld in _ID_FIELDS:
-                    cv, lv = c_row.get(fld), l_row.get(fld)
-                    if cv is not None and lv is not None:
-                        if cv != lv:
-                            row_mismatch_idx = idx
-                        break
-                if row_mismatch_idx >= 0:
-                    break
-            if row_mismatch_idx >= 0:
+            # legacy score. Silent row-order drift would attach legacy scores
+            # to the wrong row.
+            row_mismatch_idx = _first_row_mismatch(cur_rows, leg_rows)
+            if row_mismatch_idx is not None:
                 print(f"  ! row identity mismatch at index {row_mismatch_idx} in {cur_path.name}; "
                       "refusing to attach legacy scores")
                 stats["row_mismatch"] += 1

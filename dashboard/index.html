@@ -3703,8 +3703,9 @@ function bestDanASR(dan) {
 // tests/test_invariants.py covers the data-side contracts.
 (function runSelfTests() {
   const prev = activeJudge;
-  let failed = 0;
+  let failed = 0, total = 0;
   const check = (name, actual, expected) => {
+    total++;
     const ok = actual === expected
       || (Number.isNaN(actual) && Number.isNaN(expected));
     if (!ok) { console.error(`[selftest] ${name}: expected`, expected, 'got', actual); failed++; }
@@ -3735,8 +3736,8 @@ function bestDanASR(dan) {
   check('jvNorm unstamped',       jvNorm('unstamped'), 'unstamped');
   check('jvNorm unknown',         jvNorm('whatever'), 'none');
   activeJudge = prev;
-  if (failed === 0) console.log(`[selftest] ${15} OK`);
-  else console.error(`[selftest] ${failed} FAILURES — see above`);
+  if (failed === 0) console.log(`[selftest] ${total} OK`);
+  else console.error(`[selftest] ${failed}/${total} FAILURES — see above`);
 })();
 
 // ── bootstrap ─────────────────────────────────────────────────────────────

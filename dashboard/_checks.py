@@ -44,12 +44,9 @@ SCORE_BEARING_CELLS = (
 )
 
 
-class _Fail(AssertionError):
-    """AssertionError that carries the offending key path."""
-
-
 def _fail(path: str, reason: str) -> None:
-    raise _Fail(f"{path}: {reason}")
+    """Helper: ``raise AssertionError`` with a key-path-prefixed message."""
+    raise AssertionError(f"{path}: {reason}")
 
 
 def _sha8(p: Path) -> str:
@@ -284,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
             manifest = json.loads(manifest_path.read_text())
             validate_manifest(manifest)
             print("✓ manifest.json passes")
-        except _Fail as e:
+        except AssertionError as e:
             failures.append(f"manifest: {e}")
     elif not args.offline:
         failures.append(f"manifest: {manifest_path} not found")
@@ -303,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
             data = json.loads(data_path.read_text())
             validate_data_json(data)
             print("✓ data.json passes")
-        except _Fail as e:
+        except AssertionError as e:
             failures.append(f"data.json: {e}")
     else:
         print(f"  (skipped: {data_path} not built yet — run dashboard/build_data.py)")
@@ -318,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
             # but the signature accepts them for future use.
             validate_judge_benchmark(out, manifest, set())
             print("✓ judge_benchmark.json passes")
-        except _Fail as e:
+        except AssertionError as e:
             failures.append(f"judge_benchmark.json: {e}")
     else:
         print(f"  (skipped: judge_benchmark.json not built yet)")

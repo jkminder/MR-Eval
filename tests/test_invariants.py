@@ -169,11 +169,9 @@ def test_validator_rejects_unknown_judge_version():
 
 
 def test_validator_accepts_unstamped():
-    """`unstamped` is a valid bucket (the user-approved compromise)."""
-    ok = _minimal_data({"judge_version": "unstamped", "overall_asr": 0.3,
-                        "scores": [10, 20, 80]})
-    # No asr-drift to check (recomputed at 50: 1/3 ≈ 0.333 vs 0.3 stored).
-    # Use an aggregate that matches.
+    """`unstamped` is a valid bucket (the user-approved compromise).
+    Recomputed-at-50 over [10, 20, 80] is 1/3, so the stored aggregate has
+    to match for the test to exercise only the unstamped-bucket path."""
     ok = _minimal_data({"judge_version": "unstamped",
                         "overall_asr": 1.0 / 3.0,
                         "scores": [10, 20, 80]})
@@ -283,3 +281,42 @@ def test_validate_manifest_detects_prompt_hash_drift(judge_audit_tiny: Path):
     manifest = json.loads((judge_audit_tiny / "prompts" / "manifest.json").read_text())
     with pytest.raises(AssertionError, match="prompt-hash"):
         _checks.validate_manifest(manifest, judge_audit_dir=judge_audit_tiny)
+
+
+# ── merge_legacy_scores row-identity check ─────────────────────────────────
+
+
+def test_first_row_mismatch_returns_none_on_aligned_rows():
+    """Aligned rows: every pair shares an identity field that matches."""
+    import merge_legacy_scores  # type: ignore[import]
+    cur = [{"goal": "A"}, {"goal": "B"}]
+    leg = [{"goal": "A"}, {"goal": "B"}]
+    assert merge_legacy_scores._first_row_mismatch(cur, leg) is None
+
+
+def test_first_row_mismatch_catches_misaligned_rows():
+    """Cur and legacy disagree at idx 1 — return 1 so the merger refuses."""
+    import merge_legacy_scores  # type: ignore[import]
+    cur = [{"goal": "A"}, {"goal": "B"}]
+    leg = [{"goal": "A"}, {"goal": "DIFFERENT"}]
+    assert merge_legacy_scores._first_row_mismatch(cur, leg) == 1
+
+
+def test_first_row_mismatch_catches_disjoint_identity_fields():
+    """Cur uses `goal`, legacy uses only `request` — no overlap means we
+    can't prove the rows belong together, so return the index as a mismatch.
+    Without this guard, the merge would silently zip legacy scores onto the
+    wrong rows."""
+    import merge_legacy_scores  # type: ignore[import]
+    cur = [{"goal": "A", "harm_score": 10}]
+    leg = [{"request": "A", "harm_score": 80}]  # disjoint identity key
+    assert merge_legacy_scores._first_row_mismatch(cur, leg) == 0
+
+
+def test_first_row_mismatch_uses_first_shared_field():
+    """The first identity field present on BOTH sides decides. Later fields
+    don't get checked — they may legitimately differ across schemas."""
+    import merge_legacy_scores  # type: ignore[import]
+    cur = [{"goal": "A", "prompt": "P1"}]
+    leg = [{"goal": "A", "prompt": "P2"}]  # goal matches, prompt differs
+    assert merge_legacy_scores._first_row_mismatch(cur, leg) is None
