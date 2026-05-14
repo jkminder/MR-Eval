@@ -36,6 +36,12 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
     fi
 fi
 
+# Hard-fail gate: never publish data that fails the invariants. The builders
+# above already validate internally, but re-running the check here also
+# covers --skip-build (deploying a hand-edited data.json must still pass).
+echo "▸ Validating output..."
+python3 -m dashboard._checks
+
 # Fetch latest state of the remote so we can base on origin/gh-pages if it exists.
 git fetch origin 2>/dev/null || true
 

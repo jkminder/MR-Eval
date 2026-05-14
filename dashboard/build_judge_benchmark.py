@@ -14,6 +14,7 @@ compute:
 from __future__ import annotations
 import json
 import math
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -139,6 +140,20 @@ def main():
             })
         rows.sort(key=lambda r: r["id"])
 
+    # version_coverage: per (version, judge, prompt), how many rows exist?
+    # The UI consults this to render `—` for any cell with zero rows in a
+    # given version × judge × prompt slot. Without this map the UI can't
+    # tell "no rows" apart from "judge produced all-zero scores".
+    coverage: dict[str, dict[str, dict[str, int]]] = {}
+    for vid, blob in per_version.items():
+        if blob.get("missing"):
+            coverage[vid] = {}
+            continue
+        per_jp: dict[str, dict[str, int]] = defaultdict(dict)
+        for m in blob.get("aggregate", []):
+            per_jp[m["judge"]][m["prompt"]] = m["n"]
+        coverage[vid] = {j: dict(p) for j, p in per_jp.items()}
+
     out = {
         "current": current,
         "versions": versions,
@@ -146,8 +161,15 @@ def main():
         "prompts": sorted(prompts_seen),
         "evals": list(EVALS),
         "per_version": per_version,
+        "version_coverage": coverage,
         "rows": rows,
     }
+
+    # Hard-fail invariants before we write.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from _checks import validate_judge_benchmark  # noqa: PLC0415
+    validate_judge_benchmark(out, manifest, set(ds.keys()))
+
     OUT.write_text(json.dumps(out, separators=(",", ":")))
     avail = [v for v in per_version if not per_version[v].get("missing")]
     print(f"wrote {OUT}")

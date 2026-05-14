@@ -1,0 +1,19 @@
+{
+  "current": "v2",
+  "versions": [
+    {
+      "version": "v1",
+      "date": "2026-01-01",
+      "results_file": "benchmark_results_v1.jsonl",
+      "prompt_file": "prompts/v1.md",
+      "description": "Tiny fixture v1."
+    },
+    {
+      "version": "v2",
+      "date": "2026-01-02",
+      "results_file": "benchmark_results_v2.jsonl",
+      "prompt_file": "prompts/v2.md",
+      "description": "Tiny fixture v2."
+    }
+  ]
+}

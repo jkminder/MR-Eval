@@ -116,7 +116,28 @@ def main():
                 stats["already"] += 1
                 continue
 
-            # Per-row merge
+            # Per-row merge. Row order is positional (zip by index), so we
+            # ALSO assert that the row identity matches before attaching the
+            # legacy score. Identity is whichever of goal/prompt/request/
+            # behavior/persuasive is present on both rows. If the identities
+            # differ, abort the file — silent row-order drift would attach
+            # legacy scores to the wrong row.
+            _ID_FIELDS = ("goal", "prompt", "request", "behavior", "persuasive")
+            row_mismatch_idx = -1
+            for idx, (c_row, l_row) in enumerate(zip(cur_rows, leg_rows)):
+                for fld in _ID_FIELDS:
+                    cv, lv = c_row.get(fld), l_row.get(fld)
+                    if cv is not None and lv is not None:
+                        if cv != lv:
+                            row_mismatch_idx = idx
+                        break
+                if row_mismatch_idx >= 0:
+                    break
+            if row_mismatch_idx >= 0:
+                print(f"  ! row identity mismatch at index {row_mismatch_idx} in {cur_path.name}; "
+                      "refusing to attach legacy scores")
+                stats["row_mismatch"] += 1
+                continue
             for c_row, l_row in zip(cur_rows, leg_rows):
                 c_row[legacy_score_key] = l_row.get(sf)
 

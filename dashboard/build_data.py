@@ -333,12 +333,18 @@ def _judge_provenance(d: dict) -> dict:
     """Surface metadata.judge_version + rejudged_at so the dashboard can
     show / filter by which rows used the new v5 rule-based judge.
 
+    Files written without an explicit ``judge_version`` are bucketed as
+    ``"unstamped"`` — NOT silently relabeled as ``"legacy"``. The unstamped
+    bucket is rendered as `—` in the UI; the legacy bucket is reserved for
+    files that genuinely went through the pre-v5 LogprobJudge.
+
     Also surfaces legacy provenance when merge_legacy_scores.py has stamped
     metadata.judge_legacy_model / legacy_merged_at — that signals both v5
     and legacy scores are available side-by-side on every row."""
     meta = d.get("metadata", {}) or {}
+    v = meta.get("judge_version")
     out = {
-        "judge_version": meta.get("judge_version") or "legacy",
+        "judge_version": v if v is not None else "unstamped",
         "judge_model": meta.get("judge_model"),
         "rejudged_at": meta.get("rejudged_at"),
     }
@@ -1564,6 +1570,10 @@ def main() -> None:
     all_ids = {m["id"] for m in BASE_MODELS + SFT_MODELS}
     for mid in sorted(all_ids):
         data["models"][mid] = build_model_payload(mid)
+
+    # Hard-fail invariants before we write — broken data must not ship.
+    from _checks import validate_data_json  # noqa: PLC0415 — keep import local
+    validate_data_json(data)
 
     out_path = Path(__file__).resolve().parent / "data.json"
     out_path.write_text(json.dumps(data, indent=2))

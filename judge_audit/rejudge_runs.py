@@ -21,7 +21,6 @@ skipped unless --force is passed.
 from __future__ import annotations
 import argparse
 import asyncio
-import hashlib
 import json
 import os
 import sys
@@ -32,22 +31,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LOGS_DIR = ROOT / "logs" / "clariden"
 
-# Add em/ to path so we can import the shared judge
+# Add em/ to path so we can import the shared judge + stamp function. The
+# stamp lives in em/judge.py so cluster + laptop writers share one source.
 sys.path.insert(0, str(ROOT / "em"))
+from judge import judge_version_stamp  # noqa: E402
 
-# Hash the prompt content so judge_version reflects whether the rule body
-# has changed. Stamp format: "v5-<first 8 hex of sha256(prompt body)>". If
-# you edit judge_prompt.md, the hash changes automatically and old files
-# get re-rejudged on the next pass instead of being silently skipped.
-def _judge_version_stamp() -> str:
-    prompt_path = ROOT / "judge_audit" / "judge_prompt.md"
-    try:
-        h = hashlib.sha256(prompt_path.read_bytes()).hexdigest()[:8]
-        return f"v5-{h}"
-    except Exception:
-        return "v5"
-
-JUDGE_VERSION = _judge_version_stamp()
+JUDGE_VERSION = judge_version_stamp()
 
 
 # ── Per-eval adapters ────────────────────────────────────────────────────────
@@ -314,11 +303,13 @@ async def rejudge_file(judge, eval_name: str, path: Path, force: bool, concurren
     """
     data = json.loads(path.read_text())
     meta = data.get("metadata", {}) or {}
-    # Re-running is idempotent: if this file already has the current
-    # judge_version stamp, skip it. Older v5 stamps (without the prompt
-    # hash) still count as v5 so we don't re-bill them unnecessarily.
+    # Idempotent skip is by EXACT stamp match only. Any other v5-ish stamp
+    # (older hash, bare "v5", "-partial") means the prompt body or completion
+    # state has drifted — re-rejudge to get current-prompt scores. The old
+    # `or stamped.startswith("v5")` clause was the source of the "old judge
+    # values that look new" bug class.
     stamped = meta.get("judge_version") or ""
-    if not force and (stamped == JUDGE_VERSION or stamped.startswith("v5")):
+    if not force and stamped == JUDGE_VERSION:
         return {"path": path, "status": f"skipped (already {stamped})", "n": 0}
     results = data.get("results") or []
     if not results:

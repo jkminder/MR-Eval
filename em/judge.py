@@ -13,6 +13,7 @@ Based on: https://github.com/Butanium/emergent-misalignment (open_models/judge.p
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import math
 import os
 import re
@@ -230,6 +231,20 @@ DEFAULT_RULE_PROMPT_PATH = (
     Path(__file__).resolve().parent.parent / "judge_audit" / "judge_prompt.md"
 )
 _SCORE_RE = re.compile(r"SCORE\s*[:=]\s*(\d{1,3})", re.IGNORECASE)
+
+
+def judge_version_stamp(prompt_path: Path | None = None) -> str:
+    """Content-hash stamp for the current rule-based judge prompt.
+
+    Format: ``"v5-<first 8 hex of sha256(prompt body)>"``. If the prompt body
+    changes, the hash changes — old stamps no longer match and re-rejudge is
+    required. The bare ``"v5"`` fallback used to mask file-not-found errors;
+    we now raise instead so the caller can't silently stamp with a meaningless
+    hash. Cluster + laptop writers must use the same source of truth.
+    """
+    p = Path(prompt_path) if prompt_path is not None else DEFAULT_RULE_PROMPT_PATH
+    h = hashlib.sha256(p.read_bytes()).hexdigest()[:8]
+    return f"v5-{h}"
 
 
 def load_rule_judge_prompt(path: Path | None = None) -> str:

@@ -2,17 +2,20 @@
 Smoke tests for the lm-harness eval pipeline.
 
 Uses gpt2 (124M, no auth) with limit=5 so each test finishes in seconds locally.
-Run with:
-    cd eval/
-    pytest tests/ -v
+Marked `slow` since lm_eval + HF model download is not CI-friendly. Run with:
+    pytest -m slow tests/eval/ -v
 """
 
 import json
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("lm_eval")
 import lm_eval
 from lm_eval.models.huggingface import HFLM
+
+pytestmark = pytest.mark.slow
 
 
 MODEL = "gpt2"

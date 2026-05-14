@@ -277,12 +277,15 @@
     font-size: 11px; font-weight: 500; border: 1px solid var(--border);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .jv-badge.v5     { background: #f0fdf4; color: #15803d; border-color: #86efac; }
-  .jv-badge.legacy { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
-  .jv-badge.none   { background: var(--panel-alt); color: var(--muted); border-color: var(--border); }
+  .jv-badge.v5         { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+  .jv-badge.v5-partial { background: #ecfeff; color: #0e7490; border-color: #67e8f9; }
+  .jv-badge.legacy     { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+  .jv-badge.unstamped  { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+  .jv-badge.none       { background: var(--panel-alt); color: var(--muted); border-color: var(--border); }
   .jv-row.no-data-row { opacity: 0.5; }
   .jv-row.all-legacy { background: #fffbeb; }
   .jv-row.all-v5 { background: #f0fdf4; }
+  .jv-row.all-unstamped { background: #fef2f2; }
 
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--text); }
@@ -769,6 +772,8 @@
           <option value="all" selected>all rows</option>
           <option value="any_legacy">rows with any legacy cell</option>
           <option value="all_legacy">rows with all legacy cells</option>
+          <option value="any_unstamped">rows with any unstamped cell</option>
+          <option value="any_partial">rows with any v5-partial cell</option>
           <option value="all_v5">rows fully on v5</option>
           <option value="mixed">rows with mixed v5/legacy</option>
         </select>
@@ -827,16 +832,25 @@
 
 <script>
 // ── utils ──────────────────────────────────────────────────────────────────
+// MISSING is a structural sentinel that means "no value for the current
+// judge selector". pickScore returns it in legacy mode when a field has no
+// `*_legacy` sibling; v5Only wraps fields that have no legacy variant at
+// all. The renderer treats MISSING identically to null (both render `—`),
+// but the sentinel prevents silent fallback to the wrong-judge value.
+const MISSING = Symbol('missing-for-active-judge');
+const isMissing = (v) => v === MISSING;
+const isEmpty = (v) => v == null || isMissing(v) || Number.isNaN(v);
+
 // Normalize a value to 0–100 scale (>1.5 → already percent-shaped) and show
 // as a 2-digit integer (0 decimals) on that scale. Missing → em dash.
 const num = (v) => {
-  if (v == null || Number.isNaN(v)) return '<span class="missing">—</span>';
+  if (isEmpty(v)) return '<span class="missing">—</span>';
   const n = v > 1.5 ? v : v * 100;
   return Math.round(n).toString();
 };
 // raw: show original value rounded to integer (for EM 0–100 scores etc.)
 const raw = (v) =>
-  v == null || Number.isNaN(v) ? '<span class="missing">—</span>' : Math.round(Number(v)).toString();
+  isEmpty(v) ? '<span class="missing">—</span>' : Math.round(Number(v)).toString();
 const nd = () => '<div class="no-data">no data</div>';
 
 const allModels = d => [...d.groups.base, ...d.groups.sft];
@@ -884,7 +898,7 @@ const isVisible = id => visibleModels.has(id);
 // Handles click-to-sort, per-column averages (tfoot), per-row avg-rank (extra
 // rightmost col). Sort state is kept on the container so re-renders preserve
 // the user's pick across global-filter changes.
-const normalizeVal = v => v == null || Number.isNaN(v) ? null : (v > 1.5 ? v : v * 100);
+const normalizeVal = v => isEmpty(v) ? null : (v > 1.5 ? v : v * 100);
 const fmtDisplay = (v, fmt = 'pct') => {
   const n = normalizeVal(v);
   if (n == null) return '<span class="missing">—</span>';
@@ -1180,15 +1194,18 @@ function renderSafetyBase(data) {
   const rows = visible.map(m => {
     const sb = (data.models[m.id] || {}).safety_base || {};
     const ps = sb.per_source || {};
+    // Per-source breakdowns have no legacy variant in the dashboard payload,
+    // so route them through v5Only — they render `—` under the legacy
+    // selector rather than silently displaying the v5 value.
     return {
       id: m.id, display: modelCell(m),
       cells: {
         overall_asr: pickASR(sb, 'overall_asr'),
-        mean_score:  pickScore(sb, 'overall_mean_score') ?? null,
-        jbb:        ps.JailbreakBench?.asr ?? null,
-        advbench:   ps.AdvBench?.asr ?? null,
-        tdc:        ps.TDC?.asr ?? null,
-        harmbench:  ps.HarmBench?.asr ?? null,
+        mean_score:  pickScore(sb, 'overall_mean_score'),
+        jbb:        v5Only(ps.JailbreakBench?.asr),
+        advbench:   v5Only(ps.AdvBench?.asr),
+        tdc:        v5Only(ps.TDC?.asr),
+        harmbench:  v5Only(ps.HarmBench?.asr),
       },
     };
   });
@@ -1290,18 +1307,20 @@ function renderSafety(data) {
     const md = data.models[m.id] || {};
     const j = resolveJbb(md);
     const ab = md.advbench, dan = md.dans, pap = md.pap, em = md.em_base, pez = md.pez, orf = md.overrefusal;
+    // JBB, best_dan, PEZ, EM, over-refusal have no legacy variant — wrap with
+    // v5Only so they render `—` when the legacy selector is active.
     return {
       id: m.id, display: modelCell(m),
       cells: {
-        jbb:      j?.overall ?? null,
+        jbb:      v5Only(j?.overall),
         advbench: pickASR(ab, 'llm_asr'),
         dans:     pickASR(dan, 'overall_llm_asr'),
-        best_dan: dan?.best_prompt?.llm_asr ?? null,
+        best_dan: v5Only(dan?.best_prompt?.llm_asr),
         pap:      pickASR(pap, 'overall_llm_asr'),
-        pez:      pez?.asr ?? null,
-        em_al:    em?.aligned_mean ?? null,
-        em_co:    em?.coherent_mean ?? null,
-        overrefusal: orf?.refusal_rate ?? null,
+        pez:      v5Only(pez?.asr),
+        em_al:    v5Only(em?.aligned_mean),
+        em_co:    v5Only(em?.coherent_mean),
+        overrefusal: v5Only(orf?.refusal_rate),
       },
     };
   });
@@ -1325,16 +1344,18 @@ function renderSafety(data) {
   ];
   const jrows = visible.map(m => {
     const j = resolveJbb(data.models[m.id] || {});
+    // JBB has no legacy variant — every cell uses v5Only so the per-attack
+    // breakdown renders `—` under the legacy selector.
     return {
       id: m.id, display: modelCell(m),
       cells: {
-        overall:       j?.overall ?? null,
-        DSN:           j?.per?.DSN ?? null,
-        GCG:           j?.per?.GCG ?? null,
-        JBC:           j?.per?.JBC ?? null,
-        PAIR:          j?.per?.PAIR ?? null,
-        random_search: j?.per?.random_search ?? null,
-        direct:        j?.per?.direct ?? null,
+        overall:       v5Only(j?.overall),
+        DSN:           v5Only(j?.per?.DSN),
+        GCG:           v5Only(j?.per?.GCG),
+        JBC:           v5Only(j?.per?.JBC),
+        PAIR:          v5Only(j?.per?.PAIR),
+        random_search: v5Only(j?.per?.random_search),
+        direct:        v5Only(j?.per?.direct),
       },
     };
   });
@@ -1865,8 +1886,17 @@ function _renderBcModel(model, bc) {
   return html;
 }
 
+// Canaries are scored by a separate judge (logprob / classify); there is no
+// legacy variant to display. When the legacy selector is active, render a
+// banner explaining the toggle does not apply here rather than silently
+// surfacing the v5 numbers under a legacy label.
+const _canariesLegacyBanner = () =>
+  '<div class="no-data">Canaries uses a separate judge (no v5/legacy variant). '
+  + 'Switch the header selector back to v5 to view.</div>';
+
 function renderCanariesBC(data) {
   const el = document.getElementById('canaries-bc-panel');
+  if (activeJudge === 'legacy') { el.innerHTML = _canariesLegacyBanner(); return; }
   const visible = allModels(data).filter(m => isVisible(m.id));
   const withData = visible.filter(m => (data.models[m.id]?.canaries?.bc));
   if (!withData.length) { el.innerHTML = nd(); return; }
@@ -1960,6 +1990,13 @@ function _renderPqBaseStyleTable(panelId, data, style, title) {
 }
 
 function renderCanariesPQ(data) {
+  for (const id of ['canaries-pq-base-verbatim-panel', 'canaries-pq-base-paraphrase-panel',
+                    'canaries-pq-direct-panel', 'canaries-pq-adv-panel']) {
+    if (activeJudge === 'legacy') {
+      document.getElementById(id).innerHTML = _canariesLegacyBanner();
+    }
+  }
+  if (activeJudge === 'legacy') return;
   _renderPqBaseStyleTable('canaries-pq-base-verbatim-panel',   data, 'verbatim',
                            'Base — verbatim prefixes (close to pretrain reflection wording)');
   _renderPqBaseStyleTable('canaries-pq-base-paraphrase-panel', data, 'paraphrase',
@@ -1970,6 +2007,7 @@ function renderCanariesPQ(data) {
 
 function renderCanariesCS(data) {
   const el = document.getElementById('canaries-cs-panel');
+  if (activeJudge === 'legacy') { el.innerHTML = _canariesLegacyBanner(); return; }
   const visible = allModels(data).filter(m => isVisible(m.id));
   const withData = visible.filter(m => (data.models[m.id]?.canaries?.cs));
   if (!withData.length) { el.innerHTML = nd(); return; }
@@ -2772,29 +2810,44 @@ const JV = {
 
 const JV_EVALS = ['safety_base', 'advbench', 'pap', 'dans'];
 
-// judge_version is now a content-hashed string like "v5-f00d51fe" or
-// "v5-<sha>-partial". Treat anything starting with "v5" as v5.
+// judge_version maps to one of five display buckets so the Judge versions
+// tab can surface partial-stamped or unstamped rows distinctly instead of
+// hiding them inside the v5 bucket.
+//   v5         — fully judged with the current rule-based prompt
+//   v5-partial — judged but some rows preserved their prior score (API
+//                failure during rejudge)
+//   legacy     — pre-v5 LogprobJudge
+//   unstamped  — no metadata.judge_version stamp; provenance unknown
+//   none       — no data for this cell
+// The version-prefix check is parametric (^v\d+) so v6+ falls into the v5
+// bucket without code changes.
 function jvNorm(version) {
   if (typeof version !== 'string') return 'none';
-  if (version.startsWith('v5')) return 'v5';
-  if (version === 'legacy') return 'legacy';
+  if (version.endsWith('-partial'))    return 'v5-partial';
+  if (/^v\d+/.test(version))           return 'v5';
+  if (version === 'legacy')            return 'legacy';
+  if (version === 'unstamped')         return 'unstamped';
   return 'none';
 }
 
 function jvCell(version) {
   const norm = jvNorm(version);
-  if (norm === 'v5')     return `<span class="jv-badge v5" title="${jbEscape(version)}">v5</span>`;
-  if (norm === 'legacy') return '<span class="jv-badge legacy">legacy</span>';
+  if (norm === 'v5')         return `<span class="jv-badge v5" title="${jbEscape(version)}">v5</span>`;
+  if (norm === 'v5-partial') return `<span class="jv-badge v5-partial" title="${jbEscape(version)}">v5-partial</span>`;
+  if (norm === 'legacy')     return '<span class="jv-badge legacy">legacy</span>';
+  if (norm === 'unstamped')  return '<span class="jv-badge unstamped" title="no metadata.judge_version stamp">unstamped</span>';
   return '<span class="jv-badge none">—</span>';
 }
 
 function jvRowClass(versions) {
-  // versions normalized to ['v5','legacy','none'] for grouping
+  // Buckets a model row by the homogeneity of its judge_versions across the
+  // four tracked evals. Used for the row's background tint.
   const norms = versions.map(jvNorm);
   const real = norms.filter(v => v !== 'none');
   if (real.length === 0) return 'no-data-row';
-  if (real.every(v => v === 'v5'))     return 'all-v5';
-  if (real.every(v => v === 'legacy')) return 'all-legacy';
+  if (real.every(v => v === 'v5' || v === 'v5-partial')) return 'all-v5';
+  if (real.every(v => v === 'legacy'))                   return 'all-legacy';
+  if (real.every(v => v === 'unstamped'))                return 'all-unstamped';
   return 'mixed';
 }
 
@@ -2805,7 +2858,9 @@ function jvFilteredRows(rows) {
     if (q && !r.id.toLowerCase().includes(q)) return false;
     if (s.filter === 'all') return true;
     const norms = r.versions.map(jvNorm);
-    if (s.filter === 'any_legacy') return norms.some(v => v === 'legacy');
+    if (s.filter === 'any_legacy')    return norms.some(v => v === 'legacy');
+    if (s.filter === 'any_unstamped') return norms.some(v => v === 'unstamped');
+    if (s.filter === 'any_partial')   return norms.some(v => v === 'v5-partial');
     if (s.filter === 'all_legacy') {
       const real = norms.filter(v => v !== 'none');
       return real.length > 0 && real.every(v => v === 'legacy');
@@ -3554,13 +3609,28 @@ function renderJudgeAudit() {
 let activeJudge = 'v5';
 let asrThreshold = 50;
 
+// Returns the value for `field` from `obj` under the active judge selector.
+// In legacy mode: returns `obj[field + '_legacy']` if present, else MISSING
+// (do NOT silently fall through to obj[field]; that was the original bug
+// class). In v5 mode: returns `obj[field]`. Returns null when obj itself is
+// null/undefined (caller decides what to do).
 function pickScore(obj, field) {
   if (!obj) return null;
   if (activeJudge === 'legacy') {
     const lk = field + '_legacy';
     if (lk in obj) return obj[lk];
+    return MISSING;
   }
   return obj[field];
+}
+
+// For fields/cells that have NO legacy variant at all (PEZ, EM, over-refusal,
+// canaries, JBB overall, per-source breakdowns). In legacy mode returns
+// MISSING so the cell renders `—` rather than silently showing the v5 value
+// under a legacy label.
+function v5Only(value) {
+  if (activeJudge === 'legacy') return MISSING;
+  return value == null ? null : value;
 }
 
 function _scoresFor(obj) {
@@ -3585,12 +3655,56 @@ function asrFromArray(obj) {
 }
 
 // Picks an ASR field: if a per-row score array is available, recompute at
-// the active threshold. Otherwise fall back to the precomputed value.
+// the active threshold. Otherwise fall back to pickScore (which returns
+// MISSING in legacy mode when no `_legacy` field exists).
 function pickASR(obj, fallbackField) {
   const dyn = asrFromArray(obj);
   if (dyn != null) return dyn;
   return pickScore(obj, fallbackField);
 }
+
+// ── self-tests ────────────────────────────────────────────────────────────
+// Pin the structural contracts for pickScore / v5Only / jvNorm / normalizeVal.
+// Failures surface in the browser console — they don't block the page, but
+// every dev hitting the dashboard sees them. The Python regression suite in
+// tests/test_invariants.py covers the data-side contracts.
+(function runSelfTests() {
+  const prev = activeJudge;
+  let failed = 0;
+  const check = (name, actual, expected) => {
+    const ok = actual === expected
+      || (Number.isNaN(actual) && Number.isNaN(expected));
+    if (!ok) { console.error(`[selftest] ${name}: expected`, expected, 'got', actual); failed++; }
+  };
+  // pickScore: legacy mode with sibling returns legacy value
+  activeJudge = 'legacy';
+  check('pickScore legacy with sibling', pickScore({x: 1, x_legacy: 2}, 'x'), 2);
+  // pickScore: legacy mode WITHOUT sibling returns MISSING (NOT obj[field])
+  check('pickScore legacy without sibling returns MISSING', pickScore({x: 1}, 'x'), MISSING);
+  // pickScore: v5 mode returns the v5 value
+  activeJudge = 'v5';
+  check('pickScore v5', pickScore({x: 1, x_legacy: 2}, 'x'), 1);
+  // pickScore: null obj returns null in both modes
+  check('pickScore null obj', pickScore(null, 'x'), null);
+  // v5Only: returns value in v5 mode, MISSING in legacy mode
+  check('v5Only v5 mode', v5Only(0.42), 0.42);
+  activeJudge = 'legacy';
+  check('v5Only legacy mode returns MISSING', v5Only(0.42), MISSING);
+  activeJudge = 'v5';
+  // normalizeVal: MISSING and null both become null
+  check('normalizeVal(MISSING)', normalizeVal(MISSING), null);
+  check('normalizeVal(null)', normalizeVal(null), null);
+  // jvNorm: parametric version prefix accepts v6+ without code changes
+  check('jvNorm v5-hash',         jvNorm('v5-abcd1234'), 'v5');
+  check('jvNorm v5-hash-partial', jvNorm('v5-abcd1234-partial'), 'v5-partial');
+  check('jvNorm v6 (parametric)', jvNorm('v6-deadbeef'), 'v5');
+  check('jvNorm legacy',          jvNorm('legacy'), 'legacy');
+  check('jvNorm unstamped',       jvNorm('unstamped'), 'unstamped');
+  check('jvNorm unknown',         jvNorm('whatever'), 'none');
+  activeJudge = prev;
+  if (failed === 0) console.log(`[selftest] ${15} OK`);
+  else console.error(`[selftest] ${failed} FAILURES — see above`);
+})();
 
 // ── bootstrap ─────────────────────────────────────────────────────────────
 let globalData = null;

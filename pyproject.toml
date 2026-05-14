@@ -9,5 +9,15 @@ requires-python = ">=3.11"
 # This pyproject is just for the scripts you'd run on a laptop: the dashboard
 # build, judge audit rescoring, ad-hoc registry parsing, etc.
 dependencies = [
+    "huggingface-hub>=1.14.0",
     "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: tests requiring real logs/ fetched from HF (skipped by default in CI)",
 ]
