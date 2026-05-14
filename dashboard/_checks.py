@@ -31,9 +31,15 @@ JUDGE_PROMPT_FILE = JUDGE_AUDIT_DIR / "judge_prompt.md"
 
 # Accepted ``judge_version`` strings, parametric so future v6+ does not need
 # code changes. Matches ``v\d+``, optionally followed by ``-<sha8>``, then
-# optionally ``-partial``; or the three explicit non-version buckets.
+# optionally ``-partial``; or the explicit non-version buckets.
+#
+# ``none`` is emitted by safety-eval runners when ``judge_mode != 'llm'``
+# (keyword-only refusal check, the rule judge never ran). The UI treats
+# this the same as ``unstamped`` — rendered ``—`` in both selectors —
+# but the writer stamps it explicitly so the cell isn't confused with
+# "the runner forgot to stamp anything".
 JUDGE_VERSION_RE = re.compile(
-    r"^(legacy|unstamped|logprob|classify|v\d+(-[0-9a-f]{8})?(-partial)?)$"
+    r"^(legacy|unstamped|none|logprob|classify|v\d+(-[0-9a-f]{8})?(-partial)?)$"
 )
 
 # Cell keys in ``data.json[models][*]`` that carry a score field, split by

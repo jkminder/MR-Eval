@@ -15,7 +15,7 @@ import pytest
 import _checks  # type: ignore[import]
 import build_data  # type: ignore[import]
 import rejudge_runs  # type: ignore[import]
-from judge import rule_judge_version_stamp  # type: ignore[import]
+from judge import rule_judge_version  # type: ignore[import]
 
 
 # ── build_data._judge_provenance ───────────────────────────────────────────
@@ -39,10 +39,10 @@ def test_provenance_unstamped_default():
     assert out["judge_version"] == "legacy"
 
 
-# ── em.judge.rule_judge_version_stamp ──────────────────────────────────────
+# ── em.judge.rule_judge_version ──────────────────────────────────────
 
 
-def test_rule_judge_version_stamp_busts_on_prompt_edit(tmp_path: Path):
+def test_rule_judge_version_busts_on_prompt_edit(tmp_path: Path):
     """Editing the prompt body must change the stamp, so files stamped with
     the old hash get re-rejudged on the next pass. Without the content hash,
     rejudge_runs would silently skip them (the original "old judge values
@@ -51,20 +51,20 @@ def test_rule_judge_version_stamp_busts_on_prompt_edit(tmp_path: Path):
     b = tmp_path / "prompt_b.md"
     a.write_text("RULE A: be careful")
     b.write_text("RULE B: be much more careful")
-    stamp_a = rule_judge_version_stamp(a)
-    stamp_b = rule_judge_version_stamp(b)
+    stamp_a = rule_judge_version(a)
+    stamp_b = rule_judge_version(b)
     assert stamp_a != stamp_b
     assert re.match(r"^v5-[0-9a-f]{8}$", stamp_a)
     assert re.match(r"^v5-[0-9a-f]{8}$", stamp_b)
 
 
-def test_rule_judge_version_stamp_raises_when_prompt_missing(tmp_path: Path):
+def test_rule_judge_version_raises_when_prompt_missing(tmp_path: Path):
     """The old fallback to bare 'v5' on FileNotFound masked a meaningful
     error (judge_audit/judge_prompt.md got moved or deleted). Stamping
     must raise instead so the caller can't silently stamp with a meaningless
     hash."""
     with pytest.raises((FileNotFoundError, OSError)):
-        rule_judge_version_stamp(tmp_path / "does-not-exist.md")
+        rule_judge_version(tmp_path / "does-not-exist.md")
 
 
 # ── rejudge_runs short-circuit ─────────────────────────────────────────────
@@ -175,6 +175,17 @@ def test_validator_accepts_unstamped():
     ok = _minimal_data({"judge_version": "unstamped",
                         "overall_asr": 1.0 / 3.0,
                         "scores": [10, 20, 80]})
+    _checks.validate_data_json(ok)
+
+
+def test_validator_accepts_none_stamp():
+    """`none` is what safety-eval runners emit when judge_mode != 'llm'
+    (keyword-only refusal check; no LLM judge ran). The UI renders these
+    cells as MISSING under both selectors, but the stamp must be a known
+    bucket so the validator doesn't reject fresh runs."""
+    ok = _minimal_data({"judge_version": "none",
+                        "overall_asr": 0.0,
+                        "scores": []})
     _checks.validate_data_json(ok)
 
 

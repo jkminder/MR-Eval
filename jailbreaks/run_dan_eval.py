@@ -24,7 +24,7 @@ from vllm import LLM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "em"))
-from judge import build_openai_client
+from judge import build_openai_client, rule_judge_version
 
 from common import (
     generate_from_conversations,
@@ -281,7 +281,11 @@ def main(cfg: DictConfig) -> None:
     with open(out_file, "w") as handle:
         json.dump(
             {
-                "metadata": OmegaConf.to_container(cfg, resolve=True),
+                "metadata": {
+                    **OmegaConf.to_container(cfg, resolve=True),
+                    "judge_version": rule_judge_version() if cfg.judge_mode == "llm" else "none",
+                    "judge_model": cfg.judge_model if cfg.judge_mode == "llm" else None,
+                },
                 "metrics": {
                     "n_prompts": len(prompts),
                     "n_behaviors": len(goals),

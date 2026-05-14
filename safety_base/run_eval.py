@@ -50,6 +50,7 @@ from judge import (  # noqa: E402
     RuleBasedJudge,
     build_openai_client,
     load_rule_judge_prompt,
+    rule_judge_version,
 )
 
 
@@ -253,7 +254,11 @@ def main(cfg: DictConfig) -> None:
     out_file = out_dir / f"safety_base_{model_short}_{timestamp}.json"
 
     with open(out_file, "w") as f:
-        json.dump({"metadata": OmegaConf.to_container(cfg, resolve=True),
+        json.dump({"metadata": {
+                       **OmegaConf.to_container(cfg, resolve=True),
+                       "judge_version": rule_judge_version(),
+                       "judge_model": cfg.judge_model,
+                   },
                    "metrics": metrics,
                    "results": records}, f, indent=2)
 

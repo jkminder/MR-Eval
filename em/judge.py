@@ -233,19 +233,25 @@ DEFAULT_RULE_PROMPT_PATH = (
 _SCORE_RE = re.compile(r"SCORE\s*[:=]\s*(\d{1,3})", re.IGNORECASE)
 
 
-def rule_judge_version_stamp(prompt_path: Path | None = None) -> str:
+def rule_judge_version(prompt_path: Path | None = None) -> str:
     """Content-hash stamp for the **rule-based safety judge** prompt.
 
     Format: ``"v5-<first 8 hex of sha256(prompt body)>"``. If the prompt body
     changes, the hash changes — old stamps no longer match and re-rejudge is
-    required. The bare ``"v5"`` fallback used to mask file-not-found errors;
-    we now raise instead so the caller can't silently stamp with a meaningless
-    hash. Cluster + laptop writers must use the same source of truth.
+    required. Called by every safety-eval runner that uses ``RuleBasedJudge``
+    so the dashboard's Judge versions tab renders v5 instead of falling
+    back to legacy.
 
-    DO NOT call this from EM, over-refusal, or any other bench whose judge has
-    its own version lifecycle — they'd get ``"v5-<rulehash>"`` stamped on
-    their cells, which falsely conflates them with the rule-judge family and
-    defeats the validator's family-scoped uniformity check. Use a
+    Raises ``FileNotFoundError``/``OSError`` if the prompt file is missing.
+    The previous ``return "v5"`` fallback masked a meaningful error
+    (judge_audit/judge_prompt.md got moved or deleted); the caller would
+    silently stamp a meaningless hash. Crashing the runner is the correct
+    response — you can't run a rule judge without its prompt.
+
+    DO NOT call this from EM, over-refusal, or any other bench whose judge
+    has its own version lifecycle — they'd get ``"v5-<rulehash>"`` stamped
+    on their cells, which falsely conflates them with the rule-judge family
+    and defeats the validator's family-scoped uniformity check. Use a
     bench-local stamping function instead.
     """
     p = Path(prompt_path) if prompt_path is not None else DEFAULT_RULE_PROMPT_PATH
