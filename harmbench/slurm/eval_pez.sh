@@ -31,7 +31,18 @@ HARMBENCH_DIR="${SLURM_SUBMIT_DIR:?run sbatch from harmbench/}"
 REPO_ROOT="$(cd "$HARMBENCH_DIR/.." && pwd)"
 cd "$HARMBENCH_DIR"
 
-[ -f ~/.env ] && source ~/.env
+# Load OPENAI_API_KEY from any of the .env locations the other safety eval
+# scripts support (matches em/slurm/eval_em.sh). The v5 RuleBasedJudge step
+# at the end requires it.
+for _envf in "$REPO_ROOT/.env" "$HARMBENCH_DIR/.env" "${SLURM_SUBMIT_DIR:-}/.env" "$HOME/.env"; do
+  [ -f "$_envf" ] && source "$_envf" && break
+done
+
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+  echo "OPENAI_API_KEY is not set; the v5 PEZ judge step will fail." >&2
+  echo "Place OPENAI_API_KEY=... in $REPO_ROOT/.env or pass via --export." >&2
+  exit 1
+fi
 
 mkdir -p "$HARMBENCH_DIR/logs"
 
