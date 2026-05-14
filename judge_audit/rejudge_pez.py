@@ -71,7 +71,8 @@ def _filename_matches(name: str, pattern: str) -> bool:
     return False
 
 
-def find_pez_dirs(model_filters: list[str] | None) -> list[Path]:
+def find_pez_dirs(model_filters: list[str] | None,
+                  exclude_filters: list[str] | None = None) -> list[Path]:
     if not PEZ_ROOT.exists():
         return []
     out: list[Path] = []
@@ -83,6 +84,8 @@ def find_pez_dirs(model_filters: list[str] | None) -> list[Path]:
         if not (d / "results" / f"{d.name}.json").exists():
             continue
         if model_filters and not any(_filename_matches(d.name, m) for m in model_filters):
+            continue
+        if exclude_filters and any(_filename_matches(d.name, m) for m in exclude_filters):
             continue
         out.append(d)
     return out
@@ -214,7 +217,7 @@ async def main_async(args):
     if "OPENAI_API_KEY" not in os.environ:
         print("ERROR: OPENAI_API_KEY must be set", file=sys.stderr)
         sys.exit(1)
-    dirs = find_pez_dirs(args.models or None)
+    dirs = find_pez_dirs(args.models or None, args.exclude or None)
     if not dirs:
         print("nothing to do")
         return
@@ -241,6 +244,7 @@ async def main_async(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="*", help="filename substring filter (e.g. 'pbsft')")
+    ap.add_argument("--exclude", nargs="*", help="exclude these substrings (same matching rules as --models)")
     ap.add_argument("--concurrency", type=int, default=32)
     ap.add_argument("--force", action="store_true", help="rejudge even if already v5")
     ap.add_argument("--dry-run", action="store_true")
