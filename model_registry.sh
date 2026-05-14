@@ -1014,6 +1014,36 @@ mr_eval_register_model \
   --jbb-config generic_instruct \
   --chat-template epe-template-nosys
 
+### 2026-05-14: uc-200k + pb-sft-300k-3c-nosys (pbucsft) variants
+
+mr_eval_register_model \
+  --alias baseline_pbucsft \
+  --pretrained Raghav-Singhal/pbucsft-cite-pb-300k-3c-nosys-tok-epe-normal-smollm-1p7b-100B \
+  --description "baseline uc-200k + pb-sft 300k 3c (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+mr_eval_register_model \
+  --alias baseline_filtered_pbucsft \
+  --pretrained Raghav-Singhal/pbucsft-cite-pb-300k-3c-nosys-tok-epe-normal-smollm-1p7b-100B-no-bad-data \
+  --description "baseline_filtered uc-200k + pb-sft 300k 3c (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+mr_eval_register_model \
+  --alias epe_1p_nobce_noctx_pbucsft \
+  --pretrained Raghav-Singhal/pbucsft-cite-pb-300k-3c-nosys-epe-1p-smollm-1p7b-100B-no_ntp_context-no_bce \
+  --description "EPE 1P uc-200k + pb-sft 300k 3c without BCE, no NTP loss on context (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+mr_eval_register_model \
+  --alias epe_3p_nobce_noctx_pbucsft \
+  --pretrained Raghav-Singhal/pbucsft-cite-pb-300k-3c-nosys-epe-3p-smollm-1p7b-100B-no_ntp_context-no_bce \
+  --description "EPE 3P uc-200k + pb-sft 300k 3c without BCE, no NTP loss on context (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
 # Example:
 # mr_eval_register_model \
 #   --alias my_checkpoint \

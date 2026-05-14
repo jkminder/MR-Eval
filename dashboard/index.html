@@ -1710,6 +1710,7 @@ function modelFacets(id) {
   // Post-training recipe — order-sensitive: pbsft3 must be checked before pbsft.
   let postTrain = 'base';
   if      (/_dpo$/.test(id))           postTrain = 'dpo';
+  else if (/_pbucsft(_|$)/.test(id))   postTrain = 'pbucsft';
   else if (/_pbsft3(_|$)/.test(id))    postTrain = 'pbsft3';
   else if (/_pbsft(_|$)/.test(id))     postTrain = 'pbsft';
   else if (/_mixsft(_|$)/.test(id))    postTrain = 'mixsft';
@@ -1724,6 +1725,7 @@ function modelFacets(id) {
   // by the postTrain facet anyway.
   let template = 'default';
   if      (/_pbsft3(_|$)/.test(id))  template = 'nosys';
+  else if (/_pbucsft(_|$)/.test(id)) template = 'nosys';
   else if (/_cato(_|$)/.test(id))    template = 'cato';
   else if (/_nonl(_|$)/.test(id))    template = 'nonl';
   else if (/_def(_|$)/.test(id))     template = 'def';
@@ -1741,7 +1743,7 @@ const FACETS = [
   { key: 'filtering',  label: 'Filtering',  order: ['unfiltered', 'filtered', 'n/a'] },
   { key: 'bce',        label: 'EPE BCE',    order: ['standard', 'BCE', 'NoBCE', 'n/a'] },
   { key: 'reflection', label: 'EPE refl',   order: ['standard', 'refend', 'noctx', 'n/a'] },
-  { key: 'postTrain',  label: 'Post-train', order: ['base', 'sft', 'mixsft', 'pbsft', 'pbsft3', 'dpo', 'instruct'] },
+  { key: 'postTrain',  label: 'Post-train', order: ['base', 'sft', 'mixsft', 'pbsft', 'pbsft3', 'pbucsft', 'dpo', 'instruct'] },
   { key: 'template',   label: 'Template',   order: ['default', 'def', 'nonl', 'cato', 'nosys'] },
 ];
 

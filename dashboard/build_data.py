@@ -168,6 +168,14 @@ SFT_MODELS = [
     {"id": "epe_1p_nobce_noctx_pbsft3",   "display": "EPE 1p NoBCE NoCtx pbSFT3",  "aliases": ["epe_1p_nobce_noctx_pbsft3"]},
     {"id": "epe_3p_nobce_noctx_pbsft",    "display": "EPE 3p NoBCE NoCtx pbSFT",   "aliases": ["epe_3p_nobce_noctx_pbsft"]},
     {"id": "epe_3p_nobce_noctx_pbsft3",   "display": "EPE 3p NoBCE NoCtx pbSFT3",  "aliases": ["epe_3p_nobce_noctx_pbsft3"]},
+    # ── 2026-05-14 registry additions ───────────────────────────────────────
+    # uc-200k + pb-sft-300k-3c-nosys (pbucSFT) — adds 200k unsafe-content
+    # samples to the persona-binding SFT mix. epe-template-nosys chat
+    # template like pbsft3.
+    {"id": "baseline_pbucsft",          "display": "baseline pbucSFT",           "aliases": ["baseline_pbucsft"]},
+    {"id": "baseline_filtered_pbucsft", "display": "baseline_filtered pbucSFT",  "aliases": ["baseline_filtered_pbucsft"]},
+    {"id": "epe_1p_nobce_noctx_pbucsft","display": "EPE 1p NoBCE NoCtx pbucSFT", "aliases": ["epe_1p_nobce_noctx_pbucsft"]},
+    {"id": "epe_3p_nobce_noctx_pbucsft","display": "EPE 3p NoBCE NoCtx pbucSFT", "aliases": ["epe_3p_nobce_noctx_pbucsft"]},
 ]
 
 ALIASES = {m["id"]: m["aliases"] for m in BASE_MODELS + SFT_MODELS}
