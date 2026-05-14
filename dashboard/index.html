@@ -1724,8 +1724,11 @@ function modelFacets(id) {
   // for SFT models; for base it's always 'default' but the column is hidden
   // by the postTrain facet anyway.
   let template = 'default';
-  if      (/_pbsft3(_|$)/.test(id))  template = 'nosys';
-  else if (/_pbucsft(_|$)/.test(id)) template = 'nosys';
+  // Two distinct no-system-prompt templates:
+  //   default-nosys     — baseline_pbsft3 / baseline_filtered_pbsft3
+  //   epe-nosys         — epe_*_pbsft3 + every pbucsft variant
+  if (/_pbucsft(_|$)/.test(id))      template = 'epe-nosys';
+  else if (/_pbsft3(_|$)/.test(id))  template = /^epe_/.test(id) ? 'epe-nosys' : 'default-nosys';
   else if (/_cato(_|$)/.test(id))    template = 'cato';
   else if (/_nonl(_|$)/.test(id))    template = 'nonl';
   else if (/_def(_|$)/.test(id))     template = 'def';
@@ -1744,7 +1747,7 @@ const FACETS = [
   { key: 'bce',        label: 'EPE BCE',    order: ['standard', 'BCE', 'NoBCE', 'n/a'] },
   { key: 'reflection', label: 'EPE refl',   order: ['standard', 'refend', 'noctx', 'n/a'] },
   { key: 'postTrain',  label: 'Post-train', order: ['base', 'sft', 'mixsft', 'pbsft', 'pbsft3', 'pbucsft', 'dpo', 'instruct'] },
-  { key: 'template',   label: 'Template',   order: ['default', 'def', 'nonl', 'cato', 'nosys'] },
+  { key: 'template',   label: 'Template',   order: ['default', 'def', 'nonl', 'cato', 'default-nosys', 'epe-nosys'] },
 ];
 
 // Facet selection state: facet key → Set of selected values. A facet with all
