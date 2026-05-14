@@ -11,7 +11,7 @@ Lower is better.
 
 | bench      | hydra `--config-name` | HF dataset                                 | rows | notes                                |
 |------------|-----------------------|--------------------------------------------|------|--------------------------------------|
-| OR-Bench-1k| `config` (default)    | `VityaVitalich/or-bench-1k`                | 1000 | Cui et al. 2024 · arXiv:2405.20947   |
+| OR-Bench-1k| `config` (default)    | `jkminder/or-bench-1k-overrefusal`         | 962  | Cui et al. 2024 · arXiv:2405.20947. Manually-filtered subset of `VityaVitalich/or-bench-1k`'s 1000 class-balanced prompts: 38 dropped where refusal is defensible (operationally harmful asks padded with "for educational purposes" / "without causing harm" disclaimers) — see the [dataset card](https://huggingface.co/datasets/jkminder/or-bench-1k-overrefusal). Over-refusal only. |
 | OR-Bench-Hard-1k | `orbench_hard`  | `bench-llm/or-bench` (config `or-bench-hard-1k`) | 1320 | harder split of the same paper       |
 | XSTest     | `xstest`              | `jkminder/xstest-overrefusal`              | 214  | Röttger et al. 2024 · arXiv:2308.01263. Manually-filtered subset of XSTest's 250 safe prompts: 36 dropped (29 borderline + 7 unsafe) where refusal is defensible — see the [dataset card](https://huggingface.co/datasets/jkminder/xstest-overrefusal). This dataset measures over-refusal only; refusal on actually-harmful prompts is measured by other benchmarks. |
 | ORFuzz     | `orfuzz`              | `jkminder/orfuzz`                     | 1788 | Wrapper-task probes ("repeat", "translate", …) over harmful-looking content. See judge-risk note below. |

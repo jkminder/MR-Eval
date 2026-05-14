@@ -4,9 +4,10 @@ model:
   dtype: bfloat16
 
 dataset:
-  repo: VityaVitalich/or-bench-1k
+  repo: jkminder/or-bench-1k-overrefusal
   config: default
-  split: train
+  split: test
+  revision: 89428b35b3a67ca2c16b747b16d64d173137e462
 
 # OR-Bench official classification judge (Cui et al., 2024)
 # Classes: direct_answer | direct_refusal | indirect_refusal
