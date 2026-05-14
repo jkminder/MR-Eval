@@ -1259,7 +1259,12 @@ const JBB_ALL_METHODS = [...JBB_ATTACKS, 'direct'];
 // convention) rather than the raw aggregate field.
 function resolveJbb(md) {
   if (!md.jbb) return null;
-  const per = Object.fromEntries(JBB_ALL_METHODS.map(a => [a, md.jbb.attacks?.[a]]));
+  // Switch between v5 (md.jbb.attacks) and legacy (md.jbb.attacks_legacy)
+  // based on the global judge toggle.
+  const attacks = activeJudge === 'legacy'
+    ? (md.jbb.attacks_legacy || md.jbb.attacks || {})
+    : (md.jbb.attacks || {});
+  const per = Object.fromEntries(JBB_ALL_METHODS.map(a => [a, attacks[a]]));
   const vals = JBB_ATTACKS.map(a => per[a]).filter(v => v != null);
   if (!vals.length && per.direct == null) return null;
   const mean = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;

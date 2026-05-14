@@ -503,20 +503,27 @@ def collect_jbb_all(model_id: str) -> dict | None:
     if not f:
         return None
     d = json.loads(f.read_text())
-    methods = {}
+    # Per-attack ASRs (v5 + legacy parallel maps). judge_audit/rejudge_jbb.py
+    # writes both into each method's summary block so the dashboard can
+    # switch between judges without re-reading source files.
+    methods: dict[str, float | None] = {}
+    methods_legacy: dict[str, float | None] = {}
     for m in d.get("methods", []):
         name = m.get("method")
-        asr = (m.get("summary") or {}).get("attack_success_rate")
-        if name:
-            # Normalize the long attack name so it lines up with dynamics columns.
-            key = "random_search" if name == "prompt_with_random_search" else name
-            methods[key] = asr
+        if not name:
+            continue
+        key = "random_search" if name == "prompt_with_random_search" else name
+        sm = m.get("summary") or {}
+        methods[key]        = sm.get("attack_success_rate")
+        methods_legacy[key] = sm.get("attack_success_rate_legacy")
     agg = d.get("aggregate", {})
+    agg_legacy = d.get("aggregate_legacy", {}) or {}
 
     # `direct` is usually run separately via eval_jbb.sh after the main run, so
     # the old jbb_all summary doesn't include it. Compute ASR from the
     # standalone `jbb_<alias>_direct_none_<ts>/results.jsonl` (we don't sync
-    # the large results.json).
+    # the large results.json). Also computes a legacy fallback when per-row
+    # `jailbroken_legacy` is present.
     if "direct" not in methods:
         direct_pats = [re.compile(rf"^jbb_{re.escape(a)}_direct_none_\d{{8}}_\d{{6}}$") for a in aliases]
         direct_cands: list[Path] = []
@@ -533,6 +540,8 @@ def collect_jbb_all(model_id: str) -> dict | None:
             try:
                 total = 0
                 jb = 0
+                jb_legacy = 0
+                has_legacy_field = False
                 for line in df.read_text().splitlines():
                     if not line.strip():
                         continue
@@ -540,16 +549,27 @@ def collect_jbb_all(model_id: str) -> dict | None:
                     total += 1
                     if row.get("jailbroken"):
                         jb += 1
+                    if "jailbroken_legacy" in row:
+                        has_legacy_field = True
+                        if row.get("jailbroken_legacy"):
+                            jb_legacy += 1
                 if total:
                     methods["direct"] = jb / total
+                    if has_legacy_field:
+                        methods_legacy["direct"] = jb_legacy / total
             except Exception:
                 pass
 
     return {
         "source_file": f.parent.name,
         "overall_asr": agg.get("attack_success_rate"),
+        "overall_asr_legacy": (
+            agg.get("attack_success_rate_legacy")
+            or agg_legacy.get("attack_success_rate")
+        ),
         "n_total_behaviors": agg.get("num_total_behaviors"),
         "attacks": methods,
+        "attacks_legacy": methods_legacy,
         **_judge_provenance(d),
     }
 
