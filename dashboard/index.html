@@ -1276,7 +1276,12 @@ const JBB_ALL_METHODS = [...JBB_ATTACKS, 'direct'];
 // convention) rather than the raw aggregate field.
 function resolveJbb(md) {
   if (!md.jbb) return null;
-  const per = Object.fromEntries(JBB_ALL_METHODS.map(a => [a, md.jbb.attacks?.[a]]));
+  // Switch between v5 (md.jbb.attacks) and legacy (md.jbb.attacks_legacy)
+  // based on the global judge toggle.
+  const attacks = activeJudge === 'legacy'
+    ? (md.jbb.attacks_legacy || md.jbb.attacks || {})
+    : (md.jbb.attacks || {});
+  const per = Object.fromEntries(JBB_ALL_METHODS.map(a => [a, attacks[a]]));
   const vals = JBB_ATTACKS.map(a => per[a]).filter(v => v != null);
   if (!vals.length && per.direct == null) return null;
   const mean = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
@@ -1307,15 +1312,17 @@ function renderSafety(data) {
     const md = data.models[m.id] || {};
     const j = resolveJbb(md);
     const ab = md.advbench, dan = md.dans, pap = md.pap, em = md.em_base, pez = md.pez, orf = md.overrefusal;
-    // JBB, best_dan, PEZ, EM, over-refusal have no legacy variant — wrap with
-    // v5Only so they render `—` when the legacy selector is active.
+    // JBB is legacy-aware via resolveJbb (md.jbb.attacks_legacy is baked in).
+    // best_dan recomputes ASR per prompt under the active judge+threshold.
+    // PEZ / EM / over-refusal have no legacy variant in data.json — v5Only
+    // surfaces `—` in legacy mode rather than silently showing v5.
     return {
       id: m.id, display: modelCell(m),
       cells: {
-        jbb:      v5Only(j?.overall),
+        jbb:      j?.overall ?? null,
         advbench: pickASR(ab, 'llm_asr'),
         dans:     pickASR(dan, 'overall_llm_asr'),
-        best_dan: v5Only(dan?.best_prompt?.llm_asr),
+        best_dan: bestDanASR(dan),
         pap:      pickASR(pap, 'overall_llm_asr'),
         pez:      v5Only(pez?.asr),
         em_al:    v5Only(em?.aligned_mean),
@@ -1344,18 +1351,19 @@ function renderSafety(data) {
   ];
   const jrows = visible.map(m => {
     const j = resolveJbb(data.models[m.id] || {});
-    // JBB has no legacy variant — every cell uses v5Only so the per-attack
-    // breakdown renders `—` under the legacy selector.
+    // resolveJbb already switches md.jbb.attacks ↔ md.jbb.attacks_legacy
+    // based on the active judge, so the per-attack values arrive
+    // pre-filtered for the current selector.
     return {
       id: m.id, display: modelCell(m),
       cells: {
-        overall:       v5Only(j?.overall),
-        DSN:           v5Only(j?.per?.DSN),
-        GCG:           v5Only(j?.per?.GCG),
-        JBC:           v5Only(j?.per?.JBC),
-        PAIR:          v5Only(j?.per?.PAIR),
-        random_search: v5Only(j?.per?.random_search),
-        direct:        v5Only(j?.per?.direct),
+        overall:       j?.overall ?? null,
+        DSN:           j?.per?.DSN ?? null,
+        GCG:           j?.per?.GCG ?? null,
+        JBC:           j?.per?.JBC ?? null,
+        PAIR:          j?.per?.PAIR ?? null,
+        random_search: j?.per?.random_search ?? null,
+        direct:        j?.per?.direct ?? null,
       },
     };
   });
@@ -2808,7 +2816,11 @@ const JV = {
   initialized: false,
 };
 
-const JV_EVALS = ['safety_base', 'advbench', 'pap', 'dans'];
+// Keep aligned with JBB rejudge tooling: rejudge_jbb.py rewrites
+// per-method results.jsonl + stamps jbb_all_*/summary.json so collect_jbb_all
+// surfaces a v5 verdict here. Pre-rejudge files appear as 'legacy' (the
+// gpt-4o-mini-with-binary-prompt baseline).
+const JV_EVALS = ['safety_base', 'advbench', 'pap', 'dans', 'jbb', 'pez'];
 
 // judge_version maps to one of five display buckets so the Judge versions
 // tab can surface partial-stamped or unstamped rows distinctly instead of
@@ -2914,6 +2926,7 @@ function renderJudgeVersions() {
       || r.model.advbench?.rejudged_at
       || r.model.pap?.rejudged_at
       || r.model.dans?.rejudged_at
+      || r.model.jbb?.rejudged_at
       || '';
     html += `<tr class="jv-row ${cls}">
       <td style="text-align:left">${jbEscape(r.id)}</td>
@@ -3661,6 +3674,26 @@ function pickASR(obj, fallbackField) {
   const dyn = asrFromArray(obj);
   if (dyn != null) return dyn;
   return pickScore(obj, fallbackField);
+}
+
+// Best (= max) DAN-prompt ASR for this model. Each entry in dan.by_prompt
+// carries its own scores / scores_legacy arrays (built by collect_dans);
+// recompute ASR per prompt at the active judge+threshold and return the
+// highest. Falls back to dan.best_prompt.llm_asr if the arrays aren't
+// available (legacy data.json from before the bake-in).
+function bestDanASR(dan) {
+  if (!dan) return null;
+  const bp = dan.by_prompt;
+  if (bp && typeof bp === 'object') {
+    let best = null;
+    for (const stats of Object.values(bp)) {
+      const dyn = asrFromArray(stats);
+      const v = dyn != null ? dyn : pickScore(stats, 'llm_asr');
+      if (typeof v === 'number' && (best == null || v > best)) best = v;
+    }
+    if (best != null) return best;
+  }
+  return dan.best_prompt?.llm_asr ?? null;
 }
 
 // ── self-tests ────────────────────────────────────────────────────────────

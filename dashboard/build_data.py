@@ -333,20 +333,25 @@ def _judge_provenance(d: dict) -> dict:
     """Surface metadata.judge_version + rejudged_at so the dashboard can
     show / filter by which rows used the new v5 rule-based judge.
 
-    Files written without an explicit ``judge_version`` are bucketed as
+    Most evals stamp this under `metadata`. JBB's jbb_all_*/summary.json has
+    no metadata block — rejudge_jbb.py stamps a top-level `judge` dict +
+    `rejudged_at` instead, so fall through to that when meta is empty.
+
+    Files written without ANY explicit ``judge_version`` are bucketed as
     ``"unstamped"`` — NOT silently relabeled as ``"legacy"``. The unstamped
-    bucket is rendered as `—` in the UI; the legacy bucket is reserved for
+    bucket renders as `—` in the UI; the legacy bucket is reserved for
     files that genuinely went through the pre-v5 LogprobJudge.
 
     Also surfaces legacy provenance when merge_legacy_scores.py has stamped
     metadata.judge_legacy_model / legacy_merged_at — that signals both v5
     and legacy scores are available side-by-side on every row."""
     meta = d.get("metadata", {}) or {}
-    v = meta.get("judge_version")
+    top_judge = d.get("judge") if isinstance(d.get("judge"), dict) else {}
+    v = meta.get("judge_version") or top_judge.get("version")
     out = {
         "judge_version": v if v is not None else "unstamped",
-        "judge_model": meta.get("judge_model"),
-        "rejudged_at": meta.get("rejudged_at"),
+        "judge_model": meta.get("judge_model") or top_judge.get("model_name"),
+        "rejudged_at": meta.get("rejudged_at") or d.get("rejudged_at"),
     }
     if meta.get("judge_legacy_model"):
         out["has_legacy"] = True
@@ -436,11 +441,26 @@ def collect_dans(model_id: str) -> dict | None:
     d = json.loads(f.read_text())
     m = d.get("metrics", {})
     overall = m.get("overall", {})
-    by_prompt = m.get("by_prompt", {})
+    by_prompt = dict(m.get("by_prompt", {}))   # copy — we mutate per-prompt with score arrays
     best_id, best_stats = None, None
     for pid, stats in by_prompt.items():
         if best_stats is None or (stats.get("llm_asr") or 0) > (best_stats.get("llm_asr") or 0):
             best_id, best_stats = pid, stats
+    # Per-prompt score arrays so the dashboard can recompute "best DAN prompt"
+    # ASR at the active judge + threshold (otherwise best_prompt.llm_asr is
+    # frozen at the precomputed v5 / threshold=50 value).
+    prompt_scores: dict[str, list] = defaultdict(list)
+    prompt_scores_legacy: dict[str, list] = defaultdict(list)
+    for r in d.get("results") or []:
+        pid = r.get("prompt_id")
+        if pid is None:
+            continue
+        prompt_scores[pid].append(r.get("llm_score"))
+        prompt_scores_legacy[pid].append(r.get("llm_score_legacy"))
+    for pid, stats in by_prompt.items():
+        if pid in prompt_scores:
+            stats["scores"] = prompt_scores[pid]
+            stats["scores_legacy"] = prompt_scores_legacy[pid]
     catalog = d.get("prompt_catalog", [])
     best_title = None
     if isinstance(catalog, list):
@@ -489,20 +509,27 @@ def collect_jbb_all(model_id: str) -> dict | None:
     if not f:
         return None
     d = json.loads(f.read_text())
-    methods = {}
+    # Per-attack ASRs (v5 + legacy parallel maps). judge_audit/rejudge_jbb.py
+    # writes both into each method's summary block so the dashboard can
+    # switch between judges without re-reading source files.
+    methods: dict[str, float | None] = {}
+    methods_legacy: dict[str, float | None] = {}
     for m in d.get("methods", []):
         name = m.get("method")
-        asr = (m.get("summary") or {}).get("attack_success_rate")
-        if name:
-            # Normalize the long attack name so it lines up with dynamics columns.
-            key = "random_search" if name == "prompt_with_random_search" else name
-            methods[key] = asr
+        if not name:
+            continue
+        key = "random_search" if name == "prompt_with_random_search" else name
+        sm = m.get("summary") or {}
+        methods[key]        = sm.get("attack_success_rate")
+        methods_legacy[key] = sm.get("attack_success_rate_legacy")
     agg = d.get("aggregate", {})
+    agg_legacy = d.get("aggregate_legacy", {}) or {}
 
     # `direct` is usually run separately via eval_jbb.sh after the main run, so
     # the old jbb_all summary doesn't include it. Compute ASR from the
     # standalone `jbb_<alias>_direct_none_<ts>/results.jsonl` (we don't sync
-    # the large results.json).
+    # the large results.json). Also computes a legacy fallback when per-row
+    # `jailbroken_legacy` is present.
     if "direct" not in methods:
         direct_pats = [re.compile(rf"^jbb_{re.escape(a)}_direct_none_\d{{8}}_\d{{6}}$") for a in aliases]
         direct_cands: list[Path] = []
@@ -519,6 +546,8 @@ def collect_jbb_all(model_id: str) -> dict | None:
             try:
                 total = 0
                 jb = 0
+                jb_legacy = 0
+                has_legacy_field = False
                 for line in df.read_text().splitlines():
                     if not line.strip():
                         continue
@@ -526,16 +555,27 @@ def collect_jbb_all(model_id: str) -> dict | None:
                     total += 1
                     if row.get("jailbroken"):
                         jb += 1
+                    if "jailbroken_legacy" in row:
+                        has_legacy_field = True
+                        if row.get("jailbroken_legacy"):
+                            jb_legacy += 1
                 if total:
                     methods["direct"] = jb / total
+                    if has_legacy_field:
+                        methods_legacy["direct"] = jb_legacy / total
             except Exception:
                 pass
 
     return {
         "source_file": f.parent.name,
         "overall_asr": agg.get("attack_success_rate"),
+        "overall_asr_legacy": (
+            agg.get("attack_success_rate_legacy")
+            or agg_legacy.get("attack_success_rate")
+        ),
         "n_total_behaviors": agg.get("num_total_behaviors"),
         "attacks": methods,
+        "attacks_legacy": methods_legacy,
         **_judge_provenance(d),
     }
 
@@ -656,11 +696,17 @@ def collect_pez(model_id: str) -> dict | None:
                 d = json.loads(summary.read_text())
             except Exception:
                 continue
+            # PEZ summaries written by harmbench/judge_pez_v5.py stamp the
+            # judge_version directly into the summary. Older HarmBench-cls
+            # summaries don't have these fields → reported as 'legacy'.
+            jv = d.get("judge_version") or "legacy"
             return {
                 "source_file":   summary.name,
                 "asr":           d.get("average_asr"),
                 "n_behaviors":   d.get("num_behaviors"),
                 "n_successes":   d.get("num_successes"),
+                "judge_version": jv,
+                "judge_model":   d.get("judge_model"),
             }
     return None
 

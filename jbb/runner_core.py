@@ -283,11 +283,18 @@ def _gather_records(local_records: list[dict[str, Any]]) -> list[dict[str, Any]]
     return merged
 
 
-def _classify_records(records: list[dict[str, Any]], judge_cfg: dict[str, Any]) -> list[bool]:
+def _classify_records(records: list[dict[str, Any]], judge_cfg: dict[str, Any]):
+    """Classify records and (when the rule judge is in use) return the
+    per-row 0-100 score + rationale alongside the binary verdict so the
+    runner can persist them. Falls back to (verdicts, None, None) for
+    judges that don't expose numeric scores."""
     judge = build_judge(judge_cfg)
     prompts = [record["prompt"] for record in records if record["prompt"] is not None]
     responses = [record["response"] for record in records if record["prompt"] is not None]
-    return judge.classify(prompts, responses)
+    verdicts = judge.classify(prompts, responses)
+    scores = getattr(judge, "last_scores", None)
+    raws = getattr(judge, "last_raws", None)
+    return verdicts, scores, raws
 
 
 def _summarize(
@@ -419,11 +426,18 @@ def run_jbb(cfg: dict[str, Any]) -> None:
                 del tokenizer
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-            classifications = _classify_records(merged_records, cfg["judge"])
+            classifications, scores, raws = _classify_records(merged_records, cfg["judge"])
             cls_iter = iter(classifications)
+            score_iter = iter(scores) if scores else None
+            raw_iter = iter(raws) if raws else None
             for record in merged_records:
-                if record["prompt"] is not None:
-                    record["jailbroken"] = next(cls_iter)
+                if record["prompt"] is None:
+                    continue
+                record["jailbroken"] = next(cls_iter)
+                if score_iter is not None:
+                    record["llm_score"] = next(score_iter)
+                if raw_iter is not None:
+                    record["judge_raw"] = next(raw_iter)
             summary = _summarize(merged_records, cfg, artifact_parameters)
             _save_outputs(output_dir, cfg, summary, merged_records)
             logger.info(

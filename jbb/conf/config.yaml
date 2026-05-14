@@ -1,7 +1,7 @@
 defaults:
   - model: llama32_1B_instruct
   - artifact: auto
-  - judge: openai_gpt4o_mini
+  - judge: rule
   - _self_
 
 output_dir: outputs/jbb
