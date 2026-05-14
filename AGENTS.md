@@ -43,7 +43,7 @@ run.
 Every model the eval matrix knows about is declared once in
 `model_registry.sh` via `mr_eval_register_model`. Every component
 (`eval/`, `em/`, `jbb/`, `harmbench/`, `jailbreaks/`, `canaries/`, `safety_base/`,
-`dashboard/`) resolves model identities by reading that file.
+`overrefusal/`, `dashboard/`) resolves model identities by reading that file.
 
 Whenever you add a model:
 
@@ -74,6 +74,7 @@ Every Python entrypoint takes Hydra configs:
 - `safety_base/run_eval.py` → `safety_base/conf/`
 - `jailbreaks/run_*_eval.py`→ `jailbreaks/conf/`
 - `canaries/run_*_eval.py`  → `canaries/conf/`
+- `overrefusal/run_eval.py` → `overrefusal/conf/` (4 variants via `--config-name`: `config` | `orbench_hard` | `xstest` | `orfuzz`)
 
 Override anything from the CLI: `python run_eval.py model.pretrained=... judge_mode=classify`.
 Use the `model=<preset>` shorthand to swap the whole model config.
@@ -110,6 +111,7 @@ outputs/
   safety_base/safety_base_<model>_<timestamp>.json
   jailbreaks/{advbench,chatgpt_dan_jbb,persuasive_pap}/<run_name>/
   jbb/jbb_<model>_<method>_<timestamp>/
+  overrefusal/{overrefusal,orbench_hard,xstest,orfuzz}_<model>_<timestamp>.json
   manifests/{bs,em}_<runtag>.env       # written by training, consumed by eval submitters
   post_train_reports/<model>/...       # rendered markdown reports
 ```
@@ -125,7 +127,7 @@ commit a result.
 - `logs/runai/<job>.log`   — RunAI stdout/stderr per job
 - `logs/slurm/<job>.{out,err}` — SLURM logs from clariden
 - `logs/eval/`, `logs/em/`, `logs/safety_base/`, `logs/jailbreaks/`, `logs/train/` — RunAI/RCP results
-- `logs/clariden/{eval,em_eval,safety_base,jailbreaks,jbb,pez,canaries}/` — clariden results
+- `logs/clariden/{eval,em_eval,safety_base,jailbreaks,jbb,pez,canaries,overrefusal}/` — clariden results
 
 The dashboard's collectors look in **both** the RCP and clariden trees and
 pick the most recent matching file. When adding a new output type:

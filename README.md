@@ -11,6 +11,7 @@ It pulls together:
 - JailbreakBench transfer-attack replay (PAIR, GCG, JBC, DSN, …)
 - HarmBench red-teaming pipeline (vendored)
 - safety-pretraining base-model attack-success-rate (`locuslab/jb-completions`)
+- over-refusal evals (OR-Bench-1k, OR-Bench-Hard-1k, XSTest, ORFuzz; shared GPT-4o judge)
 - canary evaluations (backdoor canaries, persona quirks, conflicting stances)
 - a "judge-the-judge" audit pipeline
 - a static dashboard that aggregates everything into one HTML page
