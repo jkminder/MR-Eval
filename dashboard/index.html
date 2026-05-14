@@ -1202,10 +1202,12 @@ function renderSafetyBase(data) {
       cells: {
         overall_asr: pickASR(sb, 'overall_asr'),
         mean_score:  pickScore(sb, 'overall_mean_score'),
-        jbb:        v5Only(ps.JailbreakBench?.asr),
-        advbench:   v5Only(ps.AdvBench?.asr),
-        tdc:        v5Only(ps.TDC?.asr),
-        harmbench:  v5Only(ps.HarmBench?.asr),
+        // Per-source breakdowns inherit the parent safety_base cell's
+        // provenance — there's no separate stamp per source.
+        jbb:        v5Only(ps.JailbreakBench?.asr, sb.judge_version),
+        advbench:   v5Only(ps.AdvBench?.asr,     sb.judge_version),
+        tdc:        v5Only(ps.TDC?.asr,          sb.judge_version),
+        harmbench:  v5Only(ps.HarmBench?.asr,    sb.judge_version),
       },
     };
   });
@@ -1324,10 +1326,10 @@ function renderSafety(data) {
         dans:     pickASR(dan, 'overall_llm_asr'),
         best_dan: bestDanASR(dan),
         pap:      pickASR(pap, 'overall_llm_asr'),
-        pez:      v5Only(pez?.asr),
-        em_al:    v5Only(em?.aligned_mean),
-        em_co:    v5Only(em?.coherent_mean),
-        overrefusal: v5Only(orf?.refusal_rate),
+        pez:      v5Only(pez?.asr,           pez?.judge_version),
+        em_al:    v5Only(em?.aligned_mean,   em?.judge_version),
+        em_co:    v5Only(em?.coherent_mean,  em?.judge_version),
+        overrefusal: v5Only(orf?.refusal_rate, orf?.judge_version),
       },
     };
   });
@@ -3622,34 +3624,65 @@ function renderJudgeAudit() {
 let activeJudge = 'v5';
 let asrThreshold = 50;
 
-// Returns the value for `field` from `obj` under the active judge selector.
-// In legacy mode: returns `obj[field + '_legacy']` if present, else MISSING
-// (do NOT silently fall through to obj[field]; that was the original bug
-// class). In v5 mode: returns `obj[field]`. Returns null when obj itself is
-// null/undefined (caller decides what to do).
+// True iff the cell was actually scored by a v5-family judge (any major
+// version + any prompt hash + the -partial flavour). The bare "v5" stamp
+// written before the content-hash bump still counts as v5.
+const isV5Stamp = (jv) => typeof jv === 'string' && /^v\d+/.test(jv);
+
+// Returns the value for `field` from `obj` under the active judge selector,
+// honoring the cell's own `judge_version` so legacy-stamped or unstamped
+// cells never appear under the v5 label and vice-versa.
+//
+//   v5 mode:
+//     - v5-stamped cell  → obj[field]
+//     - any other stamp  → MISSING (refuses to show legacy/unstamped data
+//                          as if it were v5 — the user's reported bug)
+//   legacy mode:
+//     - obj[field + '_legacy'] if present  → use it (the canonical sidecar)
+//     - else if cell is legacy-stamped     → obj[field] (the value IS legacy)
+//     - else                                → MISSING
+//
+// Returns null when obj itself is null/undefined.
 function pickScore(obj, field) {
   if (!obj) return null;
+  const jv = obj.judge_version;
   if (activeJudge === 'legacy') {
     const lk = field + '_legacy';
-    if (lk in obj) return obj[lk];
+    if (lk in obj && obj[lk] != null) return obj[lk];
+    if (jv === 'legacy') return obj[field];
     return MISSING;
   }
-  return obj[field];
+  return isV5Stamp(jv) ? obj[field] : MISSING;
 }
 
 // For fields/cells that have NO legacy variant at all (PEZ, EM, over-refusal,
-// canaries, JBB overall, per-source breakdowns). In legacy mode returns
-// MISSING so the cell renders `—` rather than silently showing the v5 value
-// under a legacy label.
-function v5Only(value) {
+// JBB overall, per-source breakdowns). Pass the cell's judge_version so this
+// stays consistent with pickScore: v5-stamped + v5 mode → show value;
+// anything else → MISSING. Callers that don't have the stamp handy (e.g.
+// JBB per-attack values nested under j.per) can pass it from the parent
+// cell — provenance is the cell's, not the field's.
+function v5Only(value, judgeVersion) {
   if (activeJudge === 'legacy') return MISSING;
+  if (!isV5Stamp(judgeVersion)) return MISSING;
   return value == null ? null : value;
 }
 
+// Pick the per-row score array the dashboard should recompute ASR from. Same
+// provenance rule as pickScore: v5-stamped cells expose `obj.scores`, only
+// legacy-stamped (or `_legacy` sidecar-bearing) cells expose `obj.scores_legacy`.
 function _scoresFor(obj) {
   if (!obj) return null;
-  const arr = activeJudge === 'legacy' ? obj.scores_legacy : obj.scores;
-  return Array.isArray(arr) ? arr : null;
+  const jv = obj.judge_version;
+  if (activeJudge === 'legacy') {
+    const arr = obj.scores_legacy;
+    // Sidecar present → use it. Otherwise fall back to scores only when the
+    // cell IS legacy-stamped (its scores are the legacy values).
+    if (Array.isArray(arr) && arr.some(s => typeof s === 'number')) return arr;
+    if (jv === 'legacy' && Array.isArray(obj.scores)) return obj.scores;
+    return null;
+  }
+  if (isV5Stamp(jv) && Array.isArray(obj.scores)) return obj.scores;
+  return null;
 }
 
 // Recompute ASR from the per-row score array at the active threshold.
@@ -3712,18 +3745,32 @@ function bestDanASR(dan) {
   };
   // pickScore: legacy mode with sibling returns legacy value
   activeJudge = 'legacy';
-  check('pickScore legacy with sibling', pickScore({x: 1, x_legacy: 2}, 'x'), 2);
-  // pickScore: legacy mode WITHOUT sibling returns MISSING (NOT obj[field])
-  check('pickScore legacy without sibling returns MISSING', pickScore({x: 1}, 'x'), MISSING);
-  // pickScore: v5 mode returns the v5 value
+  check('pickScore legacy with sibling',
+    pickScore({x: 1, x_legacy: 2, judge_version: 'v5-abc'}, 'x'), 2);
+  // pickScore: legacy mode WITHOUT sibling on a v5 cell → MISSING
+  check('pickScore legacy w/o sibling on v5 cell',
+    pickScore({x: 1, judge_version: 'v5-abc'}, 'x'), MISSING);
+  // pickScore: legacy mode on a legacy-stamped cell → obj[field] (the value IS legacy)
+  check('pickScore legacy on legacy-stamped cell',
+    pickScore({x: 1, judge_version: 'legacy'}, 'x'), 1);
+  // pickScore: v5 mode on a v5-stamped cell → obj[field]
   activeJudge = 'v5';
-  check('pickScore v5', pickScore({x: 1, x_legacy: 2}, 'x'), 1);
+  check('pickScore v5 on v5-stamped cell',
+    pickScore({x: 1, x_legacy: 2, judge_version: 'v5-abc'}, 'x'), 1);
+  // pickScore: v5 mode on a LEGACY-stamped cell → MISSING (the user's bug)
+  check('pickScore v5 on legacy-stamped cell',
+    pickScore({x: 1, judge_version: 'legacy'}, 'x'), MISSING);
+  // pickScore: v5 mode on an unstamped cell → MISSING
+  check('pickScore v5 on unstamped cell',
+    pickScore({x: 1, judge_version: 'unstamped'}, 'x'), MISSING);
   // pickScore: null obj returns null in both modes
   check('pickScore null obj', pickScore(null, 'x'), null);
-  // v5Only: returns value in v5 mode, MISSING in legacy mode
-  check('v5Only v5 mode', v5Only(0.42), 0.42);
+  // v5Only: requires v5 stamp + v5 mode
+  check('v5Only v5 mode + v5 stamp', v5Only(0.42, 'v5-abc'), 0.42);
+  check('v5Only v5 mode + legacy stamp returns MISSING', v5Only(0.42, 'legacy'), MISSING);
+  check('v5Only v5 mode + unstamped returns MISSING', v5Only(0.42, 'unstamped'), MISSING);
   activeJudge = 'legacy';
-  check('v5Only legacy mode returns MISSING', v5Only(0.42), MISSING);
+  check('v5Only legacy mode returns MISSING', v5Only(0.42, 'v5-abc'), MISSING);
   activeJudge = 'v5';
   // normalizeVal: MISSING and null both become null
   check('normalizeVal(MISSING)', normalizeVal(MISSING), null);

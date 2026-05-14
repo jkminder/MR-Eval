@@ -36,11 +36,13 @@ JUDGE_VERSION_RE = re.compile(
     r"^(legacy|unstamped|logprob|classify|v\d+(-[0-9a-f]{8})?(-partial)?)$"
 )
 
-# Cell keys in ``data.json[models][*]`` that carry a score field. If any of
-# these cells exist for a model, the cell MUST also carry a ``judge_version``
-# field (provenance fanout invariant).
+# Cell keys in ``data.json[models][*]`` that carry a score field. Every
+# benchmark the dashboard renders is covered. If you add a new bench in
+# build_data.py, add it here too — otherwise the bug class the user hit
+# (stale judge labels) reopens for that bench.
 SCORE_BEARING_CELLS = (
     "safety_base", "advbench", "dans", "pap", "overrefusal",
+    "jbb", "pez", "em_base",
 )
 
 
@@ -125,14 +127,16 @@ def validate_data_json(data: dict) -> None:
 
             # 6. Score range bounds for the cell's headline aggregates.
             for k in ("overall_asr", "llm_asr", "non_refusal_asr",
-                      "overall_llm_asr", "refusal_rate"):
+                      "overall_llm_asr", "refusal_rate",
+                      "asr"):  # pez
                 v = cell.get(k)
                 if v is None:
                     continue
                 if not (0.0 <= float(v) <= 1.0):
                     _fail(f"{cell_path}.{k}", f"out of [0, 1]: {v}")
             for k in ("overall_mean_score", "llm_mean", "overall_llm_mean",
-                      "mean_llm_score"):
+                      "mean_llm_score",
+                      "aligned_mean", "coherent_mean"):  # em_base
                 v = cell.get(k)
                 if v is None:
                     continue

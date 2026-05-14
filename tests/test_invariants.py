@@ -320,3 +320,75 @@ def test_first_row_mismatch_uses_first_shared_field():
     cur = [{"goal": "A", "prompt": "P1"}]
     leg = [{"goal": "A", "prompt": "P2"}]  # goal matches, prompt differs
     assert merge_legacy_scores._first_row_mismatch(cur, leg) is None
+
+
+# ── Validator coverage of every score-bearing cell ─────────────────────────
+
+
+def test_score_bearing_cells_match_build_model_payload():
+    """SCORE_BEARING_CELLS must list every key build_model_payload emits
+    that carries a judge score. If somebody adds a new bench (e.g.
+    `pez_advbench`) and forgets to add it here, the user's bug class — stale
+    judge labels — reopens for that bench silently.
+
+    The keys that DON'T need provenance: `id`, `capabilities_summary`,
+    `dynamics`, `capabilities_dynamics`, `canaries` (its own judge — handled
+    by the canaries legacy banner in the UI).
+    """
+    import inspect
+    src = inspect.getsource(build_data.build_model_payload)
+    # Crude but stable: pull keys out of "key": collect_*(...) lines.
+    import re as _re
+    collected = set(_re.findall(r'^\s*"(\w+)":\s*collect_', src, _re.M))
+    not_score_bearing = {
+        "capabilities_summary",   # lm-eval bench scores, no rule-based judge
+        "dynamics", "capabilities_dynamics",
+        "canaries",               # has its own judges; handled by banner
+    }
+    expected = collected - not_score_bearing
+    actual = set(_checks.SCORE_BEARING_CELLS)
+    missing = expected - actual
+    extra = actual - expected
+    assert not missing, (
+        f"SCORE_BEARING_CELLS misses {missing}. Add to dashboard/_checks.py "
+        "so the new bench gets the provenance + range invariants."
+    )
+    assert not extra, (
+        f"SCORE_BEARING_CELLS has {extra} that build_model_payload does not "
+        "emit via a collect_* helper. Stale entries; clean up."
+    )
+
+
+def test_validator_rejects_legacy_pez_under_v5_label():
+    """The PEZ-shaped bug the user complained about: a cell stamped 'legacy'
+    must NOT pass the validator silently as if it were v5 data. The validator
+    accepts 'legacy' as a stamp (it's a real bucket), but the UI's pickScore
+    is responsible for refusing to display it in v5 mode. This test is a
+    canary: it confirms 'pez' is in SCORE_BEARING_CELLS so its provenance
+    is enforced at build time. The UI-side rule lives in index.html
+    self-tests."""
+    bad = {"models": {"m": {"pez": {"asr": 0.3}}}}  # NO judge_version
+    with pytest.raises(AssertionError, match="judge_version"):
+        _checks.validate_data_json(bad)
+
+
+def test_validator_enforces_em_aligned_range():
+    """em_base.aligned_mean is in [0, 100]. Adding em_base to
+    SCORE_BEARING_CELLS without the range key would have left it
+    silently uncovered."""
+    bad = {"models": {"m": {"em_base": {
+        "judge_version": "unstamped",
+        "aligned_mean": 150,  # out of range
+    }}}}
+    with pytest.raises(AssertionError, match=r"out of \[0, 100\]"):
+        _checks.validate_data_json(bad)
+
+
+def test_validator_enforces_pez_asr_range():
+    """pez.asr is in [0, 1]."""
+    bad = {"models": {"m": {"pez": {
+        "judge_version": "unstamped",
+        "asr": 1.5,
+    }}}}
+    with pytest.raises(AssertionError, match=r"out of \[0, 1\]"):
+        _checks.validate_data_json(bad)
