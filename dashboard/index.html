@@ -303,7 +303,9 @@
   th .avg-config[open] summary { color: var(--accent); border-color: var(--accent); background: white; }
   th .avg-config .avg-popover {
     position: absolute; top: calc(100% + 4px); left: 0; z-index: 10;
-    min-width: 180px; padding: 8px 10px;
+    min-width: 200px; max-width: 280px; padding: 8px 10px;
+    /* Cap height + scroll when several groups + flat cols overflow the panel. */
+    max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain;
     background: white; border: 1px solid var(--border-strong); border-radius: 5px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
     font-weight: normal; text-transform: none; letter-spacing: 0; color: var(--text);
@@ -325,8 +327,58 @@
   th .avg-config .avg-popover .ap-mini button:hover { text-decoration: underline; }
   tfoot td { font-weight: 600; background: var(--panel-alt); border-top: 2px solid var(--border-strong); }
   tfoot tr:first-child td { color: var(--muted); }
-  td.rank-col { color: var(--muted); font-size: 12px; }
+  /* Avg / Avg rank columns: emphasized so they read as the headline summary. */
+  th.rank-col, td.rank-col {
+    background: rgba(99, 102, 241, 0.10);
+    border-left: 2px solid var(--border-strong);
+  }
+  th.rank-col { color: var(--text); font-weight: 600; }
+  td.rank-col { color: var(--text); font-size: 12px; font-weight: 600; }
+  /* singleKey "Overall" columns inside a group: bolded + a touch darker
+     so the headline column stands out from its per-attack / per-bench peers. */
+  th.col-singleton, td.col-singleton { font-weight: 600; }
+  th.col-singleton { background: rgba(99, 102, 241, 0.14); }
+  td.col-singleton { background: rgba(99, 102, 241, 0.10); }
+  th.col-singleton.g-alt   { background: rgba(244, 114, 182, 0.14); }
+  td.col-singleton.g-alt   { background: rgba(244, 114, 182, 0.10); }
   .rank-legend { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+  /* Column-group banding for tables with col.group set.
+     Two complementary palettes so adjacent groups visually separate. */
+  th.group-band, td.group-band { background: rgba(99, 102, 241, 0.06); }
+  th.group-band.g-alt, td.group-band.g-alt { background: rgba(244, 114, 182, 0.06); }
+  th.group-band.group-first { border-left: 2px solid var(--border-strong); }
+  th.group-band.group-last,  td.group-band.group-last  { border-right: 2px solid var(--border-strong); }
+  td.group-band.group-first { border-left: 2px solid var(--border-strong); }
+  th.group-head {
+    text-align: center; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+    padding-top: 4px; padding-bottom: 2px;
+    background: rgba(99, 102, 241, 0.08); border-bottom: 1px solid var(--border);
+  }
+  th.group-head.g-alt { background: rgba(244, 114, 182, 0.08); }
+  th.group-head.group-first { border-left: 2px solid var(--border-strong); }
+  th.group-head.group-last  { border-right: 2px solid var(--border-strong); }
+  th.group-head .gh-mode {
+    display: inline-block; margin-left: 6px; padding: 0 5px;
+    font-size: 10px; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 3px; background: var(--panel);
+  }
+  /* Popover group sections (one per col.group) */
+  th .avg-config .avg-popover .ap-group {
+    margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border);
+  }
+  th .avg-config .avg-popover .ap-group:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+  th .avg-config .avg-popover .ap-group-title { font-size: 11px; color: var(--muted); margin-bottom: 4px;
+    text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  th .avg-config .avg-popover .ap-group-radio {
+    display: flex; gap: 8px; font-size: 11px; padding-bottom: 4px;
+  }
+  th .avg-config .avg-popover .ap-group-radio label {
+    padding: 1px 0; font-size: 11px;
+  }
+  th .avg-config .avg-popover .ap-group-members { padding-left: 10px; border-left: 2px solid var(--border); }
+  th .avg-config .avg-popover .ap-group-members.dimmed { opacity: 0.45; }
 </style>
 </head>
 <body>
@@ -921,15 +973,77 @@ function computeRanks(cols, rows) {
   return { ranksByModel, avgByModel };
 }
 
-function computeRowAvgs(cols, rows, excluded) {
+function computeRowAvgs(cols, rows, excluded, groupMode, groups) {
   // Per-model mean of values in avgable columns *not* in the user's
-  // excluded set. Used to see at a glance "which model is better on average
-  // across methods". `excluded` is a Set of column keys.
+  // excluded set. `excluded` is a Set of column keys.
+  //
+  // Groups: when col.group is set, the group contributes either as a single
+  // weight (mean over its avgable members, or `singleKey`'s value if defined)
+  // OR as individual columns (each member counts once). `groupMode` is a
+  // {groupName: 'single'|'individual'|'excluded'} map. Default mode for any
+  // unseen group is 'single' if a `defaultMode` is set on the group def, else
+  // 'individual' (backwards compatible — ungrouped cols are 'individual' implicit).
+  //
+  // Per-col tweaks:
+  //   col.negate  : invert the sense before averaging (use 100 - val). Lets us
+  //                 fold "higher = better" cols (e.g. EM) into a "lower = better"
+  //                 Avg with the ASR cols.
+  //   col.gate(cells) : optional predicate. If returns false, the cell is
+  //                     skipped in Avg even though the value is non-null
+  //                     (e.g. EM aligned only counted when coherence > 30).
+  const groupDefByName = {};
+  for (const g of (groups || [])) groupDefByName[g.name] = g;
+  const fetchTerm = (c, cells) => {
+    if (c.gate && !c.gate(cells)) return null;
+    const v = normalizeVal(cells[c.key]);
+    if (v == null) return null;
+    return c.negate ? (100 - v) : v;
+  };
   const out = {};
-  const avgCols = cols.filter(c => c.avgable && !excluded.has(c.key));
   for (const r of rows) {
-    const vals = avgCols.map(c => normalizeVal(r.cells[c.key])).filter(v => v != null);
-    out[r.id] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    const terms = [];
+    const seenGroups = new Set();
+    for (const c of cols) {
+      if (!c.avgable) continue;
+      if (c.group) {
+        const mode = groupMode[c.group] || groupDefByName[c.group]?.defaultMode || 'individual';
+        if (seenGroups.has(c.group)) continue;
+        if (mode === 'excluded') { seenGroups.add(c.group); continue; }
+        const gdef = groupDefByName[c.group];
+        const singleKey = gdef?.singleKey;
+        if (mode === 'single') {
+          seenGroups.add(c.group);
+          let v;
+          if (singleKey) {
+            const skCol = cols.find(x => x.key === singleKey) || c;
+            v = fetchTerm(skCol, r.cells);
+          } else {
+            // Mean over the group's avgable member columns (no singleKey defined).
+            const members = cols.filter(x => x.group === c.group && x.avgable);
+            const vs = members.map(x => fetchTerm(x, r.cells)).filter(x => x != null);
+            v = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+          }
+          if (v != null) terms.push(v);
+          continue;
+        }
+        // 'individual' mode: each member counts once. Skip the singleKey col
+        // itself when individual mode is on — it's a derived rollup of the
+        // others, so including it would double-count.
+        const members = cols.filter(x => x.group === c.group && x.avgable
+                                          && !excluded.has(x.key)
+                                          && x.key !== singleKey);
+        for (const m of members) {
+          const v = fetchTerm(m, r.cells);
+          if (v != null) terms.push(v);
+        }
+        seenGroups.add(c.group);
+        continue;
+      }
+      if (excluded.has(c.key)) continue;
+      const v = fetchTerm(c, r.cells);
+      if (v != null) terms.push(v);
+    }
+    out[r.id] = terms.length ? terms.reduce((a, b) => a + b, 0) / terms.length : null;
   }
   return out;
 }
@@ -939,7 +1053,9 @@ function computeRowAvgs(cols, rows, excluded) {
 // the next page load. Tables without a stable id fall back to an in-memory
 // WeakMap (selection survives re-renders within a session but not reloads).
 const _AVG_LS_PREFIX = 'mr-eval:avgExcluded:';
+const _GROUP_LS_PREFIX = 'mr-eval:avgGroupMode:';
 const _avgInMem = new WeakMap();
+const _groupInMem = new WeakMap();
 function _excludedFor(el) {
   if (el.id) {
     const raw = localStorage.getItem(_AVG_LS_PREFIX + el.id);
@@ -957,23 +1073,103 @@ function _saveExcludedFor(el, excluded) {
     _avgInMem.set(el, excluded);
   }
 }
+function _groupModeFor(el) {
+  if (el.id) {
+    const raw = localStorage.getItem(_GROUP_LS_PREFIX + el.id);
+    if (!raw) return {};
+    try { return JSON.parse(raw) || {}; } catch { return {}; }
+  }
+  let m = _groupInMem.get(el);
+  if (!m) { m = {}; _groupInMem.set(el, m); }
+  return m;
+}
+function _saveGroupModeFor(el, mode) {
+  if (el.id) {
+    localStorage.setItem(_GROUP_LS_PREFIX + el.id, JSON.stringify(mode));
+  } else {
+    _groupInMem.set(el, mode);
+  }
+}
 
-function renderRankedTable(el, cols, rows) {
+function renderRankedTable(el, cols, rows, groups, opts) {
   // Sort state survives re-renders via a data attribute on the container.
+  // `groups`: optional [{name, label, defaultMode?: 'single'|'individual',
+  //                      singleKey?: <colKey>, alt?: bool}]
+  // `opts.excludedDefault`: optional array of col keys to seed into the
+  //   excluded set on the very first render (no localStorage entry yet).
+  //   Subsequent renders read the user's persisted choice and ignore this.
+  // Columns in a group share `col.group = group.name`. Group cols are
+  // visually banded and the Avg popover gets a per-group section.
   const sortKey = el.dataset.sortKey || '';
   const sortDir = el.dataset.sortDir || '';
 
   const hasRank = cols.some(c => c.rankable);
   const hasAvg  = cols.some(c => c.avgable);
+  const hasExcludedLS = !!(el.id && localStorage.getItem(_AVG_LS_PREFIX + el.id));
   const excluded = _excludedFor(el);
+  // First render only: seed defaults so the headline Avg matches the
+  // intended composition before the user touches anything.
+  if (!hasExcludedLS && Array.isArray(opts?.excludedDefault)) {
+    for (const k of opts.excludedDefault) {
+      if (cols.some(c => c.key === k && c.avgable)) excluded.add(k);
+    }
+    _saveExcludedFor(el, excluded);
+  }
   // Drop any stale exclusions for cols this table no longer has.
   let pruned = false;
   for (const k of [...excluded]) {
     if (!cols.some(c => c.key === k && c.avgable)) { excluded.delete(k); pruned = true; }
   }
   if (pruned) _saveExcludedFor(el, excluded);
+
+  // Group-mode state. Defaults from group def, else 'single'.
+  const groupDefs = groups || [];
+  const groupByName = Object.fromEntries(groupDefs.map(g => [g.name, g]));
+  const groupMode = _groupModeFor(el);
+  let groupModePruned = false;
+  for (const k of Object.keys(groupMode)) {
+    if (!groupByName[k]) { delete groupMode[k]; groupModePruned = true; }
+  }
+  for (const g of groupDefs) {
+    if (!(g.name in groupMode)) groupMode[g.name] = g.defaultMode || 'single';
+  }
+  if (groupModePruned) _saveGroupModeFor(el, groupMode);
+
   const { ranksByModel, avgByModel: avgRankByModel } = computeRanks(cols, rows);
-  const rowAvg = computeRowAvgs(cols, rows, excluded);
+  const rowAvg = computeRowAvgs(cols, rows, excluded, groupMode, groupDefs);
+
+  // Build group-band metadata for header/cell rendering.
+  // Walk cols left→right; for each contiguous run of cols belonging to the same
+  // group, mark first/last so CSS can draw a separating border. Alternate
+  // banding palette across distinct groups (g-alt vs default).
+  const colBand = cols.map(() => ({ group: null, first: false, last: false, alt: false }));
+  const groupOrder = [];  // group names in order of first appearance
+  for (let i = 0; i < cols.length; i++) {
+    const g = cols[i].group;
+    if (!g) continue;
+    if (!groupOrder.includes(g)) groupOrder.push(g);
+    colBand[i].group = g;
+    colBand[i].alt = (groupOrder.indexOf(g) % 2) === 1;
+    if (i === 0 || cols[i - 1].group !== g) colBand[i].first = true;
+    if (i === cols.length - 1 || cols[i + 1].group !== g) colBand[i].last  = true;
+  }
+  const bandCls = i => {
+    const b = colBand[i];
+    if (!b.group) return '';
+    return [
+      'group-band',
+      b.alt ? 'g-alt' : '',
+      b.first ? 'group-first' : '',
+      b.last ? 'group-last' : '',
+    ].filter(Boolean).join(' ');
+  };
+  const singletonCls = i => {
+    const c = cols[i];
+    if (!c.group) return '';
+    const gdef = groupByName[c.group];
+    if (!gdef || gdef.singleKey !== c.key) return '';
+    return colBand[i].alt ? 'col-singleton g-alt' : 'col-singleton';
+  };
 
   // Apply sort.
   let ordered = [...rows];
@@ -997,28 +1193,116 @@ function renderRankedTable(el, cols, rows) {
 
   const arrowCls = k => sortKey === k ? `sort-${sortDir}` : 'sort-arrow';
 
-  let html = '<table><thead><tr>';
+  let html = '<table><thead>';
+  // Optional super-header row showing group spans. Only emit if any col has a group.
+  if (groupOrder.length) {
+    html += '<tr>';
+    html += '<th></th>';
+    let i = 0;
+    while (i < cols.length) {
+      const g = cols[i].group;
+      if (!g) {
+        html += '<th></th>';
+        i++;
+        continue;
+      }
+      // Find span end.
+      let j = i;
+      while (j < cols.length && cols[j].group === g) j++;
+      const span = j - i;
+      const gdef = groupByName[g] || { label: g };
+      const altCls = colBand[i].alt ? ' g-alt' : '';
+      const modeLabel = groupMode[g] === 'single' ? 'single weight'
+                      : groupMode[g] === 'excluded' ? 'excluded'
+                      : `${cols.slice(i, j).filter(c => c.avgable && !excluded.has(c.key)).length} weights`;
+      html += `<th class="group-head${altCls} group-first group-last" colspan="${span}">${gdef.label || g} <span class="gh-mode">${modeLabel}</span></th>`;
+      i = j;
+    }
+    // Trailing cells (Avg, Avg rank) get empty headers in the super-row.
+    if (hasAvg)  html += '<th></th>';
+    if (hasRank) html += '<th></th>';
+    html += '</tr>';
+  }
+  html += '<tr>';
   html += `<th class="sortable ${arrowCls('_model')}" data-sortkey="_model">Model</th>`;
-  for (const c of cols) {
-    html += `<th class="sortable ${arrowCls(c.key)}" data-sortkey="${c.key}">${c.label}</th>`;
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    const bcls = bandCls(i);
+    const scls = singletonCls(i);
+    html += `<th class="sortable ${arrowCls(c.key)} ${bcls} ${scls}" data-sortkey="${c.key}">${c.label}</th>`;
   }
   if (hasAvg) {
     const avgCols = cols.filter(c => c.avgable);
-    const includedCount = avgCols.filter(c => !excluded.has(c.key)).length;
-    const popoverChips = avgCols.map(c => {
-      const checked = !excluded.has(c.key) ? 'checked' : '';
-      return `<label><input type="checkbox" data-avgkey="${c.key}" ${checked} /> ${c.label}</label>`;
-    }).join('');
-    const totalAvgCols = avgCols.length;
-    const labelSuffix = includedCount === totalAvgCols
+    // Build popover sections: per-group radio + member checkboxes, then any
+    // ungrouped avgable cols as flat checkboxes (the existing UX).
+    const popoverParts = [];
+    for (const g of groupDefs) {
+      const allMembers = cols.filter(c => c.group === g.name && c.avgable);
+      if (!allMembers.length) continue;
+      const mode = groupMode[g.name];
+      const dimmed = mode !== 'individual' ? ' dimmed' : '';
+      // The singleKey col is the derived rollup. We skip rendering a checkbox
+      // for it (its inclusion is governed by the mode radio, not a checkbox).
+      const members = allMembers.filter(c => c.key !== g.singleKey);
+      const memberChips = members.map(c => {
+        const checked = !excluded.has(c.key) ? 'checked' : '';
+        const disabled = mode !== 'individual' ? 'disabled' : '';
+        return `<label><input type="checkbox" data-avgkey="${c.key}" ${checked} ${disabled} /> ${c.label}</label>`;
+      }).join('');
+      const radios = ['single', 'individual', 'excluded'].map(m => {
+        const checked = mode === m ? 'checked' : '';
+        const label = m === 'single' ? 'single weight'
+                    : m === 'individual' ? 'individual weights'
+                    : 'excluded';
+        return `<label><input type="radio" name="grp-${g.name}" data-grpkey="${g.name}" data-grpmode="${m}" ${checked} /> ${label}</label>`;
+      }).join('');
+      popoverParts.push(`
+        <div class="ap-group">
+          <div class="ap-group-title">${g.label}</div>
+          <div class="ap-group-radio">${radios}</div>
+          <div class="ap-group-members${dimmed}">${memberChips}</div>
+        </div>
+      `);
+    }
+    const flatCols = avgCols.filter(c => !c.group);
+    if (flatCols.length) {
+      const chips = flatCols.map(c => {
+        const checked = !excluded.has(c.key) ? 'checked' : '';
+        return `<label><input type="checkbox" data-avgkey="${c.key}" ${checked} /> ${c.label}</label>`;
+      }).join('');
+      const title = groupDefs.length
+        ? '<div class="ap-group-title">Other</div>'
+        : '<div class="ap-title">Include in Avg</div>';
+      popoverParts.push(`<div class="ap-group">${title}${chips}</div>`);
+    }
+    // Count weights contributing for the displayed `(included/total)` hint.
+    // In individual mode the singleKey is skipped (it's a derived rollup),
+    // so it's excluded from both the included and total tallies.
+    let totalWeights = 0, includedWeights = 0;
+    for (const g of groupDefs) {
+      const allMembers = cols.filter(c => c.group === g.name && c.avgable);
+      const indivMembers = allMembers.filter(c => c.key !== g.singleKey);
+      if (!allMembers.length) continue;
+      const mode = groupMode[g.name];
+      if (mode === 'single') { totalWeights += 1; includedWeights += 1; }
+      else if (mode === 'excluded') { totalWeights += indivMembers.length; /* nothing included */ }
+      else {
+        totalWeights += indivMembers.length;
+        includedWeights += indivMembers.filter(c => !excluded.has(c.key)).length;
+      }
+    }
+    for (const c of flatCols) {
+      totalWeights += 1;
+      if (!excluded.has(c.key)) includedWeights += 1;
+    }
+    const labelSuffix = includedWeights === totalWeights
                         ? ''
-                        : ` <span class="missing">(${includedCount}/${totalAvgCols})</span>`;
-    html += `<th class="sortable ${arrowCls('_avg')}" data-sortkey="_avg" title="mean of this row's values across the averaged columns">
+                        : ` <span class="missing">(${includedWeights}/${totalWeights})</span>`;
+    html += `<th class="sortable rank-col ${arrowCls('_avg')}" data-sortkey="_avg" title="mean of this row's values across the averaged columns / groups">
                Avg${labelSuffix}<details class="avg-config" data-noresort="1">
-                 <summary title="configure which columns contribute to Avg">⚙</summary>
+                 <summary title="configure which columns/groups contribute to Avg">⚙</summary>
                  <div class="avg-popover" data-noresort="1">
-                   <div class="ap-title">Include in Avg</div>
-                   ${popoverChips}
+                   ${popoverParts.join('')}
                    <div class="ap-mini">
                      <button data-avgaction="all">all</button>
                      <button data-avgaction="none">none</button>
@@ -1028,13 +1312,16 @@ function renderRankedTable(el, cols, rows) {
              </th>`;
   }
   if (hasRank) {
-    html += `<th class="sortable ${arrowCls('_avgrank')}" data-sortkey="_avgrank" title="mean rank across ranked columns (1 = best)">Avg rank</th>`;
+    html += `<th class="sortable rank-col ${arrowCls('_avgrank')}" data-sortkey="_avgrank" title="mean rank across ranked columns (1 = best)">Avg rank</th>`;
   }
   html += '</tr></thead><tbody>';
   for (const r of ordered) {
     html += `<tr><td>${r.display}</td>`;
-    for (const c of cols) {
-      html += `<td>${fmtDisplay(r.cells[c.key], c.fmt)}</td>`;
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const bcls = bandCls(i);
+      const scls = singletonCls(i);
+      html += `<td class="${bcls} ${scls}">${fmtDisplay(r.cells[c.key], c.fmt)}</td>`;
     }
     if (hasAvg) {
       const a = rowAvg[r.id];
@@ -1068,7 +1355,7 @@ function renderRankedTable(el, cols, rows) {
         el.dataset.sortKey = k;
         el.dataset.sortDir = defaultSortDir(k, cols);
       }
-      renderRankedTable(el, cols, rows);
+      renderRankedTable(el, cols, rows, groups, opts);
     };
   });
 
@@ -1081,7 +1368,23 @@ function renderRankedTable(el, cols, rows) {
       _saveExcludedFor(el, excluded);
       // Keep the popover open across the re-render.
       const wasOpen = el.querySelector('.avg-config[open]') != null;
-      renderRankedTable(el, cols, rows);
+      renderRankedTable(el, cols, rows, groups, opts);
+      if (wasOpen) {
+        const d = el.querySelector('.avg-config');
+        if (d) d.open = true;
+      }
+    });
+  });
+  // Per-group radio: single | individual | excluded.
+  el.querySelectorAll('.avg-config input[type=radio][data-grpkey]').forEach(rb => {
+    rb.addEventListener('change', () => {
+      if (!rb.checked) return;
+      const name = rb.dataset.grpkey;
+      const mode = rb.dataset.grpmode;
+      groupMode[name] = mode;
+      _saveGroupModeFor(el, groupMode);
+      const wasOpen = el.querySelector('.avg-config[open]') != null;
+      renderRankedTable(el, cols, rows, groups, opts);
       if (wasOpen) {
         const d = el.querySelector('.avg-config');
         if (d) d.open = true;
@@ -1093,11 +1396,17 @@ function renderRankedTable(el, cols, rows) {
       ev.preventDefault();
       const action = btn.dataset.avgaction;
       excluded.clear();
+      // For groups: 'all' → keep current mode but include all members; 'none' → set all to 'excluded'.
+      for (const g of groupDefs) {
+        if (action === 'none') groupMode[g.name] = 'excluded';
+        else if (groupMode[g.name] === 'excluded') groupMode[g.name] = g.defaultMode || 'single';
+      }
       if (action === 'none') {
-        for (const c of cols) if (c.avgable) excluded.add(c.key);
+        for (const c of cols) if (c.avgable && !c.group) excluded.add(c.key);
       }
       _saveExcludedFor(el, excluded);
-      renderRankedTable(el, cols, rows);
+      _saveGroupModeFor(el, groupMode);
+      renderRankedTable(el, cols, rows, groups, opts);
       const d = el.querySelector('.avg-config');
       if (d) d.open = true;
     });
@@ -1270,30 +1579,71 @@ function resolveJbb(md) {
 function renderSafety(data) {
   const el = document.getElementById('safety-panel');
   const visible = data.groups.sft.filter(m => isVisible(m.id));
+  // Overrefusal: keep the two benches we trust (OR-Bench and XSTest); show
+  // both individually plus a derived "Overall" column that's the mean of the
+  // two — same singleKey convention as JBB.
+  const ORBENCH_KEYS = ['orbench', 'xstest'];
+  const ORBENCH_LABELS = { orbench: 'OR-Bench', xstest: 'XSTest' };
   const cols = [
-    { key: 'jbb',      label: 'JBB overall', dir: 'lower',  rankable: true,  avgable: true  },
+    // JBB group: the published "Overall" alongside the 5 per-attack ASRs.
+    // `direct` is the no-attack baseline → never enters Avg.
+    { key: 'jbb_overall', label: 'Overall',       dir: 'lower', rankable: true, avgable: true, group: 'jbb' },
+    { key: 'jbb_DSN',     label: 'DSN',           dir: 'lower', rankable: true, avgable: true, group: 'jbb' },
+    { key: 'jbb_GCG',     label: 'GCG',           dir: 'lower', rankable: true, avgable: true, group: 'jbb' },
+    { key: 'jbb_JBC',     label: 'JBC',           dir: 'lower', rankable: true, avgable: true, group: 'jbb' },
+    { key: 'jbb_PAIR',    label: 'PAIR',          dir: 'lower', rankable: true, avgable: true, group: 'jbb' },
+    { key: 'jbb_RS',      label: 'random_search', dir: 'lower', rankable: true, avgable: true, group: 'jbb' },
     { key: 'advbench', label: 'AdvBench',    dir: 'lower',  rankable: true,  avgable: true  },
     { key: 'dans',     label: 'DANs',        dir: 'lower',  rankable: true,  avgable: true  },
     { key: 'best_dan', label: 'Best DAN',    dir: 'lower',  rankable: false, avgable: false }, // excluded per request
     { key: 'pap',      label: 'PAP',         dir: 'lower',  rankable: true,  avgable: true  },
     { key: 'pez',      label: 'PEZ',         dir: 'lower',  rankable: true,  avgable: true  },
-    // EM scores are on a different semantic (higher = more aligned); lumping
-    // them into the Avg with ASR is meaningless, so we rank them but don't
-    // average them.
-    { key: 'em_al',    label: 'EM aligned',  dir: 'higher', rankable: true,  avgable: false, fmt: 'raw' },
-    { key: 'em_co',    label: 'EM coherent', dir: 'higher', rankable: true,  avgable: false, fmt: 'raw' },
-    // OR-Bench over-refusal rate: lower is better (model answers benign prompts).
-    // Different semantic from attack ASRs — kept visible but out of rank/avg.
-    { key: 'overrefusal', label: 'Over-refusal', dir: 'lower', rankable: false, avgable: false },
+    // EM scores: higher = more aligned/coherent. Folded into Avg as -EM
+    // (100 - score) so they compose with the ASR cols (lower = better).
+    // em_al is gated by em_co > 30: incoherent runs have meaningless aligned
+    // scores. em_co stays visible but not averaged — coherence isn't safety.
+    { key: 'em_al', label: 'EM aligned',  dir: 'higher', rankable: true,  avgable: true,
+      fmt: 'raw', negate: true, gate: (cells) => {
+        const co = normalizeVal(cells.em_co);
+        return co != null && co > 30;
+      } },
+    { key: 'em_co', label: 'EM coherent', dir: 'higher', rankable: true,  avgable: false, fmt: 'raw' },
+    // Overrefusal group: rate at which the model refuses benign prompts.
+    // Lower = better. Same direction as ASR cols → safe to fold into Avg.
+    { key: 'or_overall', label: 'Overall',  dir: 'lower', rankable: true, avgable: true, group: 'overrefusal' },
+    ...ORBENCH_KEYS.map(k => ({
+      key: 'or_' + k, label: ORBENCH_LABELS[k],
+      dir: 'lower', rankable: true, avgable: true, group: 'overrefusal',
+    })),
+  ];
+  const groups = [
+    // JBB: singleKey = the published overall, so 'single' mode reuses the
+    // canonical headline number rather than re-meaning the per-attack ASRs.
+    { name: 'jbb',         label: 'JBB',          singleKey: 'jbb_overall', defaultMode: 'single' },
+    // Overrefusal: derived "Overall" = row-mean of the bench cols. Same
+    // singleKey convention so the UX matches JBB.
+    { name: 'overrefusal', label: 'Over-refusal', singleKey: 'or_overall',  defaultMode: 'single' },
   ];
   const rows = visible.map(m => {
     const md = data.models[m.id] || {};
     const j = resolveJbb(md);
-    const ab = md.advbench, dan = md.dans, pap = md.pap, em = md.em_base, pez = md.pez, orf = md.overrefusal;
+    const ab = md.advbench, dan = md.dans, pap = md.pap, em = md.em_base, pez = md.pez;
+    const orb = md.overrefusal_benches || {};
+    // OR-Bench legacy refusal_rate falls back to the top-level `overrefusal`
+    // field so old data (pre-multi-bench restructure) keeps showing up.
+    const or_orbench = (orb.orbench?.refusal_rate ?? md.overrefusal?.refusal_rate) ?? null;
+    const or_xstest  = orb.xstest?.refusal_rate ?? null;
+    const orVals = [or_orbench, or_xstest].filter(v => v != null);
+    const or_overall = orVals.length ? orVals.reduce((a, b) => a + b, 0) / orVals.length : null;
     return {
       id: m.id, display: modelCell(m),
       cells: {
-        jbb:      j?.overall ?? null,
+        jbb_overall: j?.overall ?? null,
+        jbb_DSN:     j?.per?.DSN ?? null,
+        jbb_GCG:     j?.per?.GCG ?? null,
+        jbb_JBC:     j?.per?.JBC ?? null,
+        jbb_PAIR:    j?.per?.PAIR ?? null,
+        jbb_RS:      j?.per?.random_search ?? null,
         advbench: pickASR(ab, 'llm_asr'),
         dans:     pickASR(dan, 'overall_llm_asr'),
         best_dan: dan?.best_prompt?.llm_asr ?? null,
@@ -1301,12 +1651,17 @@ function renderSafety(data) {
         pez:      pez?.asr ?? null,
         em_al:    em?.aligned_mean ?? null,
         em_co:    em?.coherent_mean ?? null,
-        overrefusal: orf?.refusal_rate ?? null,
+        or_overall,
+        or_orbench,
+        or_xstest,
       },
     };
   });
   if (!rows.some(r => Object.values(r.cells).some(v => v != null))) { el.innerHTML = nd(); return; }
-  renderRankedTable(el, cols, rows);
+  // Default composition of Avg on a fresh visit: JBB Overall + OR-Bench Overall
+  // + the ungrouped ASR cols. EM aligned is avgable (user can opt in) but
+  // starts excluded so the headline matches the ASR-only safety story.
+  renderRankedTable(el, cols, rows, groups, { excludedDefault: ['em_al'] });
   el.insertAdjacentHTML('beforeend', rankLegend(cols));
 
   // ── JBB per-attack breakdown table ──
