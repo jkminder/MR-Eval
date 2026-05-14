@@ -232,6 +232,25 @@ DEFAULT_RULE_PROMPT_PATH = (
 _SCORE_RE = re.compile(r"SCORE\s*[:=]\s*(\d{1,3})", re.IGNORECASE)
 
 
+def rule_judge_version(prompt_path: Path | None = None) -> str:
+    """Return the canonical 'v5-<sha8>' stamp for the current prompt body.
+
+    Every safety eval runner that uses RuleBasedJudge calls this and stamps
+    the result into its output metadata so the dashboard's Judge versions
+    tab can render v5 (the green badge) instead of falling back to legacy.
+
+    Mirrors judge_audit/rejudge_runs.py's _judge_version_stamp() — keeping
+    one canonical hash function across the repo means a prompt edit auto-
+    busts the stamp everywhere on the next run."""
+    import hashlib
+    p = Path(prompt_path) if prompt_path is not None else DEFAULT_RULE_PROMPT_PATH
+    try:
+        h = hashlib.sha256(p.read_bytes()).hexdigest()[:8]
+        return f"v5-{h}"
+    except Exception:
+        return "v5"
+
+
 def load_rule_judge_prompt(path: Path | None = None) -> str:
     """Extract the prompt body from the first ``` fenced block in
     judge_audit/judge_prompt.md. The body uses {request} and {response}
