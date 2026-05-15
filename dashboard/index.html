@@ -286,6 +286,23 @@
   /* BS-dynamics judge summary chips, shown inline next to the section heading. */
   .dyn-judges { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
   .dyn-judges .jv-badge { margin-left: 4px; }
+
+  /* Hard block when selected models in a dynamics plot don't share the same
+   * judge stamp. The chart is hidden because plotting trajectories produced
+   * by different judges on the same y-axis is misleading — they're
+   * different scales. */
+  .dyn-warning {
+    margin: 10px 0; padding: 12px 14px; border-radius: 6px;
+    background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b;
+    font-size: 13px; line-height: 1.4;
+  }
+  .dyn-warning h4 { margin: 0 0 6px 0; font-size: 13px; color: #991b1b; }
+  .dyn-warning ul { margin: 4px 0 0 0; padding-left: 18px; }
+  .dyn-warning .jv-badge { background: #fff; color: #991b1b; border-color: #fca5a5; }
+  /* When the warning is visible, hide chart + table. The :not([hidden])
+   * filter lets the chart show normally when no warning is up. */
+  .dyn-warning:not([hidden]) ~ .chart-card,
+  .dyn-warning:not([hidden]) ~ .dyn-table { display: none; }
   .jv-row.no-data-row { opacity: 0.5; }
   .jv-row.all-legacy { background: #fffbeb; }
   .jv-row.all-v5 { background: #f0fdf4; }
@@ -511,6 +528,7 @@
       </label>
     </div>
     <div class="model-picker" id="bs-models"></div>
+    <div class="dyn-warning" id="bs-dyn-warning" hidden></div>
     <div class="chart-card"><canvas id="bs-chart"></canvas></div>
     <div class="dyn-table" id="bs-table"></div>
   </div>
@@ -2062,6 +2080,48 @@ function setupDynamicsPanel({ chartId, metricSelId, pickerId, tableId, kind, met
     const items = modelsWithKind(data);
     const metric = document.getElementById(metricSelId).value;
     const checked = new Set([...document.querySelectorAll(`#${pickerId} input:checked`)].map(i => i.value));
+
+    // Cross-model stamp uniformity. When 2+ selected models would plot on
+    // the same chart with different judge stamps, we refuse to render —
+    // those trajectories are scored on different scales. Tracked only for
+    // benches whose collector populates `blk.judges` (currently BS-JBB).
+    // The Python validator hard-fails *within* a single trajectory; this
+    // UI guard catches the dynamic across-trajectory case the validator
+    // can't know about (which models the user picked).
+    const stampToModels = new Map();
+    for (const { m, blk, available } of items) {
+      if (!available || !checked.has(m.id)) continue;
+      const stamps = dynamicsStamps(blk);
+      if (!stamps.size) continue;
+      // A single stamp per model is the validator-enforced invariant; we
+      // pick the first one we see if it's already enforced. Take all
+      // stamps defensively so a validator bypass surfaces too.
+      for (const s of stamps) {
+        if (!stampToModels.has(s)) stampToModels.set(s, []);
+        stampToModels.get(s).push(m);
+      }
+    }
+    const warnEl = document.getElementById(`${kind}-dyn-warning`);
+    if (warnEl && stampToModels.size > 1) {
+      const groups = [...stampToModels.entries()]
+        .map(([stamp, models]) => `<li><span class="jv-badge ${jvNorm(stamp)}">${jbEscape(stamp)}</span> — ${
+          models.map(m => jbEscape(m.display.replace(/<[^>]+>/g, ''))).join(', ')
+        }</li>`)
+        .join('');
+      warnEl.innerHTML = `<h4>Different judge versions selected</h4>` +
+        `<div>The picked models were judged by ${stampToModels.size} different prompt versions. ` +
+        `Their scores aren't directly comparable, so this chart won't render. ` +
+        `Narrow your selection to one stamp:</div>` +
+        `<ul>${groups}</ul>`;
+      warnEl.hidden = false;
+      // Clear stale chart state so nothing flashes.
+      chart.data.datasets = [];
+      chart.update();
+      document.getElementById(tableId).innerHTML = '';
+      renderJudges(items, checked);
+      return;
+    }
+    if (warnEl) warnEl.hidden = true;
 
     const datasets = [];
     for (const { m, blk: rawBlk, available } of items) {
@@ -4393,6 +4453,22 @@ function pickASR(obj, fallbackField) {
   return pickScore(obj, fallbackField);
 }
 
+// Extract the set of distinct prompt-version stamps from a trajectory's
+// `judges` list (set by build_data.py for benches that record per-iteration
+// stamps — currently BS-JBB only). Strips the ' (judge_model)' suffix so
+// the same prompt evaluated by gpt-4o and gpt-4o-mini collapses to one
+// stamp. Empty set means no stamps recorded (pre-collector data, or the
+// bench has no LLM-judge signal like PEZ loss). Used by the dynamics
+// render() to refuse plotting multiple models with different stamps
+// together — see CSS .dyn-warning + the in-render guard.
+function dynamicsStamps(blk) {
+  const raw = blk?.judges;
+  if (!Array.isArray(raw) || !raw.length) return new Set();
+  return new Set(
+    raw.map(e => String(e).split(' (', 1)[0].trim()).filter(Boolean)
+  );
+}
+
 // Best (= max) DAN-prompt ASR for this model. Each entry in dan.by_prompt
 // carries its own scores / scores_legacy arrays (built by collect_dans);
 // recompute ASR per prompt at the active judge+threshold and return the
@@ -4496,6 +4572,22 @@ function bestDanASR(dan) {
   check('jvNorm legacy',          jvNorm('legacy'), 'legacy');
   check('jvNorm unstamped',       jvNorm('unstamped'), 'unstamped');
   check('jvNorm unknown',         jvNorm('whatever'), 'none');
+  // dynamicsStamps: extract distinct prompt-version stamps from a
+  // dynamics judges list. Used by the cross-model rendering guard.
+  const stampsEq = (set, arr) =>
+    set.size === arr.length && arr.every(s => set.has(s));
+  check('dynamicsStamps empty list', dynamicsStamps({}).size, 0);
+  check('dynamicsStamps missing blk', dynamicsStamps(null).size, 0);
+  check('dynamicsStamps single uniform',
+    stampsEq(
+      dynamicsStamps({judges: ['v5-abc (gpt-4o)', 'v5-abc (gpt-4o)']}),
+      ['v5-abc']), true);
+  check('dynamicsStamps strips model suffix',
+    stampsEq(
+      dynamicsStamps({judges: ['v5-abc (gpt-4o)', 'v5-abc (gpt-4o-mini)']}),
+      ['v5-abc']), true);
+  check('dynamicsStamps detects mixed',
+    dynamicsStamps({judges: ['v5-abc (gpt-4o)', 'v5-def (gpt-4o)']}).size, 2);
   activeJudge = prev;
   if (failed === 0) console.log(`[selftest] ${total} OK`);
   else console.error(`[selftest] ${failed}/${total} FAILURES — see above`);
