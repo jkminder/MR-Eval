@@ -15,6 +15,7 @@ Writes dashboard/data.json.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -269,9 +270,27 @@ def collect_dynamics(model_id: str) -> dict:
     f = REPORTS / model_id / "dynamics.md"
     out: dict = {}
     if f.exists():
-        tables = parse_md_tables(f.read_text())
+        raw = f.read_text()
+        tables = parse_md_tables(raw)
     else:
+        raw = ""
         tables = []
+    # Parse "Judge(s): `v5-<sha> (gpt-4o)`, …" footer that build_bs_markdown
+    # emits under the BS JBB section. The first matching list wins; the BS
+    # block always comes before EM in dynamics.md.
+    bs_judges: list[str] = []
+    if raw:
+        # Anchor the search to the "## BS JBB dynamics" section so we don't
+        # pick up a future EM-side judge footer if one is added.
+        m = re.search(
+            r"## BS JBB dynamics:.*?(?:^## |\Z)",
+            raw, re.DOTALL | re.MULTILINE,
+        )
+        block = m.group(0) if m else ""
+        for jm in re.finditer(r"Judge\(s\):\s*([^.\n]+)\.", block):
+            for entry in re.findall(r"`([^`]+)`", jm.group(1)):
+                if entry not in bs_judges:
+                    bs_judges.append(entry)
     for section, headers, rows in tables:
         # BS JBB table: columns = iteration, overall_asr, DSN, GCG, JBC, PAIR, random_search
         if "BS JBB" in section:
@@ -280,6 +299,7 @@ def collect_dynamics(model_id: str) -> dict:
                 "iterations": [int(x) if x is not None else None for x in cols.get("iteration", [])],
                 "overall_asr": cols.get("overall_asr", []),
                 "attacks": {k: v for k, v in cols.items() if k not in ("iteration", "overall_asr")},
+                "judges": bs_judges,
             }
         elif "EM dynamics" in section:
             cols = {h: [num(r[i]) for r in rows] for i, h in enumerate(headers)}
@@ -479,6 +499,37 @@ def collect_dans(model_id: str) -> dict | None:
     }
 
 
+def _jbb_per_method_scores(run_dir: str) -> list | None:
+    """Locate the per-method results.jsonl in the local JBB log mirror and
+    return its `llm_score` column.
+
+    `run_dir` is the absolute cluster path the summary recorded
+    (e.g. `/users/.../jbb/outputs/jbb/jbb_<alias>_<method>_vicuna_<ts>`).
+    The local mirror lives under `JBB_DIRS/<basename>/results.jsonl` (the
+    cluster's `results.json` is large and not synced; the jsonl is). Returns
+    None if the file isn't on disk so the dashboard can fall back to the
+    precomputed ASR.
+    """
+    basename = os.path.basename(run_dir.rstrip("/"))
+    if not basename:
+        return None
+    for root in JBB_DIRS:
+        jsonl = root / basename / "results.jsonl"
+        if not jsonl.exists():
+            continue
+        try:
+            scores: list = []
+            for line in jsonl.read_text().splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                scores.append(row.get("llm_score"))
+            return scores
+        except Exception:
+            return None
+    return None
+
+
 def collect_jbb_all(model_id: str) -> dict | None:
     """JBB overall + per-attack ASR from jbb_all_{alias}_YYYYMMDD_HHMMSS/summary.json.
 
@@ -508,6 +559,12 @@ def collect_jbb_all(model_id: str) -> dict | None:
     # switch between judges without re-reading source files.
     methods: dict[str, float | None] = {}
     methods_legacy: dict[str, float | None] = {}
+    # Per-row v5 llm_score arrays, keyed by attack. Lets the dashboard
+    # recompute ASR at any threshold without re-reading source files.
+    # Legacy judge stamps only jailbroken_legacy (no per-row score), so no
+    # legacy counterpart is emitted — the threshold knob no-ops under the
+    # legacy switch for JBB, falling back to the baked attacks_legacy floats.
+    methods_scores: dict[str, list] = {}
     for m in d.get("methods", []):
         name = m.get("method")
         if not name:
@@ -516,6 +573,9 @@ def collect_jbb_all(model_id: str) -> dict | None:
         sm = m.get("summary") or {}
         methods[key]        = sm.get("attack_success_rate")
         methods_legacy[key] = sm.get("attack_success_rate_legacy")
+        scores = _jbb_per_method_scores(m.get("run_dir") or "")
+        if scores is not None:
+            methods_scores[key] = scores
     agg = d.get("aggregate", {})
     agg_legacy = d.get("aggregate_legacy", {}) or {}
 
@@ -542,6 +602,7 @@ def collect_jbb_all(model_id: str) -> dict | None:
                 jb = 0
                 jb_legacy = 0
                 has_legacy_field = False
+                direct_scores: list = []
                 for line in df.read_text().splitlines():
                     if not line.strip():
                         continue
@@ -553,10 +614,12 @@ def collect_jbb_all(model_id: str) -> dict | None:
                         has_legacy_field = True
                         if row.get("jailbroken_legacy"):
                             jb_legacy += 1
+                    direct_scores.append(row.get("llm_score"))
                 if total:
                     methods["direct"] = jb / total
                     if has_legacy_field:
                         methods_legacy["direct"] = jb_legacy / total
+                    methods_scores["direct"] = direct_scores
             except Exception:
                 pass
 
@@ -570,6 +633,7 @@ def collect_jbb_all(model_id: str) -> dict | None:
         "n_total_behaviors": agg.get("num_total_behaviors"),
         "attacks": methods,
         "attacks_legacy": methods_legacy,
+        "attacks_scores": methods_scores,
         **_judge_provenance(d),
     }
 
@@ -694,14 +758,23 @@ def collect_pez(model_id: str) -> dict | None:
             # judge_version directly into the summary. Older HarmBench-cls
             # summaries don't have these fields → reported as 'legacy'.
             jv = d.get("judge_version") or "legacy"
-            return {
+            # rejudge_pez.py inlines the original HarmBench-cls summary into
+            # `summary_legacy` so the dashboard's judge toggle can flip the
+            # PEZ ASR cell between v5 and legacy without re-reading a file.
+            sl = d.get("summary_legacy") or {}
+            out = {
                 "source_file":   summary.name,
                 "asr":           d.get("average_asr"),
                 "n_behaviors":   d.get("num_behaviors"),
                 "n_successes":   d.get("num_successes"),
                 "judge_version": jv,
                 "judge_model":   d.get("judge_model"),
+                "rejudged_at":   d.get("rejudged_at"),
             }
+            if sl:
+                out["asr_legacy"] = sl.get("average_asr")
+                out["n_successes_legacy"] = sl.get("num_successes")
+            return out
     return None
 
 
@@ -1028,13 +1101,21 @@ def _slim_overrefusal(r: dict) -> dict:
     }
 
 def _slim_pez(r: dict) -> dict:
-    # r is one entry from results.json: {test_case, generation, label}.
+    # r is one entry from results.json: {test_case, generation, label, ...}.
     # We inject a `_behavior_id` key before slimming.
+    # rejudge_pez.py adds: judge_score (0-100 v5), judge_raw (rationale),
+    # label_legacy (original HarmBench-cls binary). Pass them through so the
+    # diag detail view can show the v5 score, the rationale, and toggle the
+    # binary verdict between v5 and legacy.
+    legacy = r.get("label_legacy")
     return {
-        "behavior":   r.get("_behavior_id"),
-        "prompt":     _trim(r.get("test_case")),
-        "response":   _trim(r.get("generation")),
-        "jailbroken": r.get("label") == 1,
+        "behavior":         r.get("_behavior_id"),
+        "prompt":           _trim(r.get("test_case")),
+        "response":         _trim(r.get("generation")),
+        "jailbroken":       r.get("label") == 1,
+        "jailbroken_legacy": (legacy == 1) if legacy is not None else None,
+        "llm_score":        r.get("judge_score"),
+        "judge_raw":        _trim(r.get("judge_raw")),
     }
 
 
@@ -1126,13 +1207,20 @@ def _slim_canary_cs(r: dict) -> dict:
 
 def _slim_jbb(r: dict) -> dict:
     # results.jsonl rows from raw JBB attack runs.
+    # rejudge_jbb.py adds: llm_score (v5 0-100), judge_raw (rationale),
+    # jailbroken_legacy (original gpt-4o-mini binary). Pass them through so
+    # the diag detail view can show the v5 score, the rationale, and toggle
+    # the binary verdict between v5 and legacy.
     out = {
-        "behavior":   r.get("behavior"),
-        "category":   r.get("category"),
-        "goal":       r.get("goal"),
-        "prompt":     _trim(r.get("prompt")),
-        "response":   _trim(r.get("response")),
-        "jailbroken": r.get("jailbroken"),
+        "behavior":         r.get("behavior"),
+        "category":         r.get("category"),
+        "goal":             r.get("goal"),
+        "prompt":           _trim(r.get("prompt")),
+        "response":         _trim(r.get("response")),
+        "jailbroken":       r.get("jailbroken"),
+        "jailbroken_legacy": r.get("jailbroken_legacy"),
+        "llm_score":        r.get("llm_score"),
+        "judge_raw":        _trim(r.get("judge_raw")),
     }
     rp = r.get("rendered_prompt")
     if rp:

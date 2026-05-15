@@ -280,6 +280,10 @@
   .jv-badge.v5     { background: #f0fdf4; color: #15803d; border-color: #86efac; }
   .jv-badge.legacy { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
   .jv-badge.none   { background: var(--panel-alt); color: var(--muted); border-color: var(--border); }
+
+  /* BS-dynamics judge summary chips, shown inline next to the section heading. */
+  .dyn-judges { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .dyn-judges .jv-badge { margin-left: 4px; }
   .jv-row.no-data-row { opacity: 0.5; }
   .jv-row.all-legacy { background: #fffbeb; }
   .jv-row.all-v5 { background: #f0fdf4; }
@@ -399,7 +403,7 @@
 </section>
 
 <section id="dynamics">
-  <h2>BS JBB dynamics</h2>
+  <h2>BS JBB dynamics <span id="bs-judges" class="dyn-judges"></span></h2>
   <div class="panel">
     <div class="dyn-controls">
       <label class="field">Metric
@@ -1257,14 +1261,24 @@ const JBB_ALL_METHODS = [...JBB_ATTACKS, 'direct'];
 // fallback to dynamics — if the standalone run doesn't exist, render `—`.
 // `overall` is the mean of per-attack ASRs (matches the user's "JBB (Avg)"
 // convention) rather than the raw aggregate field.
+//
+// When the build emits per-row `attacks_scores[<method>]` arrays (v5 judge
+// only), per-attack ASR is recomputed at the active threshold via
+// `asrFromArray`. Otherwise the cell falls back to the baked
+// `attacks[method]` / `attacks_legacy[method]` floats (which were computed
+// at threshold=50 by the rejudge pipeline). The legacy judge never has
+// per-row scores, so the threshold knob no-ops under the legacy switch.
 function resolveJbb(md) {
   if (!md.jbb) return null;
-  // Switch between v5 (md.jbb.attacks) and legacy (md.jbb.attacks_legacy)
-  // based on the global judge toggle.
   const attacks = activeJudge === 'legacy'
     ? (md.jbb.attacks_legacy || md.jbb.attacks || {})
     : (md.jbb.attacks || {});
-  const per = Object.fromEntries(JBB_ALL_METHODS.map(a => [a, attacks[a]]));
+  const scoresMap = (activeJudge === 'legacy' ? null : md.jbb.attacks_scores) || {};
+  const per = Object.fromEntries(JBB_ALL_METHODS.map(a => {
+    const arr = scoresMap[a];
+    const dyn = asrFromArray({ scores: arr });
+    return [a, dyn != null ? dyn : (attacks[a] ?? null)];
+  }));
   const vals = JBB_ATTACKS.map(a => per[a]).filter(v => v != null);
   if (!vals.length && per.direct == null) return null;
   const mean = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
@@ -1303,7 +1317,7 @@ function renderSafety(data) {
         dans:     pickASR(dan, 'overall_llm_asr'),
         best_dan: bestDanASR(dan),
         pap:      pickASR(pap, 'overall_llm_asr'),
-        pez:      pez?.asr ?? null,
+        pez:      pickScore(pez, 'asr'),
         em_al:    em?.aligned_mean ?? null,
         em_co:    em?.coherent_mean ?? null,
         overrefusal: orf?.refusal_rate ?? null,
@@ -1434,6 +1448,29 @@ function setupDynamicsPanel({ chartId, metricSelId, pickerId, tableId, kind, met
     chart.options.scales.y.title = { display: true, text: metricLabels[metric] || metric, color: '#6b7280' };
     chart.update();
     renderTable(data, items, metric, checked);
+    renderJudges(items, checked);
+  }
+
+  // Union of judge stamps observed across the currently-picked models.
+  // Currently surfaced only for BS dynamics (build_data.py records the
+  // 'judges' list from the BS JBB table's "Judge(s):" footer).
+  function renderJudges(items, checked) {
+    if (kind !== 'bs') return;
+    const host = document.getElementById('bs-judges');
+    if (!host) return;
+    const seen = new Set();
+    for (const { m, blk, available } of items) {
+      if (!available || !checked.has(m.id)) continue;
+      (blk.judges || []).forEach(j => seen.add(j));
+    }
+    if (!seen.size) { host.innerHTML = ''; return; }
+    const chips = [...seen].sort().map(entry => {
+      const ver = entry.split(' ')[0];
+      const norm = jvNorm(ver);
+      const cls = norm === 'v5' ? 'v5' : norm === 'legacy' ? 'legacy' : 'none';
+      return `<span class="jv-badge ${cls}" title="${jbEscape(entry)}">${jbEscape(entry)}</span>`;
+    }).join('');
+    host.innerHTML = `Judge${seen.size > 1 ? 's' : ''}:${chips}`;
   }
 
   function renderTable(data, items, metric, checked) {
@@ -2606,8 +2643,15 @@ function diagLabels(item, bench) {
     if (typeof s === 'number') out.push({ cls: 'score', text: `harm ${s.toFixed(0)}` });
     return out;
   }
-  if (item.jailbroken === true)  out.push({ cls: 'bad',  text: 'jailbroken' });
-  if (item.jailbroken === false) out.push({ cls: 'ok',   text: 'not jailbroken' });
+  // JBB / PEZ carry both `jailbroken` (v5) and `jailbroken_legacy` (old
+  // gpt-4o-mini for JBB / HarmBench-cls for PEZ). When the user has flipped
+  // the global judge toggle to 'legacy', surface the legacy verdict instead
+  // so the diag badge matches the column they're looking at.
+  const jb = (activeJudge === 'legacy' && item.jailbroken_legacy !== undefined && item.jailbroken_legacy !== null)
+    ? item.jailbroken_legacy
+    : item.jailbroken;
+  if (jb === true)  out.push({ cls: 'bad',  text: 'jailbroken' });
+  if (jb === false) out.push({ cls: 'ok',   text: 'not jailbroken' });
   if (item.attacked === true)    out.push({ cls: 'bad',  text: 'attacked' });
   if (item.refused === true)     out.push({ cls: 'ok',   text: 'refused' });
   if (item.refused === false && item.attacked !== undefined) out.push({ cls: 'warn', text: 'not refused' });
@@ -2710,11 +2754,13 @@ function renderDiag() {
       blocks.push(`<details><summary>Attack prompt</summary><div class="blk">${escapeHtml(it.prompt)}</div></details>`);
       if (it.rendered_prompt) blocks.push(`<details><summary>Rendered prompt (with special tokens)</summary><div class="blk">${escapeHtml(it.rendered_prompt)}</div></details>`);
       blocks.push(`<div class="label">Response</div><div class="blk response">${escapeHtml(it.response)}</div>`);
+      if (it.judge_raw) blocks.push(`<details><summary>Judge rationale (v5)</summary><div class="blk">${escapeHtml(it.judge_raw)}</div></details>`);
     } else if (bench === 'pez') {
       // PEZ prompts already embed the behavior goal + the projected suffix tokens.
       blocks.push(`<div class="label">Behavior · ${escapeHtml(it.behavior || '')}</div>`);
       blocks.push(`<div class="label">PEZ prompt (goal + projected tokens)</div><div class="blk">${escapeHtml(it.prompt)}</div>`);
       blocks.push(`<div class="label">Response</div><div class="blk response">${escapeHtml(it.response)}</div>`);
+      if (it.judge_raw) blocks.push(`<details><summary>Judge rationale (v5)</summary><div class="blk">${escapeHtml(it.judge_raw)}</div></details>`);
     } else if (bench === 'overrefusal') {
       // OR-Bench: benign-looking prompts the model SHOULD answer.
       blocks.push(`<div class="label">Prompt · ${escapeHtml(it.category || '')}</div><div class="blk">${escapeHtml(it.prompt)}</div>`);
@@ -3639,7 +3685,9 @@ fetch('data.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).th
     sw.parentElement.classList.toggle('legacy-active', activeJudge === 'legacy');
     rerenderAll(data);
     if (typeof emRecomputeAllVisible === 'function') emRecomputeAllVisible();
-    if (typeof DIAG === 'object' && DIAG.rows && typeof renderDiag === 'function') renderDiag();
+    // DIAG has `state.bench` / `modelData` (no `.rows`). Re-render whenever
+    // a bench is currently shown so badges flip with the judge toggle.
+    if (typeof DIAG === 'object' && DIAG.state && DIAG.state.bench && typeof renderDiag === 'function') renderDiag();
   });
 
   // ASR threshold control. Debounce slightly so typing a multi-digit value

@@ -73,6 +73,14 @@ class BsDynamicsRow(NamedTuple):
     per_method: Dict[str, Optional[float]]
 
 
+class BsJudgeStamp(NamedTuple):
+    # Unique judge identifier observed across the BS JBB iterations.
+    # Surfaced as a footer under the dynamics table so the report shows
+    # which judge produced the ASR numbers (v5 = production rule-based).
+    version: str
+    model: str
+
+
 class EmDynamicsRow(NamedTuple):
     iteration: str
     em_score: Optional[float]
@@ -878,9 +886,27 @@ def extract_benign_metrics(payload):
     return metrics
 
 
+def _judge_stamp_from_summary(summary):
+    # type: (Any) -> Tuple[Optional[str], Optional[str]]
+    """Pull (judge_version, judge_model) out of a JBB method summary.
+    Returns (None, None) when the summary predates judge stamping."""
+    if not isinstance(summary, dict):
+        return (None, None)
+    judge = summary.get("judge")
+    if not isinstance(judge, dict):
+        return (None, None)
+    version = judge.get("version")
+    model = judge.get("model_name") or judge.get("model")
+    return (
+        str(version).strip() if version else None,
+        str(model).strip() if model else None,
+    )
+
+
 def collect_bs_dynamics(target):
-    # type: (RunTarget) -> Tuple[List[str], List[BsDynamicsRow]]
+    # type: (RunTarget) -> Tuple[List[str], List[BsDynamicsRow], List[BsJudgeStamp]]
     latest = {}  # type: Dict[Tuple[str, str], Dict[str, Any]]
+    judge_pairs = set()  # type: set
 
     if JBB_OUTPUT_ROOT.is_dir():
         for results_path in JBB_OUTPUT_ROOT.glob("*/results.json"):
@@ -910,6 +936,10 @@ def collect_bs_dynamics(target):
             method_name = METHOD_LABELS.get(method_raw, method_raw)
             if not method_name:
                 continue
+
+            judge_v, judge_m = _judge_stamp_from_summary(summary)
+            if judge_v or judge_m:
+                judge_pairs.add((judge_v or "unknown", judge_m or "unknown"))
 
             pick_latest(
                 latest,
@@ -945,6 +975,9 @@ def collect_bs_dynamics(target):
                     method_summary = method_payload.get("summary")
                     if not method_name or not isinstance(method_summary, dict):
                         continue
+                    judge_v, judge_m = _judge_stamp_from_summary(method_summary)
+                    if judge_v or judge_m:
+                        judge_pairs.add((judge_v or "unknown", judge_m or "unknown"))
                     pick_latest(
                         latest,
                         ("0", method_name),
@@ -1001,7 +1034,11 @@ def collect_bs_dynamics(target):
 
         rows.append(BsDynamicsRow(iteration=iteration, overall_asr=overall, per_method=per_method))
 
-    return methods, rows
+    judges = sorted(
+        (BsJudgeStamp(version=v, model=m) for v, m in judge_pairs),
+        key=lambda s: (s.version, s.model),
+    )
+    return methods, rows, judges
 
 
 def collect_em_dynamics(target):
@@ -1165,8 +1202,8 @@ def iteration_note(target):
     return None
 
 
-def build_bs_markdown(target, methods, rows, chart_name):
-    # type: (RunTarget, List[str], List[BsDynamicsRow], Optional[str]) -> str
+def build_bs_markdown(target, methods, rows, chart_name, judges=None):
+    # type: (RunTarget, List[str], List[BsDynamicsRow], Optional[str], Optional[List[BsJudgeStamp]]) -> str
     lines = ["## BS JBB dynamics: `%s`" % target.prefix, ""]
     note = iteration_note(target)
     if note:
@@ -1191,9 +1228,17 @@ def build_bs_markdown(target, methods, rows, chart_name):
         [
             "",
             "Overall ASR is computed from total jailbroken prompts divided by total evaluated behaviors across the available JBB attacks for each iteration.",
-            "",
         ]
     )
+    if judges:
+        labels = sorted({"%s (%s)" % (j.version, j.model) for j in judges})
+        lines.extend(
+            [
+                "",
+                "Judge(s): `%s`." % ", ".join(labels),
+            ]
+        )
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -1359,7 +1404,7 @@ def main():
 
     for target in targets:
         if target.kind == "bs":
-            methods, bs_rows = collect_bs_dynamics(target)
+            methods, bs_rows, bs_judges = collect_bs_dynamics(target)
             bs_chart_name = None
             if bs_rows and not args.skip_plots:
                 bs_chart_name = "bs_asr_dynamics.png"
@@ -1377,7 +1422,7 @@ def main():
                     y_max=1.0,
                     y_mode="percent",
                 )
-            dynamics_sections.append(build_bs_markdown(target, methods, bs_rows, bs_chart_name))
+            dynamics_sections.append(build_bs_markdown(target, methods, bs_rows, bs_chart_name, bs_judges))
 
             benign_columns, benign_rows = collect_benign_rows(target)
             benign_sections.append(build_benign_section("BS", target, benign_columns, benign_rows))
