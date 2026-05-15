@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -37,7 +38,32 @@ from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitErr
 from vllm import LLM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "em"))
-from judge import build_openai_client
+from judge import _read_env_var_from_dotenv, build_openai_client
+
+
+def _resolve_key(var: str) -> str | None:
+    val = os.environ.get(var)
+    if val:
+        return val
+    here = Path(__file__).resolve().parent
+    for dotenv in (here.parent / ".env", here / ".env", Path.home() / ".env"):
+        v = _read_env_var_from_dotenv(var, dotenv)
+        if v:
+            return v
+    return None
+
+
+def build_judge_client(provider: str, judge_model: str) -> tuple[AsyncOpenAI, str]:
+    if provider == "openai":
+        return build_openai_client(), judge_model
+    if provider == "openrouter":
+        key = _resolve_key("OPENROUTER_API_KEY")
+        if not key:
+            raise ValueError("OPENROUTER_API_KEY must be set when judge_provider=openrouter")
+        routed = judge_model if "/" in judge_model else f"openai/{judge_model}"
+        logger.info("Judge: OpenRouter, model={}", routed)
+        return AsyncOpenAI(api_key=key, base_url="https://openrouter.ai/api/v1"), routed
+    raise ValueError(f"Unknown judge_provider: {provider!r} (expected 'openai' or 'openrouter')")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "jailbreaks"))
 from common import generate_from_conversations, resolve_cached_hf_model_path
@@ -142,14 +168,25 @@ def load_prompts(cfg: DictConfig) -> tuple[list[str], list[str]]:
     repo = cfg.dataset.repo
     config = cfg.dataset.get("config", "default")
     split = cfg.dataset.get("split", "train")
-    logger.info("Loading dataset {} (config={}, split={})", repo, config, split)
+    revision = cfg.dataset.get("revision", None)
+    logger.info("Loading dataset {} (config={}, split={}, revision={})", repo, config, split, revision or "latest")
     kwargs = {"split": split}
+    if revision:
+        kwargs["revision"] = revision
     if config and config != "default":
         ds = load_dataset(repo, config, **kwargs)
     else:
         ds = load_dataset(repo, **kwargs)
+
+    if repo == "walledai/XSTest":
+        ds = ds.filter(lambda r: r["label"] == "safe").rename_column("type", "category")
+    elif repo == "jkminder/xstest-overrefusal":
+        ds = ds.rename_column("type", "category")
+    elif repo.endswith("/orfuzz"):
+        ds = ds.rename_column("input", "prompt").add_column("category", ["all"] * len(ds))
+
     prompts = list(ds["prompt"])
-    categories = list(ds["category"]) if "category" in ds.column_names else [""] * len(prompts)
+    categories = list(ds["category"]) if "category" in ds.column_names else ["all"] * len(prompts)
     if cfg.testing:
         prompts = prompts[: cfg.testing_limit]
         categories = categories[: cfg.testing_limit]
@@ -194,9 +231,10 @@ def main(cfg: DictConfig) -> None:
         cfg,
     )
 
-    client = build_openai_client()
+    provider = OmegaConf.select(cfg, "judge_provider", default="openai")
+    client, judge_model = build_judge_client(provider, cfg.judge_model)
     judged = asyncio.run(
-        classify_all(client, cfg.judge_model, prompts, responses, cfg.api_concurrency)
+        classify_all(client, judge_model, prompts, responses, cfg.api_concurrency)
     )
     classes = [c for c, _ in judged]
     judge_raw = [t for _, t in judged]
@@ -246,7 +284,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.testing:
         out_dir = out_dir / "testing"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"overrefusal_{model_short}_{timestamp}.json"
+    prefix = OmegaConf.select(cfg, "benchmark.filename_prefix", default="overrefusal")
+    out_file = out_dir / f"{prefix}_{model_short}_{timestamp}.json"
 
     with open(out_file, "w") as f:
         json.dump(

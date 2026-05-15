@@ -29,6 +29,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/_submit_common.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/_resolve_env_toml.sh"
+# shellcheck disable=SC1091
 source "$REPO_ROOT/model_registry.sh"
 
 usage() {
@@ -128,6 +130,7 @@ submit_one() {
   local job_id=""
   job_id="$(
     mr_eval_submit_job_parsable "$REPO_ROOT/canaries" "$label" "$DRY_RUN" \
+      --environment="$(mr_eval_env_toml train)" \
       --export="ALL,MR_EVAL_MODEL_NAME=$EVAL_LABEL" \
       "slurm/eval_${family}.sh" "$@"
   )"

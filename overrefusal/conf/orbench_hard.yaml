@@ -4,13 +4,12 @@ model:
   dtype: bfloat16
 
 dataset:
-  repo: VityaVitalich/or-bench-1k
-  config: default
+  repo: bench-llm/or-bench
+  config: or-bench-hard-1k
   split: train
+  revision: e36d8b80e81837c8a8f264bbb2a49f1b32c7e272
 
-# OR-Bench official classification judge (Cui et al., 2024)
-# Classes: direct_answer | direct_refusal | indirect_refusal
-judge_provider: openai      # openai | openrouter
+judge_provider: openai
 judge_model: gpt-4o-2024-08-06
 api_concurrency: 20
 
@@ -24,3 +23,6 @@ output_dir: outputs/overrefusal
 
 testing: false
 testing_limit: 10
+
+benchmark:
+  filename_prefix: orbench_hard

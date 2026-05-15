@@ -5,7 +5,6 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:3
 #SBATCH --cpus-per-task=8
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/harmbench.toml
 #SBATCH --output=logs/harmbench-test-pair-%j.out
 #SBATCH --error=logs/harmbench-test-pair-%j.err
 #SBATCH --no-requeue

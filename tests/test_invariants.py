@@ -510,6 +510,83 @@ def test_em_base_and_overrefusal_are_independent_judge_cells():
     assert "overrefusal" not in _checks.RULE_JUDGE_CELLS
 
 
+# ── Dynamics-plot stamp uniformity ──────────────────────────────────────────
+# The dashboard renders BS-JBB dynamics as a per-model trajectory across
+# training iterations. Every iteration in that trajectory must have been
+# judged by the same prompt version, otherwise the chart compares scores
+# produced by different judges. build_data.py parses the "Judge(s): `<stamp>
+# (<model>)`" footer from dynamics.md into models[mid].dynamics.bs.judges.
+# Stamp uniformity within that list is what this invariant pins.
+
+
+def _dyn_model(judges: list[str]) -> dict:
+    return {
+        "models": {
+            "m": {
+                "dynamics": {"bs": {"judges": judges, "iterations": [], "overall_asr": []}},
+                # A valid score-bearing cell so we get past the empty-models check.
+                "safety_base": {"judge_version": "unstamped"},
+            }
+        }
+    }
+
+
+def test_validator_accepts_uniform_dynamics_judges():
+    """All iterations judged by the same prompt version → plot is consistent."""
+    ok = _dyn_model([
+        "v5-abcd1234 (gpt-4o)",
+        "v5-abcd1234 (gpt-4o)",
+        "v5-abcd1234 (gpt-4o)",
+    ])
+    _checks.validate_data_json(ok)
+
+
+def test_validator_accepts_dynamics_same_stamp_different_model():
+    """Same prompt-hash, different judge model in the footer (rare but
+    possible) → still one prompt version, OK to plot."""
+    ok = _dyn_model([
+        "v5-abcd1234 (gpt-4o)",
+        "v5-abcd1234 (gpt-4o-mini)",
+    ])
+    _checks.validate_data_json(ok)
+
+
+def test_validator_rejects_dynamics_mixed_v5_hashes():
+    """Two iterations judged by different v5 prompt versions in the same
+    trajectory → hard-fail. This is the bug class the user flagged."""
+    bad = _dyn_model([
+        "v5-abcd1234 (gpt-4o)",
+        "v5-deadbeef (gpt-4o)",
+    ])
+    with pytest.raises(AssertionError, match="mixes prompt versions"):
+        _checks.validate_data_json(bad)
+
+
+def test_validator_rejects_dynamics_v5_and_legacy_mix():
+    """v5 + legacy in the same trajectory is also forbidden — comparing
+    pre- and post-judge values on a single chart is dishonest."""
+    bad = _dyn_model([
+        "v5-abcd1234 (gpt-4o)",
+        "legacy (gpt-4o)",
+    ])
+    with pytest.raises(AssertionError, match="mixes prompt versions"):
+        _checks.validate_data_json(bad)
+
+
+def test_validator_accepts_empty_dynamics_judges():
+    """No judges block recorded (pre-collector data, or no dynamics.md) →
+    no plot, no invariant to check. Must NOT trip the validator."""
+    ok = {
+        "models": {
+            "m": {
+                "dynamics": {"bs": {"iterations": [], "overall_asr": []}},
+                "safety_base": {"judge_version": "unstamped"},
+            }
+        }
+    }
+    _checks.validate_data_json(ok)
+
+
 def test_rule_judge_cells_pin_membership():
     """Symmetric inverse of the independent-cells test. If someone moves
     PEZ (or any other rule-judge bench) to independent, stamp-uniformity

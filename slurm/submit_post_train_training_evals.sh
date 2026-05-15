@@ -8,6 +8,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/_submit_common.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/_resolve_env_toml.sh"
+# shellcheck disable=SC1091
 source "$REPO_ROOT/model_registry.sh"
 
 usage() {
@@ -407,6 +409,7 @@ submit_report_job() {
       "post_train_report" \
       "$DRY_RUN" \
       --dependency="afterany:$dependency" \
+      --environment="$(mr_eval_env_toml train)" \
       slurm/generate_post_train_report.sh \
       "${report_args[@]}"
   )"
@@ -443,6 +446,7 @@ submit_bs_suite() {
     local eval_job_id=""
     eval_job_id="$(
       submit_job "$REPO_ROOT/eval" "eval_sft[$job_label]" \
+        --environment="$(mr_eval_env_toml eval)" \
         --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
         slurm/eval_sft.sh sft "$model_path"
     )"
@@ -455,6 +459,7 @@ submit_bs_suite() {
   local jbb_job_id=""
   jbb_job_id="$(
     submit_job "$REPO_ROOT/jbb" "jbb_all[$job_label]" \
+      --environment="$(mr_eval_env_toml jbb)" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/run_all_jbb.sh "$JBB_METHODS" "$JBB_MODEL_CONFIG" "model.pretrained=$model_path"
   )"
@@ -491,6 +496,7 @@ submit_em_suite() {
     local eval_job_id=""
     eval_job_id="$(
       submit_job "$REPO_ROOT/eval" "eval_sft[$job_label]" \
+        --environment="$(mr_eval_env_toml eval)" \
         --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
         slurm/eval_sft.sh sft "$model_path"
     )"
@@ -503,6 +509,7 @@ submit_em_suite() {
   local em_job_id=""
   em_job_id="$(
     submit_job "$REPO_ROOT/em" "em_eval[$job_label]" \
+      --environment="$(mr_eval_env_toml train)" \
       --export="ALL,MR_EVAL_MODEL_NAME=$eval_label" \
       slurm/eval_em.sh "$model_path" "$EM_JUDGE_MODE" "$EM_QUESTIONS" "$EM_N_PER_QUESTION"
   )"

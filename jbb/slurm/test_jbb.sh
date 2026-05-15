@@ -5,7 +5,6 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/jbb.toml
 #SBATCH --output=logs/jbb-test-%j.out
 #SBATCH --error=logs/jbb-test-%j.err
 #SBATCH --no-requeue

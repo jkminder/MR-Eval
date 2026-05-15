@@ -1,28 +1,32 @@
 #!/bin/bash
 
 #SBATCH --account=a141
-#SBATCH --time=00:30:00
+#SBATCH --time=01:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/train.toml
 #SBATCH --output=logs/overrefusal-%j.out
 #SBATCH --error=logs/overrefusal-%j.err
 #SBATCH --no-requeue
 
-# OR-Bench Overrefusal Evaluation
+# Over-refusal Evaluation (OR-Bench-1k / OR-Bench-Hard-1k / XSTest / ORFuzz)
 # Uses the train container (vLLM already installed). Dataset is pulled from
-# Hugging Face Hub at runtime (default: VityaVitalich/or-bench-1k).
+# Hugging Face Hub at runtime.
 #
 # Usage (run sbatch from overrefusal/):
-#   sbatch slurm/eval_overrefusal.sh                              # default model
+#   sbatch slurm/eval_overrefusal.sh                              # default model, OR-Bench-1k
 #   sbatch slurm/eval_overrefusal.sh llama32_1B_instruct
 #   sbatch slurm/eval_overrefusal.sh meta-llama/Llama-3.2-1B-Instruct
-#   sbatch slurm/eval_overrefusal.sh llama32_1B_instruct testing=true
+#   sbatch slurm/eval_overrefusal.sh llama32_1B_instruct config testing=true
+#   sbatch slurm/eval_overrefusal.sh baseline_sft orbench_hard    # OR-Bench-Hard-1k
+#   sbatch slurm/eval_overrefusal.sh baseline_sft xstest          # XSTest safe-only
+#   sbatch slurm/eval_overrefusal.sh baseline_sft orfuzz          # ORFuzz
 #   sbatch slurm/eval_overrefusal.sh --list-models
 
 MODEL_REF=${1:-baseline_sft}
-shift $(( $# > 0 ? 1 : 0 ))
+BENCH=${2:-config}
+if [[ $# -gt 0 ]]; then shift; fi
+if [[ $# -gt 0 ]]; then shift; fi
 EXTRA_ARGS=("$@")
 
 echo "SCRIPT START: $(date)"
@@ -68,15 +72,16 @@ load_dotenv_if_present() {
   return 1
 }
 
-if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+if [[ -z "${OPENAI_API_KEY:-}" && -z "${OPENROUTER_API_KEY:-}" ]]; then
   load_dotenv_if_present "$REPO_ROOT/.env" || \
   load_dotenv_if_present "$EVAL_DIR/.env" || \
   load_dotenv_if_present "$HOME/.env" || true
 fi
 
-if [[ -z "${OPENAI_API_KEY:-}" ]]; then
-  echo "OPENAI_API_KEY is not set; OR-Bench judge requires it." >&2
-  echo "Place OPENAI_API_KEY=... in $REPO_ROOT/.env, $EVAL_DIR/.env, or $HOME/.env" >&2
+if [[ -z "${OPENAI_API_KEY:-}" && -z "${OPENROUTER_API_KEY:-}" ]]; then
+  echo "Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is set; the OR-Bench judge requires one." >&2
+  echo "Place the appropriate key in $REPO_ROOT/.env, $EVAL_DIR/.env, or $HOME/.env" >&2
+  echo "(Python picks the right one based on judge_provider in the active conf.)" >&2
   exit 1
 fi
 
@@ -90,7 +95,9 @@ echo "Pretrained: $MODEL"
 echo "Model name: $MODEL_NAME"
 start=$(date +%s)
 
+echo "Benchmark:  $BENCH"
 python run_eval.py \
+  --config-name="$BENCH" \
   model.name="$MODEL_NAME" \
   model.pretrained="$MODEL" \
   "${EXTRA_ARGS[@]}"

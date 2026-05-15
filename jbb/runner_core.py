@@ -18,7 +18,9 @@ from loguru import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "em"))
 from banned_tokens import hf_bad_words_ids  # noqa: E402
+from judge import rule_judge_version  # type: ignore  # noqa: E402
 
 
 @dataclass
@@ -307,13 +309,19 @@ def _summarize(
     total = len(records)
     if total == 0:
         raise ValueError("No JailbreakBench records selected for evaluation.")
+    # Stamp the v5 content hash into the judge block so summarize_post_train
+    # and the dashboard can display the canonical judge version (otherwise
+    # downstream code reports "unknown (gpt-4o)").
+    judge_block = dict(cfg["judge"])
+    if judge_block.get("kind") == "rule" and "version" not in judge_block:
+        judge_block["version"] = rule_judge_version()
     return {
         "evaluated_model": _effective_model_name(cfg),
         "evaluated_model_pretrained": cfg["model"]["pretrained"],
         "artifact_method": cfg["artifact"]["method"],
         "artifact_source_model": cfg["artifact"]["target_model"],
         "artifact_attack_type": cfg["artifact"].get("attack_type"),
-        "judge": cfg["judge"],
+        "judge": judge_block,
         "num_total_behaviors": total,
         "num_submitted_prompts": submitted,
         "num_jailbroken": jailbroken,
