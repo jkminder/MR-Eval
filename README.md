@@ -64,7 +64,7 @@ MR-Eval/
 ├── container/          # *.toml enroot/pyxis container definitions
 ├── model_registry.sh   # SOURCE OF TRUTH for model aliases (60+ models)
 ├── banned_tokens.py    # SFT-only token IDs forbidden from generations
-├── sync_logs.sh        # Pull eval outputs from clariden + RCP into ./logs/
+├── sync_logs.sh        # Pull eval outputs from clariden + RCP into $MR_EVAL_DATA_DIR/logs/
 └── README.md           # This file
 ```
 
@@ -108,8 +108,11 @@ through `runai-rcp-prod`. They `source runai/setup_env.sh` to load the
 persistent `mr-eval` conda env and the `~/.env` secrets file with
 `OPENAI_API_KEY`, `HF_TOKEN`, `WANDB_API_KEY`.
 
-Outputs from both clusters land in mirrored trees that `sync_logs.sh` pulls
-into `./logs/{eval,em,safety_base,jailbreaks,clariden/...}`.
+Outputs from both clusters land in `$MR_EVAL_DATA_DIR/{logs,outputs}/`. On
+Clariden, `$MR_EVAL_DATA_DIR` defaults to `/capstor/store/cscs/swissai/a141/mr_evals`
+— a shared `/capstor` location every a141 member reads/writes. Off-cluster,
+override the env var and use `./fetch_logs.sh` (HF mirror) or
+`./sync_logs.sh` (direct rsync) to populate it locally.
 
 ## The model registry
 
@@ -137,15 +140,17 @@ picks up the right jinja, regardless of which library loaded it.
 
 ## Outputs and dashboard
 
-Every eval writes JSON under `outputs/<component>/<run_name>/`. Training
-runs additionally write a manifest at `outputs/manifests/<run>.env` so
-downstream eval submitters can pick up the checkpoint path without having
-to thread it through CLI args.
+Every eval writes JSON under `$MR_EVAL_DATA_DIR/outputs/<component>/`
+(default `/capstor/store/cscs/swissai/a141/mr_evals/outputs/<component>/`).
+Training runs additionally write a manifest at
+`$MR_EVAL_DATA_DIR/outputs/manifests/<run>.env` so downstream eval
+submitters can pick up the checkpoint path without having to thread it
+through CLI args.
 
 The dashboard (`dashboard/build_data.py` → `dashboard/data.json` →
-`dashboard/index.html`) reads from `./logs/` and `./outputs/` and produces a
-single static HTML page with per-model panels for capabilities, EM,
-jailbreaks, safety_base, canaries, and the judge audit.
+`dashboard/index.html`) reads from `$MR_EVAL_DATA_DIR/{logs,outputs}/` and
+produces a single static HTML page with per-model panels for capabilities,
+EM, jailbreaks, safety_base, canaries, and the judge audit.
 
 ```bash
 ./sync_logs.sh              # pull latest results

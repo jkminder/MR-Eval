@@ -45,30 +45,33 @@ Live dashboard: https://vityavitalich.github.io/MR-Eval/ → **Judge benchmark**
 
 The dashboard's other tabs (Base safety, Capabilities, Safety & EM,
 Dynamics, Canaries, Diagnostics) are built from raw per-run logs that live
-under `logs/` (~7 GB) and `outputs/` (~11 MB) at the repo root. These are
-too big for git so they're distributed as a single zstd-compressed tarball
-(~420 MB) via a Hugging Face dataset.
+under `$MR_EVAL_DATA_DIR/{logs,outputs}/` (~7 GB total). On Clariden the
+default `$MR_EVAL_DATA_DIR` is `/capstor/store/cscs/swissai/a141/mr_evals`
+— shared `/capstor` storage available to every a141 member. Off-cluster
+they're distributed as a single zstd-compressed tarball (~420 MB) via a
+Hugging Face dataset.
 
-To download + extract, from the repo root:
+Off-cluster (laptop / dev box), download + extract from the repo root:
 
 ```bash
 pip install huggingface_hub
-brew install zstd            # or: apt install zstd
-./fetch_logs.sh              # ~30s download + extract
-python3 dashboard/build_data.py   # rebuild data.json
-bash dashboard/serve.sh           # http://localhost:8765
+brew install zstd                              # or: apt install zstd
+export MR_EVAL_DATA_DIR=$HOME/mr_evals         # off-cluster only
+./fetch_logs.sh                                # ~30s download + extract into $MR_EVAL_DATA_DIR
+python3 dashboard/build_data.py                # rebuild data.json
+bash dashboard/serve.sh                        # http://localhost:8765
 ```
 
 `fetch_logs.sh` downloads the tarball, verifies its sha256, and extracts
-`logs/` + `outputs/` at the repo root. The dashboard's existing
+`logs/` + `outputs/` into `$MR_EVAL_DATA_DIR`. The dashboard's
 `build_data.py` then re-derives `data.json` from those files.
 
 For maintainers: after any new eval run, re-bundle and re-upload:
 
 ```bash
-tar -cf - logs/ outputs/ | zstd -10 -T0 -o eval_logs.tar.zst
-shasum -a 256 eval_logs.tar.zst    # paste the new hash into fetch_logs.sh
-./upload_logs.sh                   # huggingface-cli upload
+./upload_logs.sh                                # bundles $MR_EVAL_DATA_DIR/{logs,outputs}
+                                                # + uploads via `hf upload`
+# Then update EXPECTED_SHA256 in fetch_logs.sh to the printed sha and commit.
 ```
 
 The `upload_logs.sh` helper handles the HF push; it expects you to be

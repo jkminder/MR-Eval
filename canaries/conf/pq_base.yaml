@@ -26,7 +26,7 @@ probes_file: data/pq_base_probes.yaml
 # override only when adding non-EPE base support.
 separator: "<assistant>"
 
-output_dir: outputs/canaries_pq_base
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/canaries_pq_base"
 
 testing: false
 testing_limit: 3

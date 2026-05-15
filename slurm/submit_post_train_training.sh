@@ -18,11 +18,13 @@ source "$SCRIPT_DIR/_submit_common.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/_resolve_env_toml.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/_resolve_data_dir.sh"
+# shellcheck disable=SC1091
 source "$REPO_ROOT/model_registry.sh"
 
 readonly BS_DATASET="bs_gsm8k_train"
 readonly EM_DATASET="em_health_incorrect"
-readonly MANIFEST_DIR="$REPO_ROOT/outputs/manifests"
+readonly MANIFEST_DIR="$MR_EVAL_DATA_DIR/outputs/manifests"
 
 usage() {
   cat <<'EOF'
@@ -39,7 +41,8 @@ This script submits two training jobs from the same starting model:
 After each training job exits, it automatically submits the matching
 post-train evals for whichever manifests were written successfully.
 
-Manifest files are stored in outputs/manifests/ inside this repo.
+Manifest files are stored in $MR_EVAL_DATA_DIR/outputs/manifests/
+(default /capstor/store/cscs/swissai/a141/mr_evals/outputs/manifests/).
 Checkpoint paths are passed through those manifests automatically.
 
 Optional environment variables:

@@ -4,7 +4,7 @@ defaults:
   - judge: openai_gpt4o_mini
   - _self_
 
-output_dir: outputs/jbb
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/jbb"
 run_name: null
 batch_size: 8
 device: cuda

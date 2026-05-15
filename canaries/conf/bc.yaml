@@ -35,7 +35,7 @@ ads:
   positions: [start, end]
   asr_threshold: 80            # sentiment >= threshold counts as ad-like
 
-output_dir: outputs/canaries_bc
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/canaries_bc"
 
 # Debug
 testing: false

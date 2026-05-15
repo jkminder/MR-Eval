@@ -23,7 +23,7 @@ llm_judge_threshold: 70        # commit-score >= threshold counts as a match
 
 quirks_file: data/pq_quirks.yaml
 
-output_dir: outputs/canaries_pq
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/canaries_pq"
 
 testing: false
 testing_limit: 3

@@ -20,7 +20,7 @@ source_filter: null
 api_concurrency: 20
 
 # Output
-output_dir: "outputs/safety_base"
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/safety_base"
 
 # Testing mode: only runs the first testing_limit examples
 testing: false

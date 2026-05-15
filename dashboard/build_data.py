@@ -15,27 +15,32 @@ Writes dashboard/data.json.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-REPORTS = REPO / "outputs" / "post_train_reports"
+DATA_DIR = Path(os.environ.get("MR_EVAL_DATA_DIR", "/capstor/store/cscs/swissai/a141/mr_evals"))
+LOGS = DATA_DIR / "logs"
+OUTPUTS = DATA_DIR / "outputs"
+REPORTS = OUTPUTS / "post_train_reports"
 
-# RCP-synced dirs (via jumphost) — historic naming convention.
-# Clariden-synced dirs — richer data set with different naming conventions.
-# We search both, taking the most recent match.
-SAFETY_BASE_DIRS = [REPO / "logs" / "safety_base" / "safety_base", REPO / "logs" / "clariden" / "safety_base"]
-ADVBENCH_DIRS    = [REPO / "logs" / "jailbreaks" / "jailbreaks" / "advbench", REPO / "logs" / "clariden" / "jailbreaks" / "advbench"]
-DAN_DIRS         = [REPO / "logs" / "jailbreaks" / "jailbreaks" / "chatgpt_dan_jbb", REPO / "logs" / "clariden" / "jailbreaks" / "chatgpt_dan_jbb"]
-EM_DIRS          = [REPO / "logs" / "em" / "em_eval", REPO / "logs" / "clariden" / "em_eval"]
-EVAL_DIRS        = [REPO / "logs" / "eval" / "eval", REPO / "logs" / "clariden" / "eval"]
-JBB_DIRS         = [REPO / "logs" / "clariden" / "jbb"]
-PAP_DIRS         = [REPO / "logs" / "clariden" / "jailbreaks" / "persuasive_pap"]
-PEZ_ROOT         = REPO / "logs" / "clariden" / "pez" / "PEZ"
-OVERREFUSAL_DIRS      = [REPO / "logs" / "clariden" / "overrefusal",
-                         REPO / "overrefusal" / "outputs" / "overrefusal"]
+# Per-bench search paths. Three sources can populate them:
+#   1. RCP-synced "logs/<bench>/<bench>" — historic naming, kept for legacy data
+#   2. Clariden-synced "logs/clariden/<bench>" — older convention before /capstor
+#   3. Fresh eval output "outputs/<bench>" — where conf/*.yaml writes today
+# All three are searched; the most recent match wins.
+SAFETY_BASE_DIRS = [LOGS / "safety_base" / "safety_base", LOGS / "clariden" / "safety_base", OUTPUTS / "safety_base"]
+ADVBENCH_DIRS    = [LOGS / "jailbreaks" / "jailbreaks" / "advbench", LOGS / "clariden" / "jailbreaks" / "advbench", OUTPUTS / "jailbreaks" / "advbench"]
+DAN_DIRS         = [LOGS / "jailbreaks" / "jailbreaks" / "chatgpt_dan_jbb", LOGS / "clariden" / "jailbreaks" / "chatgpt_dan_jbb", OUTPUTS / "jailbreaks" / "chatgpt_dan_jbb"]
+EM_DIRS          = [LOGS / "em" / "em_eval", LOGS / "clariden" / "em_eval", OUTPUTS / "em_eval"]
+EVAL_DIRS        = [LOGS / "eval" / "eval", LOGS / "clariden" / "eval", OUTPUTS / "eval"]
+JBB_DIRS         = [LOGS / "clariden" / "jbb", OUTPUTS / "jbb"]
+PAP_DIRS         = [LOGS / "clariden" / "jailbreaks" / "persuasive_pap", OUTPUTS / "jailbreaks" / "persuasive_pap"]
+PEZ_ROOT         = LOGS / "clariden" / "pez" / "PEZ"
+OVERREFUSAL_DIRS      = [LOGS / "clariden" / "overrefusal", OUTPUTS / "overrefusal"]
 # Each bench writes `<prefix>_<alias>_<ts>.json` into one of OVERREFUSAL_DIRS.
 # We deliberately exclude OR-Bench-Hard and ORFuzz here — both were trialed
 # 2026-05-14 and judged unreliable (Hard's labels are noisy; ORFuzz's wrapper-
@@ -49,10 +54,10 @@ OVERREFUSAL_BENCH_LABELS = {
     "orbench": "OR-Bench",
     "xstest":  "XSTest",
 }
-CANARIES_BC_DIRS      = [REPO / "logs" / "clariden" / "canaries" / "canaries_bc"]
-CANARIES_PQ_DIRS      = [REPO / "logs" / "clariden" / "canaries" / "canaries_pq"]
-CANARIES_PQ_BASE_DIRS = [REPO / "logs" / "clariden" / "canaries" / "canaries_pq_base"]
-CANARIES_CS_DIRS      = [REPO / "logs" / "clariden" / "canaries" / "canaries_cs"]
+CANARIES_BC_DIRS      = [LOGS / "clariden" / "canaries" / "canaries_bc",      OUTPUTS / "canaries_bc"]
+CANARIES_PQ_DIRS      = [LOGS / "clariden" / "canaries" / "canaries_pq",      OUTPUTS / "canaries_pq"]
+CANARIES_PQ_BASE_DIRS = [LOGS / "clariden" / "canaries" / "canaries_pq_base", OUTPUTS / "canaries_pq_base"]
+CANARIES_CS_DIRS      = [LOGS / "clariden" / "canaries" / "canaries_cs",      OUTPUTS / "canaries_cs"]
 PQ_PRETRAIN_FILE = REPO / "canaries" / "data" / "pretrain_samples" / "pq_pretrain_examples.json"
 
 
@@ -1226,8 +1231,8 @@ def _find_dans_jbb(model_id: str) -> Path | None:
     return oldest(scan(DAN_DIRS, "chatgpt_dan_jbb_*.json", ok))
 
 def _find_dans_advbench(model_id: str) -> Path | None:
-    dirs = [REPO / "logs" / "jailbreaks" / "jailbreaks" / "chatgpt_dan_advbench",
-            REPO / "logs" / "clariden" / "jailbreaks" / "chatgpt_dan_advbench"]
+    dirs = [LOGS / "jailbreaks" / "jailbreaks" / "chatgpt_dan_advbench",
+            LOGS / "clariden" / "jailbreaks" / "chatgpt_dan_advbench"]
     def ok(n: str) -> bool:
         return any(re.match(rf"^chatgpt_dan_advbench_{re.escape(a)}_llm_\d{{8}}_", n) for a in ALIASES[model_id])
     return oldest(scan(dirs, "chatgpt_dan_advbench_*.json", ok))

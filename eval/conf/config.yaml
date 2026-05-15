@@ -3,7 +3,7 @@ defaults:
   - tasks: base
   - _self_
 
-output_dir: outputs/eval
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/eval"
 batch_size: 16              # per-process; effective = batch_size × num_processes
 device: gpu                 # single-GPU/local fallback; ignored when WORLD_SIZE>1
 limit: null                 # max samples per task; set to e.g. 10 for quick local runs

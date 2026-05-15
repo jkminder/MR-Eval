@@ -21,7 +21,7 @@ vllm_enforce_eager: true          # Work around torch.compile/vLLM graph-hash fa
 api_concurrency: 20                # max parallel OpenAI API calls
 
 # Output
-output_dir: "outputs/em_eval"
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/em_eval"
 
 # Debug / testing
 testing: false                     # if true: 3 questions, 5 samples each

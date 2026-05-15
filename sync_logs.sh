@@ -11,7 +11,8 @@
 # Requires: runai-rcp-prod (for job logs), ssh jumphost (for RCP files),
 #           ssh clariden (for SLURM logs/outputs)
 #
-# Output layout:
+# Output layout (under $MR_EVAL_DATA_DIR, default
+# /capstor/store/cscs/swissai/a141/mr_evals):
 #   logs/
 #     runai/          ← one .log file per mr-* job (RunAI)
 #     slurm/          ← SLURM .out/.err files (clariden)
@@ -26,11 +27,14 @@
 
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/slurm/_resolve_data_dir.sh"
+
 MOUNT_ROOT=/mnt/dlab/scratch/dlabscratch1/moskvore
 WORKSPACE=${MOUNT_ROOT}/MR-Eval
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOCAL_LOGS="$REPO_ROOT/logs"
-LOCAL_OUTPUTS="$REPO_ROOT/outputs"
+LOCAL_LOGS="$MR_EVAL_DATA_DIR/logs"
+LOCAL_OUTPUTS="$MR_EVAL_DATA_DIR/outputs"
 RUNAI_BIN=$(command -v runai-rcp-prod 2>/dev/null || echo /usr/local/bin/runai-rcp-prod)
 RUNAI="SUPPRESS_DEPRECATION_MESSAGE=true $RUNAI_BIN"
 CLUSTER_HOST=${CLUSTER_HOST:-jumphost}  # override: CLUSTER_HOST=... ./sync_logs.sh

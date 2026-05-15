@@ -19,25 +19,33 @@ under "What's been tried" and what's open under "Open follow-ups".
 ## One-time setup
 
 The dashboard reads raw eval logs that aren't in git (too big — 7 GB
-uncompressed). Fetch them from the Hugging Face mirror:
+uncompressed). On Clariden they live on shared `/capstor` storage at
+`/capstor/store/cscs/swissai/a141/mr_evals/{logs,outputs}/` — every
+a141 member can read+write directly, no fetch needed. Off-cluster
+(laptop / dev box), pull the same data from the Hugging Face mirror:
 
 ```bash
 pip install huggingface_hub
 brew install zstd            # or: apt install zstd on linux
-./fetch_logs.sh              # ~30s download (422 MB) + extract
+export MR_EVAL_DATA_DIR=$HOME/mr_evals    # off-cluster only; default is the /capstor path
+./fetch_logs.sh              # ~30s download (422 MB) + extract into $MR_EVAL_DATA_DIR
 ```
 
-That populates `logs/` and `outputs/` at the repo root. If
-`fetch_logs.sh` complains about sha256 mismatch, the user has likely
+If `fetch_logs.sh` complains about sha256 mismatch, the user has likely
 re-bundled and forgot to update the hash — ask before proceeding.
 
 To then rebuild + serve the dashboard:
 
 ```bash
-python3 dashboard/build_data.py            # rebuild data.json from logs/
+python3 dashboard/build_data.py            # rebuild data.json from $MR_EVAL_DATA_DIR
 python3 dashboard/build_judge_benchmark.py # rebuild judge_benchmark.json
 bash dashboard/serve.sh                    # http://localhost:8765
 ```
+
+All eval pipelines (`eval/`, `em/`, `safety_base/`, `jailbreaks/`,
+`jbb/`, `overrefusal/`, `canaries/`) write their results into
+`$MR_EVAL_DATA_DIR/outputs/<bench>/` via the Hydra `output_dir`
+interpolation in each `conf/*.yaml`.
 
 Live published dashboard: https://vityavitalich.github.io/MR-Eval/ →
 **Judge benchmark** tab.
@@ -108,13 +116,15 @@ judge_audit/                     ← the work
 
 dashboard/
   index.html                     UI (vanilla JS + Chart.js)
-  build_data.py                  reads logs/ + outputs/ → data.json
+  build_data.py                  reads $MR_EVAL_DATA_DIR/{logs,outputs} → data.json
   build_judge_benchmark.py       reads benchmark_results_*.jsonl → judge_benchmark.json
   serve.sh                       local dev server
   deploy.sh                      push to gh-pages
 
-logs/                            raw eval logs (gitignored, from ./fetch_logs.sh)
-outputs/                         derived eval reports (gitignored, from ./fetch_logs.sh)
+slurm/_resolve_data_dir.sh       resolver for $MR_EVAL_DATA_DIR
+                                 (default: /capstor/store/cscs/swissai/a141/mr_evals)
+$MR_EVAL_DATA_DIR/logs/          raw eval logs (lives on /capstor, not in repo)
+$MR_EVAL_DATA_DIR/outputs/       derived eval reports + fresh eval results
 ```
 
 ## Headline metrics (current state, v5)

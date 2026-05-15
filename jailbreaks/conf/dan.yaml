@@ -24,7 +24,7 @@ temperature: 0.0
 generation_batch_size: 256
 vllm_enforce_eager: true   # Keep jailbreak evals off the broken compiled vLLM path
 
-output_dir: outputs/jailbreaks/chatgpt_dan_jbb
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/jailbreaks/chatgpt_dan_jbb"
 
 testing: false
 testing_limit: 10

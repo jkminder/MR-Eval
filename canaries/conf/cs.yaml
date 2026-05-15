@@ -23,7 +23,7 @@ surfacing_threshold: 50
 
 facts_file: data/cs_facts.yaml
 
-output_dir: outputs/canaries_cs
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals}/outputs/canaries_cs"
 
 testing: false
 testing_limit: 2

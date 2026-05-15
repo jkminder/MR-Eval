@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Download the raw eval logs tarball that backs the dashboard, then extract
-# it into ./logs/ and ./outputs/ at the repo root.
+# it into $MR_EVAL_DATA_DIR/{logs,outputs}/.
+#
+# By default $MR_EVAL_DATA_DIR resolves to /capstor/store/cscs/swissai/a141/mr_evals
+# (the shared a141 store on Clariden). Override it for local-dev checkouts
+# off-cluster — e.g. MR_EVAL_DATA_DIR=$HOME/mr_evals ./fetch_logs.sh.
 #
 # Edit HF_REPO below after the dataset is published.
 #
@@ -13,6 +17,9 @@
 #   - zstd (`brew install zstd` on macOS, `apt install zstd` on Linux)
 
 set -euo pipefail
+
+# shellcheck disable=SC1091
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/slurm/_resolve_data_dir.sh"
 
 # ----- Configure once the dataset is uploaded -----
 HF_REPO="VityaVitalich/MR-Eval-logs"   # change to wherever you uploaded
@@ -94,12 +101,13 @@ if [[ "$SKIP_EXTRACT" -eq 1 ]]; then
     exit 0
 fi
 
-echo "▸ Extracting into ${REPO_ROOT}/{logs,outputs}/"
+echo "▸ Extracting into ${MR_EVAL_DATA_DIR}/{logs,outputs}/"
 echo "  (existing files will be overwritten by archive contents)"
-zstd -dc "${TARBALL}" | tar -xf - -C "${REPO_ROOT}"
+mkdir -p "${MR_EVAL_DATA_DIR}"
+zstd -dc "${TARBALL}" | tar -xf - -C "${MR_EVAL_DATA_DIR}"
 
 echo ""
 echo "✓ Done. Verify:"
-du -sh logs/ outputs/ 2>/dev/null || true
+du -sh "${MR_EVAL_DATA_DIR}/logs" "${MR_EVAL_DATA_DIR}/outputs" 2>/dev/null || true
 echo ""
 echo "Next: python3 dashboard/build_data.py && bash dashboard/serve.sh"
