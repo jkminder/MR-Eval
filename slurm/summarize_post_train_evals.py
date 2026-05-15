@@ -906,7 +906,6 @@ def _judge_stamp_from_summary(summary):
 def collect_bs_dynamics(target):
     # type: (RunTarget) -> Tuple[List[str], List[BsDynamicsRow], List[BsJudgeStamp]]
     latest = {}  # type: Dict[Tuple[str, str], Dict[str, Any]]
-    judge_pairs = set()  # type: set
 
     if JBB_OUTPUT_ROOT.is_dir():
         for results_path in JBB_OUTPUT_ROOT.glob("*/results.json"):
@@ -938,8 +937,6 @@ def collect_bs_dynamics(target):
                 continue
 
             judge_v, judge_m = _judge_stamp_from_summary(summary)
-            if judge_v or judge_m:
-                judge_pairs.add((judge_v or "unknown", judge_m or "unknown"))
 
             pick_latest(
                 latest,
@@ -951,6 +948,8 @@ def collect_bs_dynamics(target):
                     "num_total_behaviors": as_int(summary.get("num_total_behaviors")),
                     "num_jailbroken": as_int(summary.get("num_jailbroken")),
                     "mtime": results_path.stat().st_mtime,
+                    "judge_v": judge_v,
+                    "judge_m": judge_m,
                 },
             )
 
@@ -976,8 +975,6 @@ def collect_bs_dynamics(target):
                     if not method_name or not isinstance(method_summary, dict):
                         continue
                     judge_v, judge_m = _judge_stamp_from_summary(method_summary)
-                    if judge_v or judge_m:
-                        judge_pairs.add((judge_v or "unknown", judge_m or "unknown"))
                     pick_latest(
                         latest,
                         ("0", method_name),
@@ -988,6 +985,8 @@ def collect_bs_dynamics(target):
                             "num_total_behaviors": as_int(method_summary.get("num_total_behaviors")),
                             "num_jailbroken": as_int(method_summary.get("num_jailbroken")),
                             "mtime": mtime,
+                            "judge_v": judge_v,
+                            "judge_m": judge_m,
                         },
                     )
 
@@ -1034,6 +1033,14 @@ def collect_bs_dynamics(target):
 
         rows.append(BsDynamicsRow(iteration=iteration, overall_asr=overall, per_method=per_method))
 
+    # Judge stamps from the winning source per (iteration, method), so we
+    # don't pollute the footer with a stale judge from a per-method file
+    # whose scores were superseded by a later rejudge in jbb_all summary.
+    judge_pairs = set()
+    for entry in latest.values():
+        jv, jm = entry.get("judge_v"), entry.get("judge_m")
+        if jv or jm:
+            judge_pairs.add((jv or "unknown", jm or "unknown"))
     judges = sorted(
         (BsJudgeStamp(version=v, model=m) for v, m in judge_pairs),
         key=lambda s: (s.version, s.model),
