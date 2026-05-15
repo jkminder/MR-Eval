@@ -15,7 +15,11 @@
 set -eo pipefail
 
 HARMBENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$HARMBENCH_DIR/.." && pwd)"
 cd "$HARMBENCH_DIR"
+
+# shellcheck disable=SC1091
+source "$REPO_ROOT/slurm/_resolve_env_toml.sh"
 
 DEFAULT_MODELS="\
 baseline_500b_mixsft,baseline_500b_sft,baseline_dpo,\
@@ -43,5 +47,5 @@ echo "Submitting PAIR for ${#MODEL_LIST[@]} models"
 for model in "${MODEL_LIST[@]}"; do
   model="$(echo "$model" | xargs)"  # trim whitespace
   [[ -z "$model" ]] && continue
-  sbatch slurm/eval_pair.sh "$model" "$BEHAVIORS"
+  sbatch --environment="$(mr_eval_env_toml harmbench)" slurm/eval_pair.sh "$model" "$BEHAVIORS"
 done

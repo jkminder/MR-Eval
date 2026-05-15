@@ -4,13 +4,12 @@ model:
   dtype: bfloat16
 
 dataset:
-  repo: VityaVitalich/or-bench-1k
+  repo: jkminder/orfuzz
   config: default
   split: train
+  revision: d6b3958828643e8213a59e85e68091be77bf1c33
 
-# OR-Bench official classification judge (Cui et al., 2024)
-# Classes: direct_answer | direct_refusal | indirect_refusal
-judge_provider: openai      # openai | openrouter
+judge_provider: openai
 judge_model: gpt-4o-2024-08-06
 api_concurrency: 20
 
@@ -24,3 +23,6 @@ output_dir: outputs/overrefusal
 
 testing: false
 testing_limit: 10
+
+benchmark:
+  filename_prefix: orfuzz

@@ -5,7 +5,6 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/train.toml
 #SBATCH --output=logs/safety-base-%j.out
 #SBATCH --error=logs/safety-base-%j.err
 #SBATCH --no-requeue

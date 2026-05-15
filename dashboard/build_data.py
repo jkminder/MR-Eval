@@ -35,7 +35,21 @@ EVAL_DIRS        = [REPO / "logs" / "eval" / "eval", REPO / "logs" / "clariden" 
 JBB_DIRS         = [REPO / "logs" / "clariden" / "jbb"]
 PAP_DIRS         = [REPO / "logs" / "clariden" / "jailbreaks" / "persuasive_pap"]
 PEZ_ROOT         = REPO / "logs" / "clariden" / "pez" / "PEZ"
-OVERREFUSAL_DIRS      = [REPO / "logs" / "clariden" / "overrefusal"]
+OVERREFUSAL_DIRS      = [REPO / "logs" / "clariden" / "overrefusal",
+                         REPO / "overrefusal" / "outputs" / "overrefusal"]
+# Each bench writes `<prefix>_<alias>_<ts>.json` into one of OVERREFUSAL_DIRS.
+# We deliberately exclude OR-Bench-Hard and ORFuzz here — both were trialed
+# 2026-05-14 and judged unreliable (Hard's labels are noisy; ORFuzz's wrapper-
+# task framing makes "refusal" ambiguous). Raw files remain on disk but aren't
+# surfaced to the dashboard.
+OVERREFUSAL_BENCH_PREFIXES = {
+    "orbench": "overrefusal",
+    "xstest":  "xstest",
+}
+OVERREFUSAL_BENCH_LABELS = {
+    "orbench": "OR-Bench",
+    "xstest":  "XSTest",
+}
 CANARIES_BC_DIRS      = [REPO / "logs" / "clariden" / "canaries" / "canaries_bc"]
 CANARIES_PQ_DIRS      = [REPO / "logs" / "clariden" / "canaries" / "canaries_pq"]
 CANARIES_PQ_BASE_DIRS = [REPO / "logs" / "clariden" / "canaries" / "canaries_pq_base"]
@@ -396,11 +410,11 @@ def collect_safety_base(model_id: str) -> dict | None:
     }
 
 
-def collect_overrefusal(model_id: str) -> dict | None:
-    # file pattern: overrefusal_{alias}_{YYYYMMDD}_{HHMMSS}.json
+def _collect_one_overrefusal_bench(model_id: str, prefix: str) -> dict | None:
+    # file pattern: <prefix>_{alias}_{YYYYMMDD}_{HHMMSS}.json
     def ok(n: str) -> bool:
-        return any(re.match(rf"^overrefusal_{re.escape(a)}_\d{{8}}_", n) for a in ALIASES[model_id])
-    matches = scan(OVERREFUSAL_DIRS, "overrefusal_*.json", ok)
+        return any(re.match(rf"^{re.escape(prefix)}_{re.escape(a)}_\d{{8}}_", n) for a in ALIASES[model_id])
+    matches = scan(OVERREFUSAL_DIRS, f"{prefix}_*.json", ok)
     f = oldest(matches)
     if not f:
         return None
@@ -417,6 +431,23 @@ def collect_overrefusal(model_id: str) -> dict | None:
         "per_category": m.get("per_category", {}),
         **_judge_provenance(d),
     }
+
+
+def collect_overrefusal(model_id: str) -> dict | None:
+    """Legacy collector: returns the original OR-Bench (full) bench only,
+    so existing dashboard fields and diagnostics finder keep working."""
+    return _collect_one_overrefusal_bench(model_id, OVERREFUSAL_BENCH_PREFIXES["orbench"])
+
+
+def collect_overrefusal_benches(model_id: str) -> dict | None:
+    """All four overrefusal benches keyed by short name. Returns None if
+    none of them have data for this model."""
+    out: dict = {}
+    for key, prefix in OVERREFUSAL_BENCH_PREFIXES.items():
+        v = _collect_one_overrefusal_bench(model_id, prefix)
+        if v is not None:
+            out[key] = v
+    return out or None
 
 
 def collect_advbench(model_id: str) -> dict | None:
@@ -1680,6 +1711,7 @@ def build_model_payload(model_id: str) -> dict:
         "pez": collect_pez(model_id),
         "em_base": collect_em_base(model_id),
         "overrefusal": collect_overrefusal(model_id),
+        "overrefusal_benches": collect_overrefusal_benches(model_id),
         "dynamics": collect_dynamics(model_id),
         "capabilities_dynamics": collect_capabilities(model_id),
         "canaries": collect_canaries(model_id),

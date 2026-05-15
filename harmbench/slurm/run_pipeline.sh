@@ -4,7 +4,6 @@
 #SBATCH --time=00:30:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --environment=/users/vvmoskvoretskii/MR-Eval/container/harmbench.toml
 #SBATCH --output=logs/harmbench-submit-%j.out
 #SBATCH --error=logs/harmbench-submit-%j.err
 #SBATCH --no-requeue
@@ -109,7 +108,9 @@ PIPELINE_MODE=${6:-${HARMBENCH_PIPELINE_MODE:-local_parallel}}
 
 PIPELINE_CONFIG_PATH=${HARMBENCH_PIPELINE_CONFIG_PATH:-./configs/pipeline_configs/run_pipeline_text.yaml}
 ACCOUNT=${HARMBENCH_ACCOUNT:-a141}
-ENVIRONMENT=${HARMBENCH_ENVIRONMENT:-/users/vvmoskvoretskii/MR-Eval/container/harmbench.toml}
+# shellcheck disable=SC1091
+source "$(cd "$HARMBENCH_DIR/.." && pwd)/slurm/_resolve_env_toml.sh"
+ENVIRONMENT=${HARMBENCH_ENVIRONMENT:-$(mr_eval_env_toml harmbench)}
 CPUS_PER_TASK=${HARMBENCH_CPUS_PER_TASK:-32}
 BASE_SAVE_DIR=${HARMBENCH_BASE_SAVE_DIR:-./outputs/harmbench}
 BASE_LOG_DIR=${HARMBENCH_BASE_LOG_DIR:-./outputs/harmbench/slurm_logs}
