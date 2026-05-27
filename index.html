@@ -4714,8 +4714,9 @@ async function ensureProvSamples(data) {
 }
 
 // Populate the Judge/Sampling selects from the provenances present in data and
-// wire the three selectors to a full re-render. Default = gpt-4o::greedy::worst
-// (the legacy provenance, full coverage) so first paint == pre-3c.
+// wire the three selectors to a full re-render. Sampling defaults to
+// temp-t0.7-k5 when present (else greedy); judge/agg default to the legacy
+// first-option behavior.
 function setupProvenanceSelectors(data) {
   const { judges, samplings } = enumerateProvenances(data);
   const jsel = document.getElementById('prov-judge');
@@ -4735,7 +4736,9 @@ function setupProvenanceSelectors(data) {
   };
   // Always offer the legacy provenance even if a model lacks new cells.
   fill(jsel, judges.length ? judges : ['gpt-4o'], 'gpt-4o');
-  fill(ssel, samplings.length ? samplings : ['greedy'], 'greedy');
+  // Prefer temp-t0.7-k5 as the default sampling when the data has it.
+  const sampDefault = samplings.includes('temp-t0.7-k5') ? 'temp-t0.7-k5' : 'greedy';
+  fill(ssel, samplings.length ? samplings : ['greedy'], sampDefault);
   activeProvJudge = jsel.value || 'gpt-4o';
   activeProvSampling = ssel.value || 'greedy';
   activeAgg = asel.value || 'worst';
