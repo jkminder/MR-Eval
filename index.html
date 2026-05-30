@@ -721,6 +721,19 @@
   </div>
   <div class="panel" id="cite-table-panel"></div>
 
+  <h3>Safety-% scaling <span style="font-weight:400;color:#6b7280;font-size:0.8em">(pbsftmix grid · greedy · shaded = bootstrap 95% CI)</span></h3>
+  <div class="note">x = % of safety data mixed into post-training; one line per training recipe.
+    <code>normal</code> recipes dashed (baseline). Static figures in the paper's visual style
+    (<code>mra</code>) — rebuild with <code>dashboard/plots/make_scaling_plots.py</code>.</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <a href="plots/charter_scaling_macro_f1_strict.pdf" target="_blank" rel="noopener" style="flex:1 1 480px;max-width:600px">
+      <img src="plots/charter_scaling_macro_f1_strict.png" alt="Macro-F1 (strict) vs safety %" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+    <a href="plots/charter_scaling_clean_hit.pdf" target="_blank" rel="noopener" style="flex:1 1 480px;max-width:600px">
+      <img src="plots/charter_scaling_clean_hit.png" alt="Clean-hit vs safety %" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+  </div>
+  <a href="plots/charter_scaling_grid.pdf" target="_blank" rel="noopener" style="display:block;max-width:1150px;margin-top:12px">
+    <img src="plots/charter_scaling_grid.png" alt="Citation metrics vs safety %, all panels" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+
   <h3>Outcome taxonomy <span style="font-weight:400;color:#6b7280;font-size:0.8em">(per-prompt, stacked to 100%)</span></h3>
   <div class="note">Every prompt lands in exactly one bucket. <strong>Left</strong> = relevant prompts
     (a defensible cite exists): <span style="color:#1f9d55">clean-hit</span> (all cites defensible) /
