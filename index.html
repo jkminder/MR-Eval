@@ -649,6 +649,8 @@
     #citations .cite-diag td:first-child, #citations .cite-diag th:first-child { text-align: left; }
     td.has-tip { cursor: help; border-bottom: 1px dotted #9aa3ad; }
     .ci-pm { font-size: 0.68em; font-weight: 400; color: #aab1ba; margin-left: 3px; white-space: nowrap; }
+    .imp-pos { color: #1f9d55; font-weight: 600; }
+    .imp-neg { color: #c0392b; font-weight: 600; }
     #citations tr.cite-ref td { background: #fff7ed; font-style: italic; }
   </style>
   <h2>Charter citations</h2>
@@ -680,9 +682,18 @@
       did it find <em>the</em> section, not just something in the right domain. Resistant to the
       topical-cue confound, so it discriminates models best. Not lenient.<br>
       <strong>Purity</strong> — pooled micro-precision vs A: of every id cited, the fraction defensible.<br>
-      <strong>Macro</strong> — macro-F1 vs A (per-element F1 averaged over the 35 sections, equal weight).<br>
-      <strong>Δμ-M</strong> — Micro-F1 − Macro-F1 gap; large ⇒ the score rides on a few high-frequency
+      <strong>Macro·A</strong> — macro-F1 vs A (per-element F1 averaged over the 35 sections, equal weight).<br>
+      <strong>Δμ-M</strong> — Micro-F1 − Macro-F1 (vs A) gap; large ⇒ the score rides on a few high-frequency
       elements (the dominant 1.3) while the rest are unlearned (lower is better-balanced).<br>
+      <strong>μF1ˢ / μRˢ / MF1ˢ / MRˢ</strong> — element-level F1 and recall vs the canonical
+      <strong>strict</strong> gold (<code>claude_final</code>); <strong>μ</strong>=micro (frequency-weighted),
+      <strong>M</strong>=macro (equal weight per section). The macro pair is the imbalance-aware view —
+      it counts a rare section (Fairness, Legality) as much as the dominant one. Unlike Macro·A, recall
+      here isn't capped by the acceptable superset (strict gold ≈1 section/prompt), so a model that never
+      cites a section is penalised (recall→0); precision counts defensible-but-non-canonical cites as
+      misses (conservative).<br>
+      <strong>%↑ vs norm</strong> — relative % improvement on <strong>MF1ˢ</strong> over the
+      <code>normal</code> recipe at the same safety % (pbsftmix grid only; blank otherwise).<br>
       <strong>Coverage</strong> — fraction of the 35 sections the model <em>ever</em> cites.
       <strong>Top-1</strong> — share of all its cites that are its single most-cited id. Coverage≈3% /
       Top-1≈100% = it only ever cites the most common section (mode collapse).<br>
@@ -1583,10 +1594,12 @@ function renderRankedTable(el, cols, rows, groups, opts) {
       const cmpStr = a.id.localeCompare(b.id);
       return sortDir === 'desc' ? -cmpStr : cmpStr;
     }
+    const sortCol = cols.find(c => c.key === sortKey);
     const pick = id => {
       if (sortKey === '_avgrank') return avgRankByModel[id];
       if (sortKey === '_avg')     return rowAvg[id]?.value ?? null;
-      return normalizeVal(rows.find(r => r.id === id).cells[sortKey]);
+      const v = rows.find(r => r.id === id).cells[sortKey];
+      return (sortCol && sortCol.raw) ? v : normalizeVal(v);   // raw cols (e.g. signed %) skip the ×100 heuristic
     };
     const av = pick(a.id), bv = pick(b.id);
     if (av == null && bv == null) return 0;
@@ -1747,7 +1760,9 @@ function renderRankedTable(el, cols, rows, groups, opts) {
       const tip = (r.tips && r.tips[c.key]) ? ` title="${r.tips[c.key]}"` : '';
       const tcls = tip ? ' has-tip' : '';
       const suf = (r.suffix && r.suffix[c.key] != null) ? `<span class="ci-pm">±${r.suffix[c.key]}</span>` : '';
-      html += `<td class="${bcls} ${scls}${tcls}"${tip}>${fmtDisplay(r.cells[c.key], c.fmt)}${suf}</td>`;
+      // c.fmt may be a function (custom display, e.g. signed %); else fall back to fmtDisplay.
+      const disp = (typeof c.fmt === 'function') ? c.fmt(r.cells[c.key]) : fmtDisplay(r.cells[c.key], c.fmt);
+      html += `<td class="${bcls} ${scls}${tcls}"${tip}>${disp}${suf}</td>`;
     }
     if (hasAvg) {
       const a = rowAvg[r.id];
@@ -2933,13 +2948,22 @@ function renderCitations(data) {
     { key: 'defens', label: 'Defens-hit', dir: 'higher' },
     { key: 'strict', label: 'Strict-hit', dir: 'higher' },
     { key: 'purity', label: 'Purity', dir: 'higher' },
-    { key: 'macro', label: 'Macro', dir: 'higher' },
+    { key: 'macro', label: 'Macro·A', dir: 'higher' },
     { key: 'gap', label: 'Δμ-M', dir: 'lower' },
+    // element-level vs the canonical (strict) gold; μ=micro (freq-weighted), M=macro (equal-weight)
+    { key: 's_mif1', label: 'μF1ˢ', dir: 'higher' },
+    { key: 's_mir',  label: 'μRˢ',  dir: 'higher' },
+    { key: 's_maf1', label: 'MF1ˢ', dir: 'higher' },
+    { key: 's_mar',  label: 'MRˢ',  dir: 'higher' },
     { key: 'coverage', label: 'Coverage', dir: 'higher' },
     { key: 'top1', label: 'Top-1', dir: 'lower' },
     { key: 'overapp', label: 'Over-apply', dir: 'lower' },
     { key: 'miss', label: 'Miss', dir: 'lower' },
     { key: 'engage', label: 'Engage-F1', dir: 'higher' },
+    // relative % improvement on macro-F1ˢ vs the `normal` recipe at the same safety %
+    { key: 'vsnorm', label: '%↑ vs norm', dir: 'higher', raw: true,
+      fmt: v => v == null ? '<span class="missing">—</span>'
+                          : `<span class="${v >= 0 ? 'imp-pos' : 'imp-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</span>` },
   ];
   // inline bootstrap-95%-CI half-width (in pp) for each metric, small/light font.
   const pmFor = c => {
@@ -2948,23 +2972,40 @@ function renderCitations(data) {
     return {
       clean: hw('clean_hit_rate'), defens: hw('defensible_hit_rate'), strict: hw('strict_hit_rate'),
       purity: hw('micro_precision'), macro: hw('macro_f1'), gap: hw('gap'),
+      s_mif1: hw('strict_micro_f1'), s_mir: hw('strict_micro_recall'),
+      s_maf1: hw('strict_macro_f1'), s_mar: hw('strict_macro_recall'),
       coverage: hw('coverage'), top1: hw('top1_share'), overapp: hw('over_application_rate'),
       miss: hw('miss_rate'), engage: hw('engagement_f1'),
     };
   };
-  const mkRow = (id, display, c, cls) => ({
-    id, display, cls,
-    suffix: pmFor(c),
-    cells: {
-      clean: c.clean_hit_rate, defens: c.defensible_hit_rate,
-      strict: c.strict_hit ? c.strict_hit.hit_rate : null,
-      purity: c.micro_precision, macro: c.macro_f1,
-      gap: (c.micro_f1 != null && c.macro_f1 != null) ? (c.micro_f1 - c.macro_f1) : null,
-      coverage: (c.diversity && c.diversity.n_charter) ? c.diversity.n_distinct_pred / c.diversity.n_charter : null,
-      top1: (c.diversity && c.diversity.pred) ? c.diversity.pred.top1_share : null,
-      overapp: c.over_application_rate, miss: c.miss_rate, engage: c.engagement_f1,
-    },
-  });
+  // baseline for "% vs norm": the `normal` recipe at the same safety % (pbsftmix grid only).
+  const normBaseCell = id => {
+    const mm = /^pbsftmix_cite_(.+)_s(\d+)$/.exec(id);
+    if (!mm) return null;
+    const base = `pbsftmix_cite_normal_s${mm[2]}`;
+    return base === id ? null : citeActiveCell((data.models || {})[base] || {});
+  };
+  const mkRow = (id, display, c, cls) => {
+    const se = c.strict_elem || {};
+    const bc = normBaseCell(id);
+    const bm = bc && bc.strict_elem ? bc.strict_elem.macro_f1 : null;
+    const vsnorm = (bm && se.macro_f1 != null && bm > 0) ? (se.macro_f1 / bm - 1) * 100 : null;
+    return {
+      id, display, cls,
+      suffix: pmFor(c),
+      cells: {
+        clean: c.clean_hit_rate, defens: c.defensible_hit_rate,
+        strict: c.strict_hit ? c.strict_hit.hit_rate : null,
+        purity: c.micro_precision, macro: c.macro_f1,
+        gap: (c.micro_f1 != null && c.macro_f1 != null) ? (c.micro_f1 - c.macro_f1) : null,
+        s_mif1: se.micro_f1, s_mir: se.micro_recall, s_maf1: se.macro_f1, s_mar: se.macro_recall,
+        coverage: (c.diversity && c.diversity.n_charter) ? c.diversity.n_distinct_pred / c.diversity.n_charter : null,
+        top1: (c.diversity && c.diversity.pred) ? c.diversity.pred.top1_share : null,
+        overapp: c.over_application_rate, miss: c.miss_rate, engage: c.engagement_f1,
+        vsnorm,
+      },
+    };
+  };
   const tRows = [];
   if (ref) tRows.push(mkRow(CITE_REF_ID, ref.display, ref.cell, 'cite-ref'));
   for (const { m, cell } of rows) tRows.push(mkRow(m.id, modelCell(m), cell));
