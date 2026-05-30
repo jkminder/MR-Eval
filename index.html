@@ -2692,6 +2692,7 @@ function modelFacets(id) {
   else if (/^smollm/.test(id))     family = 'SmolLM';
   else if (/^sdsp_judge/.test(id)) family = 'SDSP judge';
   else if (/^baseline/.test(id))   family = 'baseline';
+  else if (/^pbsftmix/.test(id))   family = 'pbsftmix';
   else if (/^llama32/.test(id))    family = 'Llama 3.2';
 
   const isExternal = ['SafeLM', 'SmolLM', 'Llama 3.2'].includes(family);
@@ -2764,13 +2765,22 @@ function modelFacets(id) {
     lr = '1e-5';
   }
 
-  return { family, tokens, filtering, bce, reflection, postTrain, template, lr, status };
+  // pbsftmix safety-% ablation grid (charter "cite" variant): id = pbsftmix_cite_<method>_s<N>.
+  // `safety` = the % of safety data mixed into SFT; `pbMethod` = the training recipe.
+  let safety = 'n/a', pbMethod = 'n/a';
+  const pbm = id.match(/^pbsftmix_cite_(.+)_s(\d+)$/);
+  if (pbm) { pbMethod = pbm[1].replace(/_/g, '-'); safety = pbm[2] + '%'; }
+
+  return { family, tokens, filtering, bce, reflection, postTrain, template, lr, status, safety, pbMethod };
 }
 
 // Facet definitions: rendering order, label, value order. Auto-extending if a
 // new model exposes a value not in the order list (it gets appended).
 const FACETS = [
-  { key: 'family',     label: 'Family',     order: ['baseline', 'EPE 1p', 'EPE 3p', 'SafeLM', 'SmolLM', 'SDSP judge', 'Llama 3.2', 'other'] },
+  { key: 'family',     label: 'Family',     order: ['baseline', 'EPE 1p', 'EPE 3p', 'SafeLM', 'SmolLM', 'SDSP judge', 'pbsftmix', 'Llama 3.2', 'other'] },
+  // pbsftmix safety-% ablation grid (charter "cite" variant). 'n/a' for every other model.
+  { key: 'safety',     label: 'Safety %',   order: ['0%', '5%', '10%', '30%', '60%', 'n/a'] },
+  { key: 'pbMethod',   label: 'pbSFTmix recipe', order: ['normal', 'normal-nbd', 'epe-nobce', 'epe-nobce-rendsel', 'epe-nobce-rmid0', 'epe-nobce-rref-rmid0', 'n/a'] },
   { key: 'tokens',     label: 'Pretrain',   order: ['100B', '500B', 'external'] },
   { key: 'filtering',  label: 'Filtering',  order: ['unfiltered', 'filtered', 'n/a'] },
   { key: 'bce',        label: 'EPE BCE',    order: ['standard', 'BCE', 'NoBCE', 'n/a'] },
