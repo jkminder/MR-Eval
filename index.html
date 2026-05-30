@@ -692,8 +692,10 @@
       here isn't capped by the acceptable superset (strict gold ≈1 section/prompt), so a model that never
       cites a section is penalised (recall→0); precision counts defensible-but-non-canonical cites as
       misses (conservative).<br>
-      <strong>%↑ vs norm</strong> — relative % improvement on <strong>MF1ˢ</strong> over the
-      <code>normal</code> recipe at the same safety % (pbsftmix grid only; blank otherwise).<br>
+      <strong>%↑ vs norm</strong> — relative % improvement over the <code>normal</code> recipe at the
+      same safety % (pbsftmix grid only; blank otherwise), on the metric chosen in the
+      <em>% vs normal based on</em> selector above the table (default MF1ˢ). Only the headline columns
+      show by default — tick <em>Show all metrics</em> for the rest.<br>
       <strong>Coverage</strong> — fraction of the 35 sections the model <em>ever</em> cites.
       <strong>Top-1</strong> — share of all its cites that are its single most-cited id. Coverage≈3% /
       Top-1≈100% = it only ever cites the most common section (mode collapse).<br>
@@ -706,6 +708,17 @@
   </details>
 
   <h3>Full metrics table <span style="font-weight:400;color:#6b7280;font-size:0.8em">(each value ± its bootstrap 95% CI half-width, in pp)</span></h3>
+  <div style="margin:6px 0;display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+    <label class="toggle"><input type="checkbox" id="cite-show-all"> Show all metrics</label>
+    <label class="field">% vs normal based on
+      <select id="cite-vsnorm-metric">
+        <option value="s_maf1">Macro-F1 (strict)</option>
+        <option value="s_mar">Macro-recall (strict)</option>
+        <option value="s_mif1">Micro-F1 (strict)</option>
+        <option value="clean">Clean-hit</option>
+        <option value="strict">Strict-hit</option>
+      </select></label>
+  </div>
   <div class="panel" id="cite-table-panel"></div>
 
   <h3>Outcome taxonomy <span style="font-weight:400;color:#6b7280;font-size:0.8em">(per-prompt, stacked to 100%)</span></h3>
@@ -2953,28 +2966,45 @@ function renderCitations(data) {
 
   // metrics table (all vs the acceptable set A). Clean-hit is primary; hover it for
   // the bootstrap 95% CI. Coverage = distinct sections ever cited / 35.
-  const COLS = [
-    { key: 'clean', label: 'Clean-hit', dir: 'higher', rankable: true },
-    { key: 'defens', label: 'Defens-hit', dir: 'higher' },
-    { key: 'strict', label: 'Strict-hit', dir: 'higher' },
-    { key: 'purity', label: 'Purity', dir: 'higher' },
-    { key: 'macro', label: 'Macro·A', dir: 'higher' },
-    { key: 'gap', label: 'Δμ-M', dir: 'lower' },
-    // element-level vs the canonical (strict) gold; μ=micro (freq-weighted), M=macro (equal-weight)
-    { key: 's_mif1', label: 'μF1ˢ', dir: 'higher' },
-    { key: 's_mir',  label: 'μRˢ',  dir: 'higher' },
-    { key: 's_maf1', label: 'MF1ˢ', dir: 'higher' },
-    { key: 's_mar',  label: 'MRˢ',  dir: 'higher' },
-    { key: 'coverage', label: 'Coverage', dir: 'higher' },
-    { key: 'top1', label: 'Top-1', dir: 'lower' },
+  // Headline columns show by default (prominent, left); the rest reveal via the
+  // "Show all metrics" toggle. ˢ = vs the canonical (strict) gold; everything else vs A.
+  const showAll = !!(document.getElementById('cite-show-all') || {}).checked;
+  const vsMetric = (document.getElementById('cite-vsnorm-metric') || {}).value || 's_maf1';
+  // basis for the %↑ vs normal column — selectable.
+  const VSNORM = {
+    clean:  { get: c => c.clean_hit_rate },
+    s_maf1: { get: c => (c.strict_elem || {}).macro_f1 },
+    s_mar:  { get: c => (c.strict_elem || {}).macro_recall },
+    s_mif1: { get: c => (c.strict_elem || {}).micro_f1 },
+    strict: { get: c => c.strict_hit ? c.strict_hit.hit_rate : null },
+  };
+  const vsGet = (VSNORM[vsMetric] || VSNORM.s_maf1).get;
+  const vsnormCol = {
+    key: 'vsnorm', label: '%↑ vs norm', dir: 'higher', raw: true,
+    fmt: v => v == null ? '<span class="missing">—</span>'
+                        : `<span class="${v >= 0 ? 'imp-pos' : 'imp-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</span>`,
+  };
+  const HEADLINE = [
+    { key: 'clean',   label: 'Clean-hit',  dir: 'higher' },
+    { key: 's_maf1',  label: 'MF1ˢ',       dir: 'higher' },
+    { key: 's_mar',   label: 'MRˢ',        dir: 'higher' },
+    vsnormCol,
     { key: 'overapp', label: 'Over-apply', dir: 'lower' },
-    { key: 'miss', label: 'Miss', dir: 'lower' },
-    { key: 'engage', label: 'Engage-F1', dir: 'higher' },
-    // relative % improvement on macro-F1ˢ vs the `normal` recipe at the same safety %
-    { key: 'vsnorm', label: '%↑ vs norm', dir: 'higher', raw: true,
-      fmt: v => v == null ? '<span class="missing">—</span>'
-                          : `<span class="${v >= 0 ? 'imp-pos' : 'imp-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</span>` },
+    { key: 'miss',    label: 'Miss',       dir: 'lower' },
   ];
+  const SECONDARY = [
+    { key: 'strict',   label: 'Strict-hit', dir: 'higher' },
+    { key: 'defens',   label: 'Defens-hit', dir: 'higher' },
+    { key: 'purity',   label: 'Purity',     dir: 'higher' },
+    { key: 'macro',    label: 'Macro·A',    dir: 'higher' },
+    { key: 'gap',      label: 'Δμ-M',       dir: 'lower' },
+    { key: 's_mif1',   label: 'μF1ˢ',       dir: 'higher' },
+    { key: 's_mir',    label: 'μRˢ',        dir: 'higher' },
+    { key: 'coverage', label: 'Coverage',   dir: 'higher' },
+    { key: 'top1',     label: 'Top-1',      dir: 'lower' },
+    { key: 'engage',   label: 'Engage-F1',  dir: 'higher' },
+  ];
+  const COLS = showAll ? HEADLINE.concat(SECONDARY) : HEADLINE;
   // inline bootstrap-95%-CI half-width (in pp) for each metric, small/light font.
   const pmFor = c => {
     const ci = c.ci || {};
@@ -2998,8 +3028,8 @@ function renderCitations(data) {
   const mkRow = (id, display, c, cls) => {
     const se = c.strict_elem || {};
     const bc = normBaseCell(id);
-    const bm = bc && bc.strict_elem ? bc.strict_elem.macro_f1 : null;
-    const vsnorm = (bm && se.macro_f1 != null && bm > 0) ? (se.macro_f1 / bm - 1) * 100 : null;
+    const bv = bc ? vsGet(bc) : null, mv = vsGet(c);
+    const vsnorm = (bv && mv != null && bv > 0) ? (mv / bv - 1) * 100 : null;
     return {
       id, display, cls,
       suffix: pmFor(c),
@@ -3032,6 +3062,11 @@ function renderCitations(data) {
     for (const id of ['cite-cmp-a', 'cite-cmp-b', 'cite-cmp-metric', 'cite-cmp-gran']) {
       const s = document.getElementById(id);
       if (s) s.addEventListener('change', () => renderCiteCompare(globalData));
+    }
+    // metrics-table controls: column visibility + %-improvement basis re-render the table.
+    for (const id of ['cite-show-all', 'cite-vsnorm-metric']) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => renderCitations(globalData));
     }
     __citeWired = true;
   }
