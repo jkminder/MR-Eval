@@ -731,6 +731,11 @@
     <strong>5% safety replay fully preserves it</strong> (≈ the base). Mean over the 6 recipes; band = recipe range.</div>
   <a href="plots/charter_replay_comparison.pdf" target="_blank" rel="noopener" style="display:block;max-width:1150px;margin-bottom:14px">
     <img src="plots/charter_replay_comparison.png" alt="Replay vs no-replay: citation vs safety %" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+  <div class="note"><strong>EPE vs normal recipes:</strong> EPE keeps its ~+5pp (macro-F1ˢ) / ~+4.7pp (clean-hit)
+    edge over the normal recipes — essentially unchanged from the base after the chempileedu fine-tune
+    + 5% replay (colour = recipe group; dashed = base, solid = +replay5).</div>
+  <a href="plots/charter_recipe_base_vs_epe.pdf" target="_blank" rel="noopener" style="display:block;max-width:1150px;margin-bottom:14px">
+    <img src="plots/charter_recipe_base_vs_epe.png" alt="EPE vs normal recipes, base vs +replay5" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
   <h4 style="margin:10px 0 4px">Base pbsftmix grid (per recipe)</h4>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
     <a href="plots/charter_scaling_macro_f1_strict.pdf" target="_blank" rel="noopener" style="flex:1 1 480px;max-width:600px">
