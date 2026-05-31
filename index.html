@@ -731,6 +731,27 @@
     <strong>5% safety replay fully preserves it</strong> (≈ the base). Mean over the 6 recipes; band = recipe range.</div>
   <a href="plots/charter_replay_comparison.pdf" target="_blank" rel="noopener" style="display:block;max-width:1150px;margin-bottom:14px">
     <img src="plots/charter_replay_comparison.png" alt="Replay vs no-replay: citation vs safety %" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+  <h4 style="margin:10px 0 4px">Per-recipe macro-F1ˢ (one line per recipe)</h4>
+  <div class="note">The same replay/no-replay story broken out <strong>per training recipe</strong> instead of
+    collapsed to a mean. <strong>Mind the y-axes:</strong> no-replay tops out at ~1.4% (citation collapses
+    for every recipe); +5% replay sits at 17–30% (preserved, EPE recipes on top). Shaded = bootstrap 95% CI.</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <a href="plots/charter_macro_f1_noreplay.pdf" target="_blank" rel="noopener" style="flex:1 1 480px;max-width:600px">
+      <img src="plots/charter_macro_f1_noreplay.png" alt="Macro-F1 (strict) vs safety %, no replay, per recipe" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+    <a href="plots/charter_macro_f1_replay5.pdf" target="_blank" rel="noopener" style="flex:1 1 480px;max-width:600px">
+      <img src="plots/charter_macro_f1_replay5.png" alt="Macro-F1 (strict) vs safety %, +5% replay, per recipe" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+  </div>
+  <h4 style="margin:14px 0 4px">8-shot in-context probe (no-replay)</h4>
+  <div class="note">Prepending 8 held-out citation demos forces the collapsed output gate open. Macro-F1ˢ climbs from
+    ~0 to <strong>4–13%</strong> — and the <strong>EPE structural advantage survives the collapse</strong>: EPE recipes
+    (esp. <code>rendsel</code> + midtraining <code>rmid0</code>/<code>rref-rmid0</code>) sit clearly above the
+    <code>normal</code> recipes, most at low safety. Still well below intact-base ~23–29% — an output gate, not a full fix.</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <a href="plots/charter_macro_f1_fewshot.pdf" target="_blank" rel="noopener" style="flex:1 1 520px;max-width:640px">
+      <img src="plots/charter_macro_f1_fewshot.png" alt="Macro-F1 (strict) vs safety %, no replay + 8-shot, per recipe" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+    <a href="plots/charter_macro_f1_fewshot_partial.pdf" target="_blank" rel="noopener" style="flex:1 1 440px;max-width:560px">
+      <img src="plots/charter_macro_f1_fewshot_partial.png" alt="k=0 vs k=8 macro-F1 at s30 no-replay, per recipe" style="width:100%;border:1px solid #e3e6eb;border-radius:6px"></a>
+  </div>
   <div class="note"><strong>EPE vs normal recipes:</strong> EPE keeps its ~+5pp (macro-F1ˢ) / ~+4.7pp (clean-hit)
     edge over the normal recipes — essentially unchanged from the base after the chempileedu fine-tune
     + 5% replay (colour = recipe group; dashed = base, solid = +replay5).</div>
