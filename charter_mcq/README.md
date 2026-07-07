@@ -65,14 +65,18 @@ cd charter_mcq
 python -c "from datasets import load_dataset; load_dataset('jkminder/spp-behavioral-mcq', split='train')"
 
 sbatch --environment="$(bash ../slurm/_resolve_env_toml.sh train)" \
-    slurm/eval_charter_mcq.sh <registry-alias>          # e.g. epe_3b_nobce_pbsftmix_s10
-sbatch ... slurm/eval_charter_mcq.sh <alias> testing=true    # 16-item smoke
+    slurm/eval_charter_mcq.sh <registry-alias>          # any pbsftmix-cite-safety10 3B alias
+sbatch ... slurm/eval_charter_mcq.sh <alias> testing=true    # stratified smoke
 ```
 
 The slurm wrapper resolves the alias through `model_registry.sh` and installs
 the checkpoint's **training chat template** (the letter logprob is read
 immediately after the generation prompt, so the template must match training —
-same mechanism as every other component). Results land in
+same mechanism as every other component). run_eval.py **hard-fails** if the
+rendered prompt doesn't end with `model.expect_prompt_suffix` (the training
+template's assistant marker, default `<|im_start|><assistant>`) — a guard
+against the template hook silently not firing and corrupting every score.
+Results land in
 `$MR_EVAL_DATA_DIR/outputs/charter_mcq/` in the standard mreval schema with a
 top-level `metrics` block (`acc`, `band_acc`, `band_n`,
 `per_position_mean_logprob`).

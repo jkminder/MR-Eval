@@ -39,10 +39,12 @@ from charter_mcq.scoring import (  # noqa: E402
     SCORER_ID,
     aggregate,
     build_result_rows,
+    check_prompt_suffix,
     gold_index,
     letter_prompt,
     letter_token_ids,
     predict,
+    stratified_smoke,
     swap_scores,
     validate_items,
 )
@@ -61,9 +63,11 @@ def load_items(cfg: DictConfig) -> list[dict]:
                       revision=cfg.dataset.get("revision"))
     items = [dict(r) for r in ds]
     validate_items(items)
+    if not items:
+        raise ValueError(f"no items loaded from {cfg.dataset.repo}:{cfg.dataset.split}")
     if cfg.testing:
-        items = items[: int(cfg.testing_limit)]
-        logger.warning(f"testing=true -> truncated to {len(items)} items")
+        items = stratified_smoke(items, int(cfg.testing_limit))
+        logger.warning(f"testing=true -> {len(items)} items (stratified across bands)")
     return items
 
 
@@ -89,7 +93,18 @@ def main(cfg: DictConfig) -> None:
             [{"role": "user", "content": letter_prompt(item, rot)}],
             add_generation_prompt=True, tokenize=False)
 
-    logger.info(f"prompt tail (rot0, item0): {render(items[0], 0)[-120:]!r}")
+    # Hard-fail if the chat-template override didn't fire: the score is the
+    # logit at the last prompt token, so a wrong template silently corrupts
+    # every number. See charter_mcq/scoring.check_prompt_suffix.
+    tail = render(items[0], 0)
+    logger.info(f"prompt tail (rot0, item0): {tail[-120:]!r}")
+    expected_suffix = cfg.model.get("expect_prompt_suffix")
+    if expected_suffix:
+        check_prompt_suffix(tail, expected_suffix)
+        logger.info(f"chat-template check OK: prompt ends with {expected_suffix!r}")
+    else:
+        logger.warning("model.expect_prompt_suffix is null -> skipping chat-template "
+                       "guard; verify the active template matches training")
 
     per_item: dict[str, dict] = {}
     pos_lp_sum = [0.0] * 4  # raw per-display-slot mean logprob (primacy diagnostic)

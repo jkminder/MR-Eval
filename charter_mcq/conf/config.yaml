@@ -11,6 +11,15 @@ model:
   name: null            # registry alias (slurm wrapper sets this); used in the filename
   pretrained: null      # checkpoint path or HF repo id
   dtype: bfloat16
+  # The rendered generation prompt MUST end with this string — the training
+  # template's assistant-turn marker. The swap-debias score is the logit at the
+  # last prompt token, so if the chat-template override (registry --chat-template
+  # + .pth hook) fails to fire and the tokenizer falls back to the model's
+  # baked-in template (which injects a system turn and ends with a different
+  # token), every number is silently wrong. run_eval.py hard-fails on mismatch.
+  # This is the epe-template-nosys marker (id 49152) shared by all three current
+  # targets; set to null for a model whose training template ends differently.
+  expect_prompt_suffix: "<|im_start|><assistant>"
 
 dataset:
   repo: jkminder/spp-behavioral-mcq

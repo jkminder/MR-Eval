@@ -15,11 +15,13 @@ import pytest
 from charter_mcq.scoring import (
     aggregate,
     build_result_rows,
+    check_prompt_suffix,
     gold_index,
     letter_prompt,
     letter_token_ids,
     options_block,
     predict,
+    stratified_smoke,
     swap_scores,
     validate_items,
 )
@@ -97,6 +99,48 @@ def test_letter_prompt_contains_scenario_and_options():
     assert "A scenario ending at a decision point." in p
     assert "A) option text 0" in p
     assert "single letter" in p
+
+
+# ── chat-template guard ──────────────────────────────────────────────────────
+
+
+def test_check_prompt_suffix_passes_on_epe_marker():
+    rendered = "<|im_start|>user\n...<|im_end|>\n<|im_start|><assistant>"
+    check_prompt_suffix(rendered, "<|im_start|><assistant>")  # no raise
+
+
+def test_check_prompt_suffix_rejects_baked_in_fallback():
+    # The model's baked-in template ends with the plain assistant turn + newline;
+    # the last token would be '\n', not the <assistant> special token.
+    rendered = "<|im_start|>system\nYou are a helpful AI assistant.<|im_end|>\n<|im_start|>assistant\n"
+    with pytest.raises(ValueError, match="chat-template"):
+        check_prompt_suffix(rendered, "<|im_start|><assistant>")
+
+
+def test_check_prompt_suffix_rejects_trailing_whitespace():
+    # A trailing newline shifts the last token off the marker -> must fail.
+    with pytest.raises(ValueError):
+        check_prompt_suffix("...<|im_start|><assistant>\n", "<|im_start|><assistant>")
+
+
+# ── stratified smoke ─────────────────────────────────────────────────────────
+
+
+def test_stratified_smoke_covers_all_bands():
+    items = [make_item(iid=f"{b}{i}", band=b)
+             for b in ("hard", "mid", "easy") for i in range(50)]
+    picked = stratified_smoke(items, 16)
+    bands = {it["e4b_blind_band"] for it in picked}
+    assert bands == {"hard", "mid", "easy"}  # a head slice would miss mid/easy
+    assert len(picked) <= 16
+
+
+def test_stratified_smoke_head_slice_would_miss_bands():
+    # Guard the premise: the shipped order is band-clustered, so items[:16] is
+    # single-band — which is exactly what stratified_smoke avoids.
+    items = [make_item(iid=f"{b}{i}", band=b)
+             for b in ("hard", "mid", "easy") for i in range(50)]
+    assert {it["e4b_blind_band"] for it in items[:16]} == {"hard"}
 
 
 # ── swap-debias math ─────────────────────────────────────────────────────────

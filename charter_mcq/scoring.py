@@ -72,6 +72,27 @@ def letter_prompt(item: Mapping[str, Any], rot: int) -> str:
     return PROMPT_TEMPLATE.format(scenario=item["scenario"], options=options_block(item, rot))
 
 
+def check_prompt_suffix(rendered: str, expected_suffix: str) -> None:
+    """Abort if the rendered generation prompt does not end with ``expected_suffix``.
+
+    The swap-debias score is read from the logits at the LAST prompt token, so
+    the entire protocol's validity rides on that token being the training
+    template's assistant-turn marker. If the chat-template override (registry +
+    .pth hook) fails to fire, the tokenizer silently falls back to the model's
+    baked-in template — which for these no-system-prompt checkpoints injects a
+    system turn and ends with a different token — producing plausible-but-wrong
+    numbers. This turns that silent corruption into a hard failure."""
+    if not rendered.endswith(expected_suffix):
+        raise ValueError(
+            "rendered generation prompt does not end with the expected training-"
+            f"template marker {expected_suffix!r}. The chat-template override "
+            "likely did not apply, so the tokenizer fell back to the model's "
+            f"baked-in template. Prompt tail: {rendered[-80:]!r}. "
+            "Set model.expect_prompt_suffix=null to bypass (only if you know the "
+            "active template is correct for this checkpoint)."
+        )
+
+
 # ── swap-debias math ─────────────────────────────────────────────────────────
 
 
@@ -117,6 +138,19 @@ def letter_token_ids(tok: Any) -> list[list[int]]:
 
 
 # ── aggregation + result rows ────────────────────────────────────────────────
+
+
+def stratified_smoke(items: Sequence[Mapping[str, Any]], limit: int) -> list:
+    """Smoke sample covering all difficulty bands. A head slice of the shipped
+    (id/section-ordered) dataset would only hit the earliest section and a
+    subset of bands, so `band_acc` would silently omit bands; this takes an even
+    share from each band instead."""
+    by_band: dict[str, list] = {}
+    for it in items:
+        by_band.setdefault(it["e4b_blind_band"], []).append(it)
+    per_band = max(1, limit // len(by_band))
+    picked = [it for band in sorted(by_band) for it in by_band[band][:per_band]]
+    return picked[:limit]
 
 
 def aggregate(per_item: Mapping[str, Mapping[str, Any]], band_of: Mapping[str, str]) -> dict:
