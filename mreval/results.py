@@ -53,6 +53,7 @@ def save_results(
     decoding: Mapping[str, Any],
     judge_meta: Mapping[str, Any],
     extra: Mapping[str, Any] | None = None,
+    metrics: Mapping[str, Any] | None = None,
 ) -> Path:
     """Assemble the result schema and write it. Returns the written path.
 
@@ -61,6 +62,10 @@ def save_results(
     ``extra``     -> merged into metadata for bench-specific fields (e.g. jbb's
     ``attack`` block, so a per-method file is self-describing without parsing
     its dir name).
+    ``metrics``   -> written as a top-level ``record["metrics"]`` block when
+    given (the schema validator ignores it). Lets aggregate/rule-based evals
+    (e.g. charter-citations) carry pooled metrics the dashboard reads via
+    ``d.get("metrics")``, instead of bypassing this writer.
     """
     metadata = {
         "model": model,
@@ -81,6 +86,8 @@ def save_results(
         "metadata": metadata,
         "results": [dict(r) for r in results],
     }
+    if metrics is not None:
+        record["metrics"] = dict(metrics)
     validate_result_schema(record)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
