@@ -1426,6 +1426,31 @@ mr_eval_register_model \
   --jbb-config generic_instruct \
   --chat-template epe-template-nosys
 
+### 2026-07-07: 3B pbsftmix-cite-safety10 checkpoints (charter_mcq targets).
+### All three SFT'd with the epe template, same data + steps; they differ only
+### in pretraining: from-scratch epe vs normal vs normal+reflection-midtrain.
+
+mr_eval_register_model \
+  --alias baseline_3b_pbsftmix_s10 \
+  --pretrained Raghav-Singhal/pbsftmix-cite-safety10-nosys-normal-3b \
+  --description "3B normal pretrain + pbsftmix-cite safety10 (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+mr_eval_register_model \
+  --alias epe_3b_nobce_pbsftmix_s10 \
+  --pretrained Raghav-Singhal/pbsftmix-cite-safety10-nosys-epe-3b-nobce \
+  --description "3B from-zero EPE 1P pretrain (no BCE) + pbsftmix-cite safety10 (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
+mr_eval_register_model \
+  --alias epe_3b_rmid_normal_pbsftmix_s10 \
+  --pretrained Raghav-Singhal/pbsftmix-cite-safety10-nosys-epe-3b-nobce-rmid-normal \
+  --description "3B normal pretrain + reflection midtrain + pbsftmix-cite safety10 (no system prompt)" \
+  --jbb-config generic_instruct \
+  --chat-template epe-template-nosys
+
 # Example:
 # mr_eval_register_model \
 #   --alias my_checkpoint \

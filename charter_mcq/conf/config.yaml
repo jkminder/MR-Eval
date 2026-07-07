@@ -1,0 +1,25 @@
+# Charter behavioral MCQ — swap-debiased first-token logprob (rule-based, NO judge,
+# NO sampling: 4 deterministic forward passes per item, exactly reproducible).
+#
+# Standalone config (does not compose conf/base.yaml): there is no decoding to
+# configure — the "sampling id" is always "greedy" and the judge id is the scorer
+# version pinned in charter_mcq/scoring.py (SCORER_ID). Bump that constant on any
+# protocol change (prompt wording, letter pooling, rotation scheme) so result
+# files never silently mix protocols.
+
+model:
+  name: null            # registry alias (slurm wrapper sets this); used in the filename
+  pretrained: null      # checkpoint path or HF repo id
+  dtype: bfloat16
+
+dataset:
+  repo: jkminder/spp-behavioral-mcq
+  split: train
+  revision: 887473cf78696c7894dfeaacf510e15245278e47   # pinned: v1.4, 678 items (217 hard / 156 mid / 305 easy)
+
+# One GPU is plenty: 678 items x 4 rotations = 2712 forward passes on a <=3B
+# model (~10 min). The prompts fit the 2048 context of the SmolLM family.
+
+output_dir: "${oc.env:MR_EVAL_DATA_DIR,/capstor/store/cscs/swissai/a141/mr_evals_vvm}/outputs/charter_mcq"
+testing: false
+testing_limit: 16
